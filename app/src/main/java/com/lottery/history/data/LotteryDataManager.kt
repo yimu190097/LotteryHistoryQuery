@@ -126,7 +126,11 @@ object LotteryDataManager {
                             issue = it.issue, type = config.code,
                             primary = it.primaryNumbers.joinToString(","),
                             secondary = it.secondaryNumbers.joinToString(","),
-                            date = it.date
+                            date = it.date,
+                            firstPrizeCount = it.firstPrizeCount,
+                            firstPrizeAmount = it.firstPrizeAmount,
+                            secondPrizeCount = it.secondPrizeCount,
+                            secondPrizeAmount = it.secondPrizeAmount
                         )
                     })
                     caches[config.code] = d.getAllByType(config.code).map { e -> e.toModel() }
@@ -173,7 +177,11 @@ object LotteryDataManager {
             issue = issue,
             primaryNumbers = primary.split(',').mapNotNull { it.toIntOrNull() },
             secondaryNumbers = secondary.split(',').mapNotNull { it.toIntOrNull() },
-            date = date
+            date = date,
+            firstPrizeCount = firstPrizeCount,
+            firstPrizeAmount = firstPrizeAmount,
+            secondPrizeCount = secondPrizeCount,
+            secondPrizeAmount = secondPrizeAmount
         )
 }
 

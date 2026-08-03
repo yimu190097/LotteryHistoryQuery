@@ -84,16 +84,23 @@ class CustomerServiceActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityCustomerServiceBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        // 防御性包裹：任一初始化环节异常都不再闪退，给出友好提示并安全退出
+        try {
+            binding = ActivityCustomerServiceBinding.inflate(layoutInflater)
+            setContentView(binding.root)
 
-        voiceHelper = VoiceHelper(this)
+            voiceHelper = VoiceHelper(this)
 
-        setupToolbar()
-        setupRecyclerView()
-        setupInputBar()
-        setupKeyboardScroll()
-        observeMessages()
+            runCatching { setupToolbar() }
+            runCatching { setupRecyclerView() }
+            runCatching { setupInputBar() }
+            runCatching { setupKeyboardScroll() }
+            runCatching { observeMessages() }
+        } catch (t: Throwable) {
+            android.util.Log.e("CustomerService", "初始化失败", t)
+            Toast.makeText(this, "客服页面暂时无法打开，请稍后再试", Toast.LENGTH_LONG).show()
+            finish()
+        }
     }
 
     private fun setupToolbar() {
@@ -402,9 +409,11 @@ class CustomerServiceActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        voiceHelper.release()
+        if (::voiceHelper.isInitialized) voiceHelper.release()
         keyboardListener?.let {
-            window.decorView.rootView.viewTreeObserver.removeOnGlobalLayoutListener(it)
+            runCatching {
+                window.decorView.rootView.viewTreeObserver.removeOnGlobalLayoutListener(it)
+            }
         }
     }
 }

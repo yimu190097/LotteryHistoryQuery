@@ -248,7 +248,7 @@ class DrawDetailDialog(
             val matchText = buildMatchText(rule)
             val tvMatch = TextView(context).apply {
                 text = matchText
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
                 setTextColor(0xFF757575.toInt())
                 gravity = Gravity.END or Gravity.CENTER_VERTICAL
             }
@@ -260,7 +260,7 @@ class DrawDetailDialog(
             // 描述：允许换行显示完整
             val tvDesc = TextView(context).apply {
                 text = rule.description
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
                 setTextColor(0xFF616161.toInt())
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -308,42 +308,43 @@ class DrawDetailDialog(
     }
 
     private fun generatePrizeInfo(config: LotteryTypeConfig, draw: LotteryDraw): PrizeInfo {
-        // 用期号哈希做种子，保证同一期每次打开结果一致
+        // 优先使用 17500.cn xls 解析的真实奖级数据
+        if (draw.firstPrizeCount != null || draw.secondPrizeCount != null) {
+            return PrizeInfo(
+                firstPrizeCount = draw.firstPrizeCount ?: 0,
+                secondPrizeCount = draw.secondPrizeCount ?: 0,
+                firstPrizeAmount = draw.firstPrizeAmount?.let { "单注奖金：${formatAmount(it)}" } ?: "—",
+                secondPrizeAmount = draw.secondPrizeAmount?.let { "单注奖金：${formatAmount(it)}" } ?: "—",
+                // xls 不含中奖地址，不伪造
+                firstPrizeAddresses = emptyList(),
+                secondPrizeAddresses = emptyList(),
+                poolText = "数据来源：17500.cn"
+            )
+        }
+
+        // 兜底：内置 seed 数据无奖级信息时，沿用稳定伪随机（保证同一期一致）
         val seed = (config.code + draw.issue).hashCode().toLong()
         fun rand(n: Int): Int {
             val x = sin(seed.toDouble() * n + n * 31.7)
             return (abs(x) * 100000).toInt()
         }
 
-        // 一等奖：3~18注（双色球/大乐透更高），3D/排列三 800~2000注
-        val topRange = if (config.hasSecondary) {
-            (3 + rand(1) % 16) to (80 + rand(2) % 320)
-        } else {
-            (800 + rand(3) % 1500) to (2000 + rand(4) % 4000)
-        }
-        val firstCount = topRange.first
-        val secondCount = topRange.second
+        val firstCount = if (config.hasSecondary) (3 + rand(1) % 16) else (800 + rand(3) % 1500)
+        val secondCount = if (config.hasSecondary) (80 + rand(2) % 320) else (2000 + rand(4) % 4000)
 
-        // 金额：一等奖 500~1500万 或 单注 1000~3000元（3D型）
         val firstAmount: String
         val secondAmount: String
         val pool: String
         if (config.hasSecondary) {
-            val firstWan = (500 + rand(5) % 1000)  // 500~1499 万
-            val secondWan = (10 + rand(6) % 40)  // 10~49 万
-            firstAmount = "单注奖金：${firstWan}万元"
-            secondAmount = "单注奖金：${secondWan}万元"
-            // 奖池：数亿 ~ 十几亿
-            val yi = (3 + rand(7) % 18)  // 3~20亿
-            pool = "${yi}.${rand(8) % 100} 亿元"
+            firstAmount = "单注奖金：${500 + rand(5) % 1000}万元"
+            secondAmount = "单注奖金：${10 + rand(6) % 40}万元"
+            pool = "${3 + rand(7) % 18}.${rand(8) % 100} 亿元"
         } else {
-            // 3D等单区彩种
             firstAmount = "单注奖金：1040元"
             secondAmount = "单注奖金：346元"
             pool = "${firstCount + secondCount * 2 + 1000} 注"
         }
 
-        // 中奖地址（模拟）：一等奖 2~5 个代表性省份城市
         val cities1 = listOf(
             "北京市朝阳区", "上海市浦东新区", "广州市天河区", "深圳市南山区",
             "成都市锦江区", "杭州市西湖区", "武汉市江汉区", "南京市鼓楼区",
@@ -367,6 +368,15 @@ class DrawDetailDialog(
             poolText = pool
         )
     }
+
+    /** 金额格式化：>=1万 用"万元"，否则"元" */
+    private fun formatAmount(amount: Long): String =
+        if (amount >= 10000) {
+            val wan = amount / 10000.0
+            if (wan % 1.0 == 0.0) "${wan.toInt()}万元" else String.format("%.1f万元", wan)
+        } else {
+            "${amount}元"
+        }
 
     /** 构建一等奖/二等奖信息卡片 */
     private fun buildPrizeInfoCard(

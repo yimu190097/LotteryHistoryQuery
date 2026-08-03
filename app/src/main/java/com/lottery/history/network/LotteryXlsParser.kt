@@ -2,32 +2,33 @@ package com.lottery.history.network
 
 import com.lottery.history.model.LotteryDraw
 import com.lottery.history.model.LotteryTypeConfig
-import jxl.Cell
-import jxl.CellType
-import jxl.DateCell
-import jxl.NumberCell
 import jxl.Sheet
 import jxl.Workbook
+import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * 17500.cn 开奖历史 XLS（Excel 97-2003）解析器。
+ * 17500.cn 开奖历史解析器。
  *
- * 17500 xls 每行字段约定：
- *   第 0 列：期号（Number 或 Label，形如 2024128）
- *   第 1 列：开奖日期（Date 或 Label，形如 2024-11-05 / 2024/11/05）
- *   第 2..M 列：主号码（前区/红球/基本号/百位十位个位…），顺序出现
- *   次号码（若彩种有）紧跟着主号码之后，数量由 config.parseSecondaryCount 控制
- *   剩余列：销售额/奖池/中奖注数等统计数据，直接忽略
+ * 重要：17500.cn 的 *.xls 文件实际是【空格分隔的纯文本】（仅扩展名为 .xls），
+ * 并非真正的 Excel 二进制。本解析器先嗅探文件头：
+ *   - 若以 OLE2 头(0xD0CF11E0) 开头 → 走 jxl 真二进制 Excel 解析（兼容真 xls）。
+ *   - 否则 → 按空格分隔文本解析（当前 17500.cn 实际格式）。
  *
- * 容错策略：
- *   - 跳过表头行：期号非纯数字或日期无法解析即视为无效行
- *   - 号码范围校验：0-99（覆盖 0-9 位彩种、22选5、30选7、大乐透 1-35 等）
- *   - 主号码严格等于 parsePrimaryCount，否则跳过；次号码不足时按彩种要求严格校验
- *   - 所有解析异常单 try-catch，确保一行错误不影响其余
+ * 文本每行字段约定：
+ *   第 0 列：期号（07001）
+ *   第 1 列：开奖日期（2007-05-30）
+ *   第 2..M 列：主号码 + 次号码（数量由 config 控制）
+ *   随后若干 "-" 占位列、销售额、奖池
+ *   之后成对出现：[奖级注数 单注奖金]（一等奖、二等奖、三等奖…）
+ *
+ * 本解析器会从尾部成对数值中提取【一等奖/二等奖】真实注数与单注奖金，
+ * 供"查看详情"展示当期中奖具体信息（用户需求：点击查看详情显示一等奖几注、二等奖几注）。
+ *
+ * 容错：单行解析异常不影响其余行；结果按期号倒序返回。
  */
 object LotteryXlsParser {
 
@@ -36,8 +37,23 @@ object LotteryXlsParser {
     private val dateRegex2 = Regex("""^\d{4}/\d{1,2}/\d{1,2}$""")
     private val dateRegex3 = Regex("""^\d{4}\.\d{1,2}\.\d{1,2}$""")
 
-    /** 从 InputStream 解析为开奖列表，按期号倒序返回。出现致命异常时抛出让上层兜底 TXT */
+    /** OLE2 / 复合文档魔数头 */
+    private val OLE2_HEADER = byteArrayOf(0xD0.toByte(), 0xCF.toByte(), 0x11.toByte(), 0xE0.toByte())
+
     fun parse(config: LotteryTypeConfig, input: InputStream): List<LotteryDraw> {
+        // 嗅探：把流读成字节，判断是否真二进制 xls
+        val bytes = input.readBytes()
+        return if (bytes.size >= 4 && bytes[0] == OLE2_HEADER[0] && bytes[1] == OLE2_HEADER[1] &&
+            bytes[2] == OLE2_HEADER[2] && bytes[3] == OLE2_HEADER[3]
+        ) {
+            parseBinaryXls(config, ByteArrayInputStream(bytes))
+        } else {
+            parseText(config, String(bytes, Charsets.UTF_8))
+        }
+    }
+
+    // ============= 真二进制 Excel 解析（兼容真 xls，17500 当前不走此分支） =============
+    private fun parseBinaryXls(config: LotteryTypeConfig, input: InputStream): List<LotteryDraw> {
         val result = mutableListOf<LotteryDraw>()
         val workbook = Workbook.getWorkbook(input) ?: error("Workbook 为空")
         try {
@@ -45,43 +61,33 @@ object LotteryXlsParser {
             val rows = sheet.rows
             val minColumns = 2 + config.parsePrimaryCount +
                 (if (config.hasSecondary) config.parseSecondaryCount else 0)
-
             for (r in 0 until rows) {
                 try {
-                    val cells: Array<Cell> = sheet.getRow(r) ?: continue
+                    val cells = sheet.getRow(r) ?: continue
                     if (cells.size < minColumns) continue
-
-                    val issue = readIssue(cells.getOrNull(0)) ?: continue
-                    val date = readDate(cells.getOrNull(1)) ?: continue
-
-                    // 期号+日期双校验，避免误解析表头/说明行
+                    val issue = cells.getOrNull(0)?.contents?.trim().orEmpty()
+                    val dateRaw = cells.getOrNull(1)?.contents?.trim().orEmpty()
+                    val date = normalizeDate(dateRaw) ?: continue
                     if (!issueRegex.matches(issue)) continue
-                    if (!dateRegex1.matches(date)) continue
-
-                    // 主号码：列 2 .. 2+parsePrimaryCount-1
-                    val startPrimary = 2
                     val primary = (0 until config.parsePrimaryCount).mapNotNull { idx ->
-                        readIntCell(cells.getOrNull(startPrimary + idx))?.takeIf { it in 0..99 }
+                        cells.getOrNull(2 + idx)?.contents?.trim()?.toIntOrNull()?.takeIf { it in 0..99 }
                     }
                     if (primary.size != config.parsePrimaryCount) continue
-
-                    // 次号码：紧跟主号码后
                     val secondary = if (config.hasSecondary && config.parseSecondaryCount > 0) {
-                        val startSec = startPrimary + config.parsePrimaryCount
+                        val start = 2 + config.parsePrimaryCount
                         (0 until config.parseSecondaryCount).mapNotNull { idx ->
-                            val v = readIntCell(cells.getOrNull(startSec + idx))
-                            v?.takeIf { it in 0..99 && it != -1 }
+                            cells.getOrNull(start + idx)?.contents?.trim()?.let { v ->
+                                v.takeIf { it != "-" && it.isNotEmpty() }?.toIntOrNull()?.takeIf { it in 0..99 }
+                            }
                         }
-                    } else {
-                        emptyList()
-                    }
+                    } else emptyList()
                     if (config.hasSecondary && config.rules.any { it.matchSecondary > 0 }) {
                         if (secondary.size < config.parseSecondaryCount) continue
                     }
-
+                    // 真二进制 xls 列结构不稳定，奖级信息不提取
                     result.add(LotteryDraw(issue, primary.sorted(), secondary.sorted(), date))
                 } catch (_: Exception) {
-                    // 单行解析出错，直接忽略，不中断整体解析
+                    // 单行错误忽略
                 }
             }
         } finally {
@@ -91,65 +97,117 @@ object LotteryXlsParser {
         return result
     }
 
-    // ============= 单元格读取工具 =============
+    // ============= 空格分隔文本解析（17500.cn *.xls 实际格式） =============
+    private fun parseText(config: LotteryTypeConfig, raw: String): List<LotteryDraw> {
+        val result = mutableListOf<LotteryDraw>()
+        val minParts = 2 + config.parsePrimaryCount + config.parseSecondaryCount
+        for (line in raw.lineSequence()) {
+            try {
+                val trimmed = line.trim()
+                if (trimmed.isEmpty()) continue
+                val parts = trimmed.split(Regex("\\s+"))
+                if (parts.size < minParts) continue
 
-    private fun readIssue(cell: Cell?): String? {
-        if (cell == null) return null
-        return when (cell.type) {
-            CellType.NUMBER, CellType.NUMBER_FORMULA -> {
-                val n = (cell as? NumberCell)?.value ?: return null
-                // 期号是整数，去除 .0
-                val longVal = n.toLong()
-                if (longVal <= 0) null else longVal.toString()
+                val issue = parts[0]
+                if (!issueRegex.matches(issue)) continue
+                val date = normalizeDate(parts[1]) ?: continue
+
+                val numStart = 2
+                val primary = (0 until config.parsePrimaryCount).mapNotNull { idx ->
+                    parts.getOrNull(numStart + idx)?.toIntOrNull()?.takeIf { it in 0..99 }
+                }
+                if (primary.size != config.parsePrimaryCount) continue
+
+                val secondary = if (config.hasSecondary && config.parseSecondaryCount > 0) {
+                    val secStart = numStart + config.parsePrimaryCount
+                    (0 until config.parseSecondaryCount).mapNotNull { idx ->
+                        parts.getOrNull(secStart + idx)?.let { v ->
+                            v.takeIf { it != "-" && it.isNotEmpty() }?.toIntOrNull()?.takeIf { it in 0..99 }
+                        }
+                    }
+                } else emptyList()
+                if (config.hasSecondary && config.rules.any { it.matchSecondary > 0 }) {
+                    if (secondary.size < config.parseSecondaryCount) continue
+                }
+
+                // 提取奖级信息：从号码之后的剩余字段中找成对(注数, 单注奖金)
+                val extraStart = numStart + config.parsePrimaryCount +
+                    (if (config.hasSecondary) config.parseSecondaryCount else 0)
+                val prize = extractPrizeTiers(parts, extraStart)
+
+                result.add(
+                    LotteryDraw(
+                        issue = issue,
+                        primaryNumbers = primary.sorted(),
+                        secondaryNumbers = secondary.sorted(),
+                        date = date,
+                        firstPrizeCount = prize.firstCount,
+                        firstPrizeAmount = prize.firstAmount,
+                        secondPrizeCount = prize.secondCount,
+                        secondPrizeAmount = prize.secondAmount
+                    )
+                )
+            } catch (_: Exception) {
+                // 单行错误忽略
             }
-            else -> cell.contents?.trim()?.takeIf { it.isNotEmpty() }
         }
+        result.sortByDescending { it.issue }
+        return result
     }
 
-    private fun readDate(cell: Cell?): String? {
-        if (cell == null) return null
-        return when (cell.type) {
-            CellType.DATE, CellType.DATE_FORMULA -> {
-                val d: Date? = (cell as? DateCell)?.date
-                d?.let { formatYmd(it) }
-            }
-            else -> {
-                val s = cell.contents?.trim().orEmpty()
-                normalizeDate(s)
+    /**
+     * 从 extraStart 起的剩余字段中提取一等奖/二等奖成对数据。
+     * 字段结构：[占位"-"... ] [销售额] [奖池?] [一等注数 一等奖金] [二等注数 二等奖金] ...
+     * 启发式：跳过 "-" 与超大销售额/奖池，找到首个"小注数+大金额"对为一等奖，次个为二等奖。
+     * 注数为 0 时金额通常为 0（空开），仍视为有效奖级。
+     */
+    private data class PrizeTier(
+        val firstCount: Int?, val firstAmount: Long?,
+        val secondCount: Int?, val secondAmount: Long?
+    )
+
+    private fun extractPrizeTiers(parts: List<String>, start: Int): PrizeTier {
+        // 收集剩余数值（跳过 "-" 与非数字）
+        val nums = (start until parts.size).mapNotNull { idx ->
+            val v = parts[idx]
+            if (v == "-" || v.isEmpty()) null else v.toLongOrNull()
+        }
+        if (nums.size < 4) return PrizeTier(null, null, null, null)
+
+        // 扫描成对(注数, 金额)：注数 0..50000，金额>=100 或 (注数==0 且金额==0)
+        val pairs = mutableListOf<Pair<Int, Long>>()
+        var i = 0
+        while (i + 1 < nums.size && pairs.size < 2) {
+            val count = nums[i]
+            val amount = nums[i + 1]
+            if (count in 0..50000 && (amount >= 100 || (count == 0L && amount == 0L))) {
+                pairs.add(count.toInt() to amount)
+                i += 2
+            } else {
+                // 销售额/奖池等非奖级大数，跳过单个继续找
+                i += 1
             }
         }
+        val first = pairs.getOrNull(0)
+        val second = pairs.getOrNull(1)
+        return PrizeTier(
+            firstCount = first?.first, firstAmount = first?.second,
+            secondCount = second?.first, secondAmount = second?.second
+        )
     }
 
-    private fun readIntCell(cell: Cell?): Int? {
-        if (cell == null) return null
-        return when (cell.type) {
-            CellType.NUMBER, CellType.NUMBER_FORMULA -> {
-                (cell as? NumberCell)?.value?.toInt()
-            }
-            CellType.EMPTY -> null
-            else -> cell.contents?.trim()?.toIntOrNull()
-        }
-    }
-
-    /** 把各种分隔符的日期统一成 YYYY-MM-DD，不符合返回 null */
+    // ============= 工具 =============
     private fun normalizeDate(raw: String): String? {
         if (raw.isEmpty()) return null
         if (dateRegex1.matches(raw)) return raw
         if (dateRegex2.matches(raw)) {
-            val parts = raw.split("/")
-            if (parts.size == 3) {
-                return "${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}"
-            }
+            val p = raw.split("/")
+            if (p.size == 3) return "${p[0]}-${p[1].padStart(2, '0')}-${p[2].padStart(2, '0')}"
         }
         if (dateRegex3.matches(raw)) {
-            val parts = raw.split(".")
-            if (parts.size == 3) {
-                return "${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}"
-            }
+            val p = raw.split(".")
+            if (p.size == 3) return "${p[0]}-${p[1].padStart(2, '0')}-${p[2].padStart(2, '0')}"
         }
         return null
     }
-
-    private val ymdFmt by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.CHINA) }
-    private fun formatYmd(d: Date): String = ymdFmt.format(d)
 }

@@ -60,7 +60,7 @@ class HistoryAdapter(
             sepParams.setMargins(margin * 2, 0, margin * 2, 0)
             separator.layoutParams = sepParams
             separator.text = "+"
-            separator.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            separator.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             separator.setTextColor(Color.parseColor("#616161"))
             separator.gravity = Gravity.CENTER
             holder.llNumbers.addView(separator)
