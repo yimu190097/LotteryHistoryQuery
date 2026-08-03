@@ -164,25 +164,24 @@ class DrawDetailDialog(
         val missingCount = merged.groupBy { it.prizeName }.keys.size -
             merged.count { it.tierEntry != null }.coerceAtLeast(0)
         if (!haveAnyRealTiers) {
+            // 本期全部奖级未公布：只展示简短提示（不啰嗦）
             val warn = TextView(context).apply {
-                text = "⚠️ 本期注数/金额明细未加载（\"规则固定¥X\"为游戏规则设定的基础额度，" +
-                    "实际兑付以当期官方公布为准，可能含派奖、浮动调整）"
+                text = "注：本期注数/金额暂未公布，请稍后刷新。"
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setTextColor(0xFFFFFFFF.toInt())
-                setBackgroundColor(0xFFE65100.toInt())   // 深橙底白字，醒目不误导
-                val pad = (10 * density).toInt()
+                setBackgroundColor(0xFFE65100.toInt())
+                val pad = (8 * density).toInt()
                 setPadding(pad, pad, pad, pad)
             }
             llRules.addView(warn)
         } else if (missingCount > 0) {
+            // 部分奖级缺数据：一句话说明（看情况展示）
             val warn = TextView(context).apply {
-                text = "说明：本期已公布 ${merged.groupBy { it.tierEntry != null }.size} 个奖级，" +
-                    "其余 $missingCount 个奖级明细未完全加载（\"规则固定¥X\" 仅为规则基础额度，" +
-                    "每期具体中奖金额以官方公布的实时数据为准，含派奖、浮动调整）。"
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                text = "注：$missingCount 个奖级明细未完全公布。"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 setTextColor(0xFF5D4037.toInt())
                 setBackgroundColor(0xFFFFF3E0.toInt())
-                val pad = (8 * density).toInt()
+                val pad = (6 * density).toInt()
                 setPadding(pad, pad, pad, pad)
             }
             llRules.addView(warn)
@@ -227,17 +226,12 @@ class DrawDetailDialog(
             }
         }
 
-        // 末行：规则说明（强调派奖/浮动调整，每期以官方公布为准；不暴露数据来源）
+        // 末行：精炼说明（不暴露数据来源，只保留必要信息）
         val footer = TextView(context).apply {
-            text = buildString {
-                append("空开=本期无人中；\"规则固定¥X\" 为《游戏规则》设定的基础单注奖金额度，")
-                append("实际兑付会随官方派奖、奖金浮动调整而变化，")
-                append("**每期具体中奖金额以当期官方公布的数据为准**。")
-                append("\n重复奖项名（如双色球四等奖）两种命中规则共享同一条注数/金额。")
-            }
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            text = "空开=本期无人中；\"规则固定¥X\"为基础额度，每期实际金额以官方公布为准（含派奖/浮动）。"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setTextColor(0xFF9E9E9E.toInt())
-            val pad = (12 * density).toInt()
+            val pad = (10 * density).toInt()
             setPadding(pad, pad, pad, pad)
         }
         llRules.addView(footer)

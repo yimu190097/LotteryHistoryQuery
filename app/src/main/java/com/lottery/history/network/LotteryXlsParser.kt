@@ -37,6 +37,28 @@ object LotteryXlsParser {
 
     private val OLE2_HEADER = byteArrayOf(0xD0.toByte(), 0xCF.toByte(), 0x11.toByte(), 0xE0.toByte())
 
+    /**
+     * 通用安全数字解析：
+     *  ①先去掉千分位逗号（"84,337,222.00"→"84337222.00"）
+     *  ②再作为小数转 Long（8000.0→8000，84337222.00→84337222）
+     *  ③纯数字整数 toLongOrNull 兜底
+     * 真实数据格式举例（快乐8 kl8_desc.txt 2023053期）：
+     *  84,337,222.00 = 销售额；159,139,949.00 = 奖池；22 8000.0 = 22注×8000元（二等奖）；625 800.0 = 625注×800元
+     */
+    private fun parseNumberSafe(raw: String): Long? {
+        val cleaned = raw.replace(",", "").trim()
+        if (cleaned.isEmpty()) return null
+        // 1) 先尝试 Double→Long：处理 8000.0 / 159139949.00
+        val d = cleaned.toDoubleOrNull()
+        if (d != null && d.isFinite() && !d.isNaN()) {
+            if (d >= Long.MIN_VALUE.toDouble() && d <= Long.MAX_VALUE.toDouble()) {
+                return d.toLong()
+            }
+        }
+        // 2) 兜底 toLongOrNull
+        return cleaned.toLongOrNull()
+    }
+
     fun parse(config: LotteryTypeConfig, input: InputStream): List<LotteryDraw> {
         val bytes = input.readBytes()
         val isBinary = bytes.size >= 4 &&
@@ -62,12 +84,9 @@ object LotteryXlsParser {
                 val cells = sheet.getRow(r) ?: continue
                 for (c in cells.indices) {
                     val v = cells[c].contents
-                    // 整串数字去 .0
-                    val normalized = v.toLongOrNull()?.toString()
-                        ?: v.toDoubleOrNull()?.let { d ->
-                            if (d == d.toLong().toDouble()) d.toLong().toString() else v
-                        }
-                        ?: v.trim()
+                    // 去掉逗号+小数转长整数，统一格式（支持 84,337,222.00、8000.0、纯整数）
+                    val num = parseNumberSafe(v)
+                    val normalized = num?.toString() ?: v.trim()
                     if (c > 0) out.append(' ')
                     out.append(normalized)
                 }
@@ -157,7 +176,7 @@ object LotteryXlsParser {
         val nums = (start until parts.size).mapNotNull { idx ->
             val v = parts[idx]
             // 七乐彩最新一期尾部全 '-'，全部跳过后 nums.size<2 → 直接返回空
-            if (v == "-" || v.isEmpty()) null else v.toLongOrNull()
+            if (v == "-" || v.isEmpty()) null else parseNumberSafe(v)
         }
         val all = mutableListOf<PrizeTierEntry>()
         if (nums.size < 2) return all

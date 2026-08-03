@@ -23,3 +23,4 @@ Thumbs.db
 
 # Kotlin 缓存
 .kotlin/
+android-sdk/

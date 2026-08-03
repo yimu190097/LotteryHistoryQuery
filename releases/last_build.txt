@@ -1,1 +1,10 @@
-v8_全真实数据_快乐8官方确认版 20260803_191723
+v9_修复数字解析器_快乐820号码多行显示_全签名版 20260803_210013
+APK: releases/LotteryHistoryQuery_latest.apk
+  -> releases/LotteryHistoryQuery_v9_最新版_修复解析器_多行显示_v1v2v3全签名_20260803_210013.apk
+签名: v1(JAR) + v2 + v3 全部 true
+修复:
+  - LotteryXlsParser: 新增 parseNumberSafe，支持 8000.0 / 84,337,222.00 格式
+  - 快乐8 20个号码球 DrawDetailDialog/IssueSearchDialog/LatestDrawsDialog/HistoryAdapter 4处自动调小尺寸多行显示
+  - DrawDetailDialog: 警告和页脚提示大幅简化（看情况展示）
+  - 奖级规则: 大乐透五等奖300/快乐8选十中八800/七乐彩四~七等浮动
+  - 隐藏所有数据来源采集途径字样
