@@ -223,8 +223,9 @@ class IssueSearchDialog(context: Context) : Dialog(context) {
     }
 
     private fun renderResult(container: LinearLayout, cfg: LotteryTypeConfig, draw: LotteryDraw) {
-        val ballSize = (30 * density).toInt()
-        val ballMargin = (4 * density).toInt()
+        // 快乐8 20个号码：缩小球+间距，FlowLayout自动多行换行显示
+        val ballSize = if (cfg.parsePrimaryCount >= 15) (22 * density).toInt() else (30 * density).toInt()
+        val ballMargin = if (cfg.parsePrimaryCount >= 15) (3 * density).toInt() else (4 * density).toInt()
 
         // 彩种名 + 期号 + 日期
         container.addView(TextView(context).apply {

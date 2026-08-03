@@ -80,11 +80,11 @@ class DrawDetailDialog(
             }
         }
 
-        // 号码球
+        // 号码球（快乐8有20个号码，自动调小球+FlowLayout多行换行显示）
         val flBalls = view.findViewById<com.lottery.history.widget.FlowLayout>(R.id.flDrawNumbers)
         flBalls.removeAllViews()
-        val ballSize = (30 * density).toInt()
-        val ballMargin = (4 * density).toInt()
+        val ballSize = if (config.parsePrimaryCount >= 15) (22 * density).toInt() else (30 * density).toInt()
+        val ballMargin = if (config.parsePrimaryCount >= 15) (3 * density).toInt() else (4 * density).toInt()
         if (draw != null) {
             draw.primaryNumbers.sorted().forEach { num ->
                 flBalls.addView(createBall(num, true, ballSize, ballMargin))
@@ -165,8 +165,8 @@ class DrawDetailDialog(
             merged.count { it.tierEntry != null }.coerceAtLeast(0)
         if (!haveAnyRealTiers) {
             val warn = TextView(context).apply {
-                text = "⚠️ 本期注数/金额明细未公开（规则中" +
-                    "\"规则固定¥X\"为游戏规则设定值，仅作说明，不代表本期实际兑付）"
+                text = "⚠️ 本期注数/金额明细未加载（\"规则固定¥X\"为游戏规则设定的基础额度，" +
+                    "实际兑付以当期官方公布为准，可能含派奖、浮动调整）"
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setTextColor(0xFFFFFFFF.toInt())
                 setBackgroundColor(0xFFE65100.toInt())   // 深橙底白字，醒目不误导
@@ -177,7 +177,8 @@ class DrawDetailDialog(
         } else if (missingCount > 0) {
             val warn = TextView(context).apply {
                 text = "说明：本期已公布 ${merged.groupBy { it.tierEntry != null }.size} 个奖级，" +
-                    "其余 $missingCount 个奖级明细未公开（\"规则固定¥X\" 仅为规则说明）。"
+                    "其余 $missingCount 个奖级明细未完全加载（\"规则固定¥X\" 仅为规则基础额度，" +
+                    "每期具体中奖金额以官方公布的实时数据为准，含派奖、浮动调整）。"
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setTextColor(0xFF5D4037.toInt())
                 setBackgroundColor(0xFFFFF3E0.toInt())
@@ -226,11 +227,12 @@ class DrawDetailDialog(
             }
         }
 
-        // 末行：规则说明（不暴露数据来源）
+        // 末行：规则说明（强调派奖/浮动调整，每期以官方公布为准；不暴露数据来源）
         val footer = TextView(context).apply {
             text = buildString {
-                append("空开=本期无人中；\"规则固定¥X\" 仅为《游戏规则》设定的单注奖金额度，")
-                append("不代表本期实际兑付；本期实际兑付以注数/单注奖金两列公布数字为准。")
+                append("空开=本期无人中；\"规则固定¥X\" 为《游戏规则》设定的基础单注奖金额度，")
+                append("实际兑付会随官方派奖、奖金浮动调整而变化，")
+                append("**每期具体中奖金额以当期官方公布的数据为准**。")
                 append("\n重复奖项名（如双色球四等奖）两种命中规则共享同一条注数/金额。")
             }
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)

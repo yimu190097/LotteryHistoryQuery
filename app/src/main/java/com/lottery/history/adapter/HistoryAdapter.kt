@@ -77,8 +77,13 @@ class HistoryAdapter(
 
         val res = holder.itemView.resources
         val density = res.displayMetrics.density
-        val ballSize = res.getDimensionPixelSize(R.dimen.ball_compact_size)
-        val margin = (4 * density).toInt()
+        // 快乐8 20个号码：缩小球和间距，FlowLayout多行换行显示
+        val ballSize = if (config.parsePrimaryCount >= 15) {
+            (20 * density).toInt()
+        } else {
+            res.getDimensionPixelSize(R.dimen.ball_compact_size)
+        }
+        val margin = if (config.parsePrimaryCount >= 15) (2 * density).toInt() else (4 * density).toInt()
 
         holder.llNumbers.removeAllViews()
 

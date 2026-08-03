@@ -52,12 +52,14 @@ class LatestDrawsDialog(context: Context) : Dialog(context) {
         container.removeAllViews()
         val res = context.resources
         val density = res.displayMetrics.density
-        val ballSize = (22 * density).toInt()
-        val ballMargin = (3 * density).toInt()
         val rowVerticalPadding = (8 * density).toInt()
 
         LotteryType.ALL.forEachIndexed { index, config ->
             val draw: LotteryDraw? = LotteryDataManager.getCached(config.code).firstOrNull()
+
+            // 球大小：快乐8（20个号码）单独缩小，一屏内多行显示不挤
+            val ballSize = if (config.parsePrimaryCount >= 15) (18 * density).toInt() else (22 * density).toInt()
+            val ballMargin = if (config.parsePrimaryCount >= 15) (2 * density).toInt() else (3 * density).toInt()
 
             // 单个彩种卡片
             val row = LinearLayout(context).apply {
