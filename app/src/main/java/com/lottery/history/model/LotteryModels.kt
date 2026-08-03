@@ -2,7 +2,7 @@ package com.lottery.history.model
 
 /**
  * 单张单项奖级：中奖注数 + 单注奖金（元）。
- * 用于存储当期每个等级的真实数据（17500.cn 解析，按奖项顺序排序）。
+ * 用于存储当期每个等级的真实开奖数据（按奖项顺序排序）。
  */
 data class PrizeTierEntry(
     val count: Int,    // 当期该奖级中奖注数（0 表示空开）
@@ -49,7 +49,7 @@ data class LotteryDraw(
     /** 二等奖单注金额（元）（便捷字段，保持向后兼容） */
     val secondPrizeAmount: Long? = null,
     /**
-     * 当期所有奖级，从一等奖往下按顺序排列（17500.cn XLS 真实数据）。
+     * 当期所有奖级，从一等奖往下按顺序排列（真实开奖数据）。
      * DrawDetailDialog 会按 rules 顺序把每个奖项名 + 该 entry 一并渲染。
      */
     val allPrizeTiers: List<PrizeTierEntry?> = emptyList()

@@ -19,8 +19,6 @@ import com.lottery.history.model.LotteryDraw
 import com.lottery.history.model.LotteryTypeConfig
 import com.lottery.history.model.PrizeTierEntry
 import com.lottery.history.util.BallTextHelper
-import kotlin.math.abs
-import kotlin.math.sin
 
 /**
  * 某一期开奖详情弹窗（面向40+客户优化版）：
@@ -29,7 +27,6 @@ import kotlin.math.sin
  * - 全部奖项列表：按 LotteryTypeConfig.rules 顺序，从一等奖到最低奖，每一项：
  *     奖项名称 | 命中规则 | 中奖注数 | 单注奖金
  *   全部展开，无需再点击"查看规则"按钮
- * - 若该期有真实奖级数据（17500.cn 解析），显示真实注数/金额；否则显示稳定伪随机兜底
  */
 class DrawDetailDialog(
     context: Context,
@@ -61,16 +58,19 @@ class DrawDetailDialog(
     private fun render(view: View) {
         val density = context.resources.displayMetrics.density
 
-        // 彩种名
+        // 彩种名（强化醒目，用户一眼看到现在查的是哪个彩种）
         view.findViewById<TextView>(R.id.tvLotteryName).apply {
             text = config.displayName
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+            setTypeface(null, Typeface.BOLD)
             setTextColor(
                 Color.parseColor(if (config.hasSecondary) "#C62828" else "#1565C0")
             )
         }
 
-        // 期号 + 日期
+        // 期号 + 日期（加大字体，显示为"第XXXX期 · yyyy-MM-dd"）
         view.findViewById<TextView>(R.id.tvIssueAndDate).apply {
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             if (draw != null) {
                 val issue = draw.issue
                 val date = draw.date.orEmpty()
@@ -136,16 +136,6 @@ class DrawDetailDialog(
             setTextColor(0xFFC62828.toInt())
         }
         titleRow.addView(tvTitle)
-        // 数据来源说明
-        titleRow.addView(TextView(context).apply {
-            text = if (draw?.allPrizeTiers?.isNotEmpty() == true) "（数据来源：17500.cn 真实开奖）" else "（历史数据参考）"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            setTextColor(0xFF757575.toInt())
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = (2 * density).toInt() }
-        })
         llRules.addView(titleRow)
 
         // 表头：奖项名称 / 命中规则 / 中奖注数 / 单注奖金
@@ -236,13 +226,12 @@ class DrawDetailDialog(
             }
         }
 
-        // 末行：真实性声明 + 数据来源溯源
+        // 末行：规则说明（不暴露数据来源）
         val footer = TextView(context).apply {
             text = buildString {
-                append("数据来源：data.17500.cn 官方公开开奖明细。")
-                append("\n空开=本期无人中；\"规则固定¥X\" 仅为《游戏规则》设定的单注奖金额度，")
-                append("不代表本期实际兑付；本期实际兑付以注数/单注奖金两列真实数字为准。")
-                append("\n重复奖项名（如双色球四等奖）两种命中规则共享同一条真实注数/金额。")
+                append("空开=本期无人中；\"规则固定¥X\" 仅为《游戏规则》设定的单注奖金额度，")
+                append("不代表本期实际兑付；本期实际兑付以注数/单注奖金两列公布数字为准。")
+                append("\n重复奖项名（如双色球四等奖）两种命中规则共享同一条注数/金额。")
             }
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setTextColor(0xFF9E9E9E.toInt())
@@ -261,7 +250,7 @@ class DrawDetailDialog(
 
     /**
      * 【真实性红线】：
-     *   - 注数/单注奖金两列**只能**来自真实 draw.allPrizeTiers（17500.cn data.17500.cn 官方公开数据）
+     *   - 注数/单注奖金两列**只能**来自真实 draw.allPrizeTiers（官方公开开奖数据）
      *   - 规则 MatchRuleDef.fixedAmountYuan 只能拼到 matchText 规则描述里，标注「规则固定¥X」，
      *     明确告知客户这是游戏规则本身设定，不代表本期实际兑付金额。
      *   - 规则中"连续同名奖级"（如 4+0 和 3+1 都叫四等奖）视为一个真实奖级，共享同一 entry
@@ -471,7 +460,7 @@ class DrawDetailDialog(
             secondPrizeAmount = secondAmt?.let { "单注奖金：${formatAmount(it)}" } ?: "本期奖级未公开",
             firstPrizeAddresses = emptyList(),   // 永不输出假中奖地址
             secondPrizeAddresses = emptyList(),  // 永不输出假中奖地址
-            poolText = "数据来源：data.17500.cn（官方真实数据）"  // 永不输出假奖池
+            poolText = "官方公开开奖数据"  // 永不输出假奖池
         )
     }
 

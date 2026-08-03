@@ -9,7 +9,7 @@ import java.io.ByteArrayInputStream
 import java.io.InputStream
 
 /**
- * 17500.cn 开奖历史解析器。
+ * 官方公开开奖历史解析器。
  *
  * 数据源协议：HTTP 返回【空格分隔的纯文本（扩展名伪装 .xls）】，HTTPS 返回【真二进制 OLE2 Excel】。
  * 真机环境两种都可能出现，本解析器统一嗅探后处理：

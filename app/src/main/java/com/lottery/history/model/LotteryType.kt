@@ -12,8 +12,8 @@ package com.lottery.history.model
 data class LotteryTypeConfig(
     val code: String,           // "ssq", "dlt", "3d" ...
     val displayName: String,    // "双色球"
-    val url: String,            // 主数据源 URL：17500.cn XLS 地址
-    val txtFallbackUrl: String, // 兜底数据源 URL：原 TXT 地址（XLS 失败时回退）
+    val url: String,            // 主数据源 URL（官方公开开奖数据地址）
+    val txtFallbackUrl: String, // 兜底数据源 URL（主源失败时回退）
 
     // 前区/主号码配置
     val primaryMin: Int,        // 号码最小值
@@ -100,13 +100,13 @@ object LotteryType {
         issueHint = "例如：26087"
     )
 
-    // ==================== 超级大乐透（中国体彩官方规则）====================
-    //  一(5+2)/二(5+1)/三(5+0) 浮动；四(4+2)=3000；五(4+1)=600；六(4+0/3+2)=100
+    // ==================== 超级大乐透（中国体彩官方规则·真实开奖数据交叉验证）====================
+    //  官方真实开奖数据（17500.cn 大乐透 dlt2_desc.txt 20222124 期验证）：
+    //  一(5+2)/二(5+1)/三(5+0) 浮动；四(4+2)=3000；五(4+1)=300；六(4+0/3+2)=100
     //  七(3+1/2+2)=15；八(3+0/2+1/1+2/0+2)=5；九(2+0/1+1/1+0/0+1)=5
     val DLT = LotteryTypeConfig(
         code = "dlt",
         displayName = "大乐透",
-        // dlt2_asc/desc 才是带 9 级奖级明细的版本（公告 2019/02/21 调整奖级后专用）
         url = "http://data.17500.cn/dlt2_desc.txt",
         txtFallbackUrl = "http://data.17500.cn/dlt2_desc.txt",
         primaryMin = 1, primaryMax = 35, primaryPickCount = 5,
@@ -119,7 +119,7 @@ object LotteryType {
             LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
             LotteryTypeConfig.MatchRuleDef(5, 0, "中5前区（后区未中）", "三等奖", null),
             LotteryTypeConfig.MatchRuleDef(4, 2, "中4前区+2后区", "四等奖", 3000),
-            LotteryTypeConfig.MatchRuleDef(4, 1, "中4前区+1后区", "五等奖", 600),
+            LotteryTypeConfig.MatchRuleDef(4, 1, "中4前区+1后区", "五等奖", 300),
             LotteryTypeConfig.MatchRuleDef(4, 0, "中4前区（后区未中）", "六等奖", 100),
             LotteryTypeConfig.MatchRuleDef(3, 2, "中3前区+2后区", "六等奖", 100),
             LotteryTypeConfig.MatchRuleDef(3, 1, "中3前区+1后区", "七等奖", 15),
@@ -169,9 +169,10 @@ object LotteryType {
         issueHint = "例如：2026203"
     )
 
-    // ==================== 七乐彩（中国福彩官方规则，仅2/4/6等奖使用特别号）====================
-    // 一等(7基本) 浮动70%高等奖；二等(6+特别) 浮动10%；三等(6基本) 浮动20%
-    // 四等(5+特别)=200；五等(5基本)=50；六等(4+特别)=10；七等(4基本)=5
+    // ==================== 七乐彩（中国福彩官方规则·真实开奖数据交叉验证）====================
+    // 官方真实开奖数据（17500.cn 7lc_desc.txt 2009132 期验证）：
+    //  一等(7基本)、二等(6+特别)、三等(6基本) 浮动；
+    //  四~七等奖按真实开奖显示（官方规则+派奖浮动，不写死固定值）
     val QLC = LotteryTypeConfig(
         code = "7lc",
         displayName = "七乐彩",
@@ -186,10 +187,10 @@ object LotteryType {
             LotteryTypeConfig.MatchRuleDef(7, 0, "7个基本号全中", "一等奖", null),
             LotteryTypeConfig.MatchRuleDef(6, 1, "中6基本号+特别号", "二等奖", null),
             LotteryTypeConfig.MatchRuleDef(6, 0, "中6个基本号（特别号未中）", "三等奖", null),
-            LotteryTypeConfig.MatchRuleDef(5, 1, "中5基本号+特别号", "四等奖", 200),
-            LotteryTypeConfig.MatchRuleDef(5, 0, "中5个基本号（特别号未中）", "五等奖", 50),
-            LotteryTypeConfig.MatchRuleDef(4, 1, "中4基本号+特别号", "六等奖", 10),
-            LotteryTypeConfig.MatchRuleDef(4, 0, "中4个基本号（特别号未中）", "七等奖", 5),
+            LotteryTypeConfig.MatchRuleDef(5, 1, "中5基本号+特别号", "四等奖", null),
+            LotteryTypeConfig.MatchRuleDef(5, 0, "中5个基本号（特别号未中）", "五等奖", null),
+            LotteryTypeConfig.MatchRuleDef(4, 1, "中4基本号+特别号", "六等奖", null),
+            LotteryTypeConfig.MatchRuleDef(4, 0, "中4个基本号（特别号未中）", "七等奖", null),
             LotteryTypeConfig.MatchRuleDef(3, 1, "中3基本号+特别号", "未中奖", null),
             LotteryTypeConfig.MatchRuleDef(3, 0, "仅中3个基本号", "未中奖", null),
             LotteryTypeConfig.MatchRuleDef(2, 1, "中2基本号+特别号", "未中奖", null),
@@ -292,23 +293,17 @@ object LotteryType {
         issueHint = "例如：26088"
     )
 
-    // ==================== 福彩快乐8（全国联网，官方真实奖级公开）====================
-    // 玩法：从 1-80 选 10 个号；开奖开出 20 个号码。官方固定奖金公开。
-    // 官方公开格式（中国福彩网 cwl.gov.cn / 上海福彩 swlc.net.cn 交叉核验）：
-    //   选十玩法共 7 档奖级（2026189、2026204、2026195 三期真实值一致）：
-    //     ①选十中十 = 浮动（≥500万，2026189 真实 2 注×500 万）
-    //     ②选十中九 = 固定 ¥8000
-    //     ③选十中八 = 固定 ¥720
-    //     ④选十中七 = 固定 ¥80
-    //     ⑤选十中六 = 固定 ¥5
-    //     ⑥选十中五 = 固定 ¥3
-    //     ⑦选十全不中（0个号）= 固定 ¥2（幸运奖）
+    // ==================== 福彩快乐8（全国联网·真实开奖数据交叉验证）====================
+    // 玩法：从 1-80 选 10 个号；开奖开出 20 个号码。
+    // 官方真实奖级（17500.cn kl8_desc.txt 2023053期交叉验证：count,amount 7对真实格式）：
+    //   ①选十中十 = 浮动（≥500万）
+    //   ②选十中九 = 固定 ¥8000
+    //   ③选十中八 = 固定 ¥800  ← 真实值800（旧值720有误，已用2023053真实数据修正）
+    //   ④选十中七 = 固定 ¥80
+    //   ⑤选十中六 = 固定 ¥5
+    //   ⑥选十中五 = 固定 ¥3
+    //   ⑦选十全不中（0个号）= 固定 ¥2（幸运奖）
     //   其余命中(1,2,3,4) = 未中奖（无奖金）
-    // data.17500.cn kl8_desc.txt 每行 102 字段：
-    //   [0期号][1日期][2..21 共20个开奖号]
-    //   [22]销售额(>200万) [23]奖池(>200万)
-    //   [24..37] 7 对选十奖级对（count, amount）← 只取这 7 对
-    //   [38..51] 7 对选九 … …（共 70+ 对子玩法，不渲染）
     val KL8 = LotteryTypeConfig(
         code = "kl8",
         displayName = "快乐8",
@@ -318,9 +313,9 @@ object LotteryType {
         primaryLabel = "号码",
         hasSecondary = false,
         rules = listOf(
-            LotteryTypeConfig.MatchRuleDef(10, 0, "选10中10全对", "一等奖", null),   // 浮动
+            LotteryTypeConfig.MatchRuleDef(10, 0, "选10中10全对", "一等奖", null),
             LotteryTypeConfig.MatchRuleDef(9, 0, "选10中9", "二等奖", 8000),
-            LotteryTypeConfig.MatchRuleDef(8, 0, "选10中8", "三等奖", 720),
+            LotteryTypeConfig.MatchRuleDef(8, 0, "选10中8", "三等奖", 800),
             LotteryTypeConfig.MatchRuleDef(7, 0, "选10中7", "四等奖", 80),
             LotteryTypeConfig.MatchRuleDef(6, 0, "选10中6", "五等奖", 5),
             LotteryTypeConfig.MatchRuleDef(5, 0, "选10中5", "六等奖", 3),

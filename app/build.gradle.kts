@@ -74,7 +74,7 @@ dependencies {
     // 加密存储 token / 登录态
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
-    // Excel (xls 97-2003) 解析 —— 17500.cn xls 数据源
+    // Excel (xls 97-2003) 解析 —— 官方公开开奖数据表格格式
     // 本地 JAR，避免 Gradle 镜像仓库因网络波动拉取失败
     implementation(files("libs/jxl-2.6.12.jar"))
 }

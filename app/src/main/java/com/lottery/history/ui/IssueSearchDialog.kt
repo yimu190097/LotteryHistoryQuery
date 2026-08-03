@@ -310,6 +310,27 @@ class IssueSearchDialog(context: Context) : Dialog(context) {
                 layoutParams = lp
             })
         }
+
+        // 查看本期全部奖项详情（所有奖级 + 真实注数 + 单注奖金）→ 跳转 DrawDetailDialog
+        container.addView(TextView(context).apply {
+            text = "查看本期全部奖项详情 ›"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                (46 * density).toInt()
+            )
+            lp.topMargin = (14 * density).toInt()
+            layoutParams = lp
+            setBackgroundResource(R.drawable.bg_button_red)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                DrawDetailDialog(context, cfg, draw).show()
+            }
+        })
     }
 
     private fun buildPrizeRow(label: String, count: Int?, amount: Long?, color: Int): LinearLayout {
