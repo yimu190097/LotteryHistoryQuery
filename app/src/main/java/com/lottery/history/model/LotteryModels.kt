@@ -7,7 +7,33 @@ package com.lottery.history.model
 data class PrizeTierEntry(
     val count: Int,    // 当期该奖级中奖注数（0 表示空开）
     val amount: Long   // 单注奖金（元），0 表示空开无奖金
-)
+) {
+    /** 序列化格式：count:amount（便于写入 Room 字符串列） */
+    fun encode(): String = "${count}:${amount}"
+
+    companion object {
+        fun decode(raw: String): PrizeTierEntry? {
+            val p = raw.split(':').takeIf { it.size == 2 } ?: return null
+            val c = p[0].toIntOrNull() ?: return null
+            val a = p[1].toLongOrNull() ?: return null
+            return PrizeTierEntry(count = c, amount = a)
+        }
+    }
+}
+
+/**
+ * 所有奖级编解码：把 List<PrizeTierEntry?> 序列化成 "3:7852000,125:160800,..." 字符串，
+ * 存入 Room.allPrizeTiers 列；null 值编码为 "null"。
+ */
+fun List<PrizeTierEntry?>.encodeTiers(): String? =
+    if (this.isEmpty()) null
+    else this.joinToString(",") { if (it == null) "null" else it.encode() }
+
+fun decodePrizeTiers(raw: String?): List<PrizeTierEntry?> =
+    if (raw.isNullOrEmpty()) emptyList()
+    else raw.split(',').map { part ->
+        if (part == "null") null else PrizeTierEntry.decode(part)
+    }
 
 data class LotteryDraw(
     val issue: String,
@@ -24,8 +50,6 @@ data class LotteryDraw(
     val secondPrizeAmount: Long? = null,
     /**
      * 当期所有奖级，从一等奖往下按顺序排列（17500.cn XLS 真实数据）。
-     * 数量与规则 LotteryTypeConfig.rules 中"有金额的奖项"数量一致，可能不足时用 null 补齐。
-     * 示例（双色球 5 级数据）：[一等奖(3注1000万), 二等奖(81注36.9万), 三等奖(724注3000元), 四等奖(44157注200元), 五等奖(10注643.4万), ...]
      * DrawDetailDialog 会按 rules 顺序把每个奖项名 + 该 entry 一并渲染。
      */
     val allPrizeTiers: List<PrizeTierEntry?> = emptyList()

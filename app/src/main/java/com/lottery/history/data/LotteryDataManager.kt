@@ -7,6 +7,8 @@ import com.lottery.history.db.LotteryDrawEntity
 import com.lottery.history.model.LotteryDraw
 import com.lottery.history.model.LotteryType
 import com.lottery.history.model.LotteryTypeConfig
+import com.lottery.history.model.decodePrizeTiers
+import com.lottery.history.model.encodeTiers
 import com.lottery.history.network.LotteryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -130,7 +132,8 @@ object LotteryDataManager {
                             firstPrizeCount = it.firstPrizeCount,
                             firstPrizeAmount = it.firstPrizeAmount,
                             secondPrizeCount = it.secondPrizeCount,
-                            secondPrizeAmount = it.secondPrizeAmount
+                            secondPrizeAmount = it.secondPrizeAmount,
+                            allPrizeTiers = it.allPrizeTiers.encodeTiers()
                         )
                     })
                     caches[config.code] = d.getAllByType(config.code).map { e -> e.toModel() }
@@ -181,8 +184,35 @@ object LotteryDataManager {
             firstPrizeCount = firstPrizeCount,
             firstPrizeAmount = firstPrizeAmount,
             secondPrizeCount = secondPrizeCount,
-            secondPrizeAmount = secondPrizeAmount
+            secondPrizeAmount = secondPrizeAmount,
+            allPrizeTiers = decodePrizeTiers(allPrizeTiers)
         )
+
+    /**
+     * 按「期号」查找某一期开奖结果：
+     *   1) 先完全匹配 issue == query
+     *   2) 再用 startsWith 模糊匹配（用户可能输"26087"而完整 issue 是"26087001"等容错）
+     *   3) 最后再用 endsWith 匹配（用户可能只输 2026087 的后几位 087）
+     */
+    fun findDrawByIssue(config: LotteryTypeConfig, queryRaw: String): LotteryDraw? {
+        val q = queryRaw.trim()
+        if (q.isEmpty()) return null
+        val list = getCached(config)
+        // 1. 完全相等
+        list.firstOrNull { it.issue == q }?.let { return it }
+        // 2. 尾部匹配（客户最常见：只输最后 N 位期号）
+        list.firstOrNull { it.issue.endsWith(q) }?.let { return it }
+        // 3. 前缀匹配（客户可能输 2026 开头的全写）
+        list.firstOrNull { it.issue.startsWith(q) }?.let { return it }
+        // 4. 去空格/去"第""期"字后再比对（容错）
+        val compact = q.replace("""[第期\s\-_]""".toRegex(), "")
+        if (compact.isEmpty()) return null
+        list.firstOrNull { draw ->
+            val di = draw.issue.replace("""[\-_ ]""".toRegex(), "")
+            di == compact || di.endsWith(compact) || di.startsWith(compact)
+        }?.let { return it }
+        return null
+    }
 }
 
 data class RefreshResult(

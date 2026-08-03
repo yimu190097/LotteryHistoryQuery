@@ -167,30 +167,61 @@ class DrawDetailDialog(
             setBackgroundColor(0xFFC62828.toInt())
         })
 
-        // ----- 按 rules 顺序逐行渲染所有奖级 -----
-        // 真实奖级 -> 按 rules 索引对齐（rules 可能有重复奖项名（如双色球"四等奖"出现多次），
-        // 按"真实有数据的奖项数"从一等奖往下分配 allPrizeTiers 里对应 entry；
-        // 重复名（如双色球 4+0 和 3+1 都叫四等奖）合并共用同一 entry）。
+        // ----- 按 rules 顺序逐行渲染所有奖级（100%真实数据展示，绝不兜底）-----
         val merged = mergePrizeTiersWithRules(config.rules, draw?.allPrizeTiers.orEmpty())
+        // 顶部提示：若当期真实 allPrizeTiers 少于规则去重后的奖级数，显式提示客户"部分未公布"
+        val haveAnyRealTiers = merged.any { it.tierEntry != null }
+        val missingCount = merged.groupBy { it.prizeName }.keys.size -
+            merged.count { it.tierEntry != null }.coerceAtLeast(0)
+        if (!haveAnyRealTiers) {
+            val warn = TextView(context).apply {
+                text = "⚠️ 本期注数/金额明细未公开（规则中" +
+                    "\"规则固定¥X\"为游戏规则设定值，仅作说明，不代表本期实际兑付）"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setTextColor(0xFFFFFFFF.toInt())
+                setBackgroundColor(0xFFE65100.toInt())   // 深橙底白字，醒目不误导
+                val pad = (10 * density).toInt()
+                setPadding(pad, pad, pad, pad)
+            }
+            llRules.addView(warn)
+        } else if (missingCount > 0) {
+            val warn = TextView(context).apply {
+                text = "说明：本期已公布 ${merged.groupBy { it.tierEntry != null }.size} 个奖级，" +
+                    "其余 $missingCount 个奖级明细未公开（\"规则固定¥X\" 仅为规则说明）。"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setTextColor(0xFF5D4037.toInt())
+                setBackgroundColor(0xFFFFF3E0.toInt())
+                val pad = (8 * density).toInt()
+                setPadding(pad, pad, pad, pad)
+            }
+            llRules.addView(warn)
+        }
+
         merged.forEachIndexed { idx, row ->
             val entry = row.tierEntry
+
+            // ---- 中奖注数列（只能用真实数据）----
             val countText = when {
-                entry != null && entry.count > 0 -> "${entry.count}注"
-                entry != null -> "空开"
-                else -> "—"
+                entry == null -> "—"
+                entry.count > 0 -> "${entry.count}注"
+                else -> "空开"   // entry.count == 0：真实数据就是空开
             }
+
+            // ---- 单注奖金列（只能用真实数据）----
             val amountText = when {
-                entry != null && entry.amount > 0 -> formatAmount(entry.amount)
-                entry != null && entry.count == 0L.toInt() -> "—"  // 空开无金额
+                entry == null -> "—"
+                entry.amount > 0L -> formatAmount(entry.amount)
+                entry.count == 0 -> "空开无奖金"    // count 0 + amount 0：真实空开
                 else -> "—"
             }
+
             val rowView = buildPrizeRow(
                 prizeName = row.prizeName,
                 matchText = row.matchText,
                 countText = countText,
                 amountText = amountText,
                 density = density,
-                highlightTop = idx < 3    // 前3等奖(一/二/三) 高亮色
+                highlightTop = idx < 3
             )
             llRules.addView(rowView)
             if (idx < merged.size - 1) {
@@ -205,9 +236,14 @@ class DrawDetailDialog(
             }
         }
 
-        // 末行：数据说明 / 底部留白
+        // 末行：真实性声明 + 数据来源溯源
         val footer = TextView(context).apply {
-            text = "注：空开表示本期无人中该奖项；重复奖项名（如双色球四等奖）两种命中规则共享同一组统计。"
+            text = buildString {
+                append("数据来源：data.17500.cn 官方公开开奖明细。")
+                append("\n空开=本期无人中；\"规则固定¥X\" 仅为《游戏规则》设定的单注奖金额度，")
+                append("不代表本期实际兑付；本期实际兑付以注数/单注奖金两列真实数字为准。")
+                append("\n重复奖项名（如双色球四等奖）两种命中规则共享同一条真实注数/金额。")
+            }
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setTextColor(0xFF9E9E9E.toInt())
             val pad = (12 * density).toInt()
@@ -219,35 +255,48 @@ class DrawDetailDialog(
     // ================ 数据对齐：rules ↔ allPrizeTiers 合并 ================
     private data class MergedPrizeRow(
         val prizeName: String,
-        val matchText: String,
-        val tierEntry: PrizeTierEntry?
+        val matchText: String, // 命中规则（含规则固定奖金说明：「规则固定¥X」写在此处，只作规则说明，不作真实开奖数据）
+        val tierEntry: PrizeTierEntry? // 真实 allPrizeTiers 解析到的当期奖级（=null 表示本期未公开该奖级）
     )
 
     /**
-     * 把 config.rules（可能含重复奖项名，如双色球四等奖出现2次）
-     * 与 draw.allPrizeTiers（按一等奖→二等奖→...真实顺序）合并对齐：
+     * 【真实性红线】：
+     *   - 注数/单注奖金两列**只能**来自真实 draw.allPrizeTiers（17500.cn data.17500.cn 官方公开数据）
+     *   - 规则 MatchRuleDef.fixedAmountYuan 只能拼到 matchText 规则描述里，标注「规则固定¥X」，
+     *     明确告知客户这是游戏规则本身设定，不代表本期实际兑付金额。
      *   - 规则中"连续同名奖级"（如 4+0 和 3+1 都叫四等奖）视为一个真实奖级，共享同一 entry
-     *   - 去重后的 prizeName 索引即对应 allPrizeTiers[ idx ]
-     *   - 若真实 entry 不足，未命中的显示 null（显示"—"）
+     *   - 【快乐8 多子玩法奖级隔离】：config.realTiersToUse 指定从真实 allPrizeTiers 中只取前 N 个
+     *     真实奖级对参与规则对齐（避免快乐8 allPrizeTiers 中 70+ 对子玩法奖级混入选十）
      */
     private fun mergePrizeTiersWithRules(
         rules: List<LotteryTypeConfig.MatchRuleDef>,
         tiers: List<PrizeTierEntry?>
     ): List<MergedPrizeRow> {
         val merged = mutableListOf<MergedPrizeRow>()
+        // 只截取真实奖级前 N 对 —— N = config.realTiersToUse（快乐8=7，其他=rules.size）
+        val trimmedTiers = tiers.take(config.realTiersToUse)
         var dedupIdx = -1
         var lastName: String? = null
         rules.forEach { rule ->
-            // 遇到新奖项名（与上一个不同）→ dedupIdx++
+            if (rule.prizeName.contains("未中奖") || rule.prizeName.contains("无奖项")) {
+                return@forEach
+            }
             if (rule.prizeName != lastName) {
                 dedupIdx++
                 lastName = rule.prizeName
             }
-            val entry = tiers.getOrNull(dedupIdx)
+            val entry = trimmedTiers.getOrNull(dedupIdx)
+            // 命中规则 + 规则固定奖金（如双色球三等奖「规则固定¥3,000」）→ 拼到规则列，不进金额列
+            val baseMatch = rule.description.ifEmpty { buildMatchText(rule) }
+            val fullMatch = if (rule.fixedAmountYuan != null) {
+                baseMatch + "（规则固定¥${rule.fixedAmountYuan}）"
+            } else {
+                baseMatch
+            }
             merged.add(
                 MergedPrizeRow(
                     prizeName = rule.prizeName,
-                    matchText = buildMatchText(rule),
+                    matchText = fullMatch,
                     tierEntry = entry
                 )
             )
@@ -392,8 +441,10 @@ class DrawDetailDialog(
         return row
     }
 
-    // ================ 兼容：generatePrizeInfo 旧 API（其他地方可能仍引用） ================
-    // 为避免外部未更新引用编译报错，保留但不再在 UI 中使用
+    // ================ 兼容：generatePrizeInfo 旧 API（编译期保留，仅真实数据，永不输出假数据） ================
+    // 严格执行用户"数据必须真实，异常就删除"红线：
+    //   - 仅使用真实 draw.allPrizeTiers / firstPrizeCount 字段；缺失就显示「未公开」
+    //   - 禁止任何 rand() / 伪随机 / 兜底数字；禁止伪造中奖地址/奖池
     @Suppress("unused")
     private data class PrizeInfo(
         val firstPrizeCount: Int,
@@ -406,34 +457,22 @@ class DrawDetailDialog(
     )
 
     @Suppress("unused")
-    private fun generatePrizeInfo(config: LotteryTypeConfig, draw: LotteryDraw): PrizeInfo {
-        // 优先使用真实奖级数据
-        if (draw.firstPrizeCount != null || draw.secondPrizeCount != null) {
-            return PrizeInfo(
-                firstPrizeCount = draw.firstPrizeCount ?: 0,
-                secondPrizeCount = draw.secondPrizeCount ?: 0,
-                firstPrizeAmount = draw.firstPrizeAmount?.let { "单注奖金：${formatAmount(it)}" } ?: "—",
-                secondPrizeAmount = draw.secondPrizeAmount?.let { "单注奖金：${formatAmount(it)}" } ?: "—",
-                firstPrizeAddresses = emptyList(),
-                secondPrizeAddresses = emptyList(),
-                poolText = "数据来源：17500.cn"
-            )
-        }
-        val seed = (config.code + draw.issue).hashCode().toLong()
-        fun rand(n: Int): Int {
-            val x = sin(seed.toDouble() * n + n * 31.7)
-            return (abs(x) * 100000).toInt()
-        }
-        val firstCount = if (config.hasSecondary) (3 + rand(1) % 16) else (800 + rand(3) % 1500)
-        val secondCount = if (config.hasSecondary) (80 + rand(2) % 320) else (2000 + rand(4) % 4000)
-        val firstAmount = if (config.hasSecondary) "单注奖金：${500 + rand(5) % 1000}万元" else "单注奖金：1040元"
-        val secondAmount = if (config.hasSecondary) "单注奖金：${10 + rand(6) % 40}万元" else "单注奖金：346元"
-        val pool = if (config.hasSecondary) "${3 + rand(7) % 18}.${rand(8) % 100} 亿元" else "${firstCount + secondCount * 2 + 1000} 注"
-        val cities1 = listOf("北京市朝阳区", "上海市浦东新区", "广州市天河区", "深圳市南山区", "成都市锦江区", "杭州市西湖区")
-        val cities2 = listOf("广东省佛山市", "浙江省宁波市", "江苏省无锡市", "湖南省长沙市", "福建省厦门市", "山东省烟台市")
-        val addr1 = (0 until (2 + rand(9) % 3)).map { cities1[(rand(10 + it) + it) % cities1.size] }.distinct()
-        val addr2 = (0 until (3 + rand(11) % 4)).map { cities2[(rand(12 + it) + it) % cities2.size] }.distinct()
-        return PrizeInfo(firstCount, secondCount, firstAmount, secondAmount, addr1, addr2, pool)
+    private fun generatePrizeInfo(@Suppress("UNUSED_PARAMETER") config: LotteryTypeConfig, draw: LotteryDraw): PrizeInfo {
+        // 只有真实来源（first/second/amount 来自 allPrizeTiers）
+        //   非空 → 显示真实值；空 → 统一标「本期奖级未公开」绝不兜底
+        val firstCount = draw.firstPrizeCount
+        val secondCount = draw.secondPrizeCount
+        val firstAmt = draw.firstPrizeAmount
+        val secondAmt = draw.secondPrizeAmount
+        return PrizeInfo(
+            firstPrizeCount = firstCount ?: 0,
+            secondPrizeCount = secondCount ?: 0,
+            firstPrizeAmount = firstAmt?.let { "单注奖金：${formatAmount(it)}" } ?: "本期奖级未公开",
+            secondPrizeAmount = secondAmt?.let { "单注奖金：${formatAmount(it)}" } ?: "本期奖级未公开",
+            firstPrizeAddresses = emptyList(),   // 永不输出假中奖地址
+            secondPrizeAddresses = emptyList(),  // 永不输出假中奖地址
+            poolText = "数据来源：data.17500.cn（官方真实数据）"  // 永不输出假奖池
+        )
     }
 
     private fun createBall(

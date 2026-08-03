@@ -13,5 +13,8 @@ data class LotteryDrawEntity(
     val firstPrizeCount: Int? = null,
     val firstPrizeAmount: Long? = null,
     val secondPrizeCount: Int? = null,
-    val secondPrizeAmount: Long? = null
+    val secondPrizeAmount: Long? = null,
+    // 所有奖级（一等奖～最低奖级）：每行「注数:金额」用逗号串联成字符串；没有时为 null
+    // 例："3:7852000,125:160800,1590:3000,5190:200,53880:10,86700:5"
+    val allPrizeTiers: String? = null
 )

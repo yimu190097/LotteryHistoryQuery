@@ -7,8 +7,6 @@ import jxl.Sheet
 import jxl.Workbook
 import java.io.ByteArrayInputStream
 import java.io.InputStream
-import kotlin.math.abs
-import kotlin.math.sin
 
 /**
  * 17500.cn 开奖历史解析器。
@@ -143,15 +141,22 @@ object LotteryXlsParser {
     }
 
     // 从 parts 尾部的数值字段中提取【全部奖级】(注数,金额) 对列表（一等奖、二等奖、三等奖…按顺序）
-    // 三步：
-    //   1) 跳过紧随号码之后的重复/排序号码段（值 0-35 连续数字；ssq/dlt/7lc 常见）
-    //   2) 跳过超大销售额/奖池（> 100 亿）
-    //   3) 跳过销售额/奖池残留（> 20 万的单个大值），然后找 0..20 万注数+金额对；
-    //      count==0 的空开也视为有效对，避免组三 0 注 320 元错位到组六
-    // 返回：按顺序的奖级列表，空开 entry 也保留（amount 为额定单注或 0）。最多提取 15 级（全彩种覆盖）。
+    // 五步（100% 真实奖级，绝不回退 / 伪造）：
+    //   0) '-' 号当作 null（七乐彩最新一期延迟公开：尾部16个全'-'，跳过整段不解析）
+    //   1) 跳过紧随号码之后的重复/排序号码段（值 0..35 连续数字；ssq/dlt/7lc 常见）
+    //   2) **预扫描：跳过销售额/奖池大数**：单个值 > 2_000_000（200万）的数字一律视为
+    //        销售额 / 奖池 / 累计金额，直接跳过。—— 全国任何彩种的「中奖注数」从未超过 200 万：
+    //        双色球六等奖（末等奖）最高一期约 170 万注，七乐彩六等奖最高 6 万注。
+    //        （注：一等奖单注奖金 ≥ 500万，会被 "count≤500 && amount≥100万" 的白名单捞回来，
+    //          因为「count 是注数，肯定在跳过之前已经先被校验了」，不会漏头奖。）
+    //   3) 然后找 (count, amount) 成对
+    //   4) 白名单/普通过滤：高奖金 count≤500 且 amount≥100万 直接通过；普通 amount 0..200万；
+    //        count==0 && amount==0 空开保留。
+    // 返回：按顺序的奖级列表。最多提取 15 级（覆盖全彩种）。
     private fun extractAllPrizeTiers(parts: List<String>, start: Int): List<PrizeTierEntry> {
         val nums = (start until parts.size).mapNotNull { idx ->
             val v = parts[idx]
+            // 七乐彩最新一期尾部全 '-'，全部跳过后 nums.size<2 → 直接返回空
             if (v == "-" || v.isEmpty()) null else v.toLongOrNull()
         }
         val all = mutableListOf<PrizeTierEntry>()
@@ -159,16 +164,29 @@ object LotteryXlsParser {
         var i = 0
         // 1) 跳过紧随号码之后的重复/排序号码段（值 0..35）
         while (i < nums.size && nums[i] in 0..35) { i++ }
-        // 2) 跳过销售额/奖池（> 100 亿）
-        while (i < nums.size && nums[i] > 100_0000_0000L) { i++ }
-        // 3) 跳过销售额/奖池残留（> 20 万的单个大值）
-        while (i < nums.size && nums[i] > 200000) { i++ }
+        // 2) 预扫描：单个值 > 2_000_000（200万）一律视为销售额/奖池/累计额 → 跳过
+        //    七乐彩典型：销售额 5,264,472；奖池 2,583,654；都是 > 200 万，这一步全部吃掉。
+        while (i < nums.size && nums[i] > 2_000_000L) { i++ }
         // 最多 15 级（大乐透规则最多到九等奖，加冗余到 15 足够）
         while (i + 1 < nums.size && all.size < 15) {
             val count = nums[i]
             val amount = nums[i + 1]
-            // count==0：该奖级空开（amount 为额定单注，仍视为有效对）
-            if (count in 0..200000 && (amount >= 100 || count == 0L)) {
+            // 注数上限严格 200 万（同 step2），避免奖池金额被误当 count，造成 pair 错位
+            if (count !in 0..2_000_000L) {
+                i += 1
+                continue
+            }
+            if (amount < 0) {
+                i += 1
+                continue
+            }
+            // 高奖金白名单：count 很少（≤500注）且 amount ≥ 100万 → 典型浮动头奖/二等奖，直接通过
+            val isBigPrize = count <= 500L && amount >= 1_000_000L
+            // 普通奖金：0 ≤ amount ≤ 2_000_000（200万封顶，如双色球三等奖 3000、大乐透三等奖 10000 都在范围内）
+            val isNormalPrize = amount in 0..2_000_000L
+            // count==0 且 amount==0 也允许（空开）
+            val isZeroOpen = count == 0L && amount == 0L
+            if (isBigPrize || isNormalPrize || isZeroOpen) {
                 all.add(PrizeTierEntry(count = count.toInt(), amount = amount))
                 i += 2
             } else {
@@ -197,11 +215,5 @@ object LotteryXlsParser {
             return null
         }
         return null
-    }
-
-    // 为现有 DrawDetailDialog.generatePrizeInfo seed 兜底保留的 sin/abs 链接依赖（无需删除）
-    @Suppress("unused")
-    private fun keepLinked() {
-        sin(1.0); abs(1)
     }
 }

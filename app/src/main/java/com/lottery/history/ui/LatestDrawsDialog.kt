@@ -170,20 +170,30 @@ class LatestDrawsDialog(context: Context) : Dialog(context) {
             }
             row.addView(ballsContainer)
 
-            // 第三行：查看详情提示
-            val tvDetail = TextView(context).apply {
-                text = "点击查看开奖详情"
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-                setTextColor(Color.parseColor("#C62828"))
-                gravity = Gravity.END
+            // 第三行：大按钮「查看本期奖项详情」→ DrawDetailDialog 显示当期所有奖项(含金额+注数)
+            val btnViewIssueDetail = TextView(context).apply {
+                text = "查看本期奖项详情 ›"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextColor(Color.WHITE)
+                setTypeface(null, Typeface.BOLD)
+                gravity = Gravity.CENTER
                 val lp = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
+                    (40 * density).toInt()
                 )
-                lp.topMargin = (4 * density).toInt()
+                lp.topMargin = (6 * density).toInt()
+                lp.marginStart = (12 * density).toInt()
+                lp.marginEnd = (12 * density).toInt()
                 layoutParams = lp
+                setBackgroundResource(R.drawable.bg_button_red)
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    if (draw == null) return@setOnClickListener
+                    DrawDetailDialog(context, config, draw).show()
+                }
             }
-            row.addView(tvDetail)
+            row.addView(btnViewIssueDetail)
 
             container.addView(row)
 

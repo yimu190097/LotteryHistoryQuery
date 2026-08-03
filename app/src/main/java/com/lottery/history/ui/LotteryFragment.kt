@@ -52,6 +52,10 @@ class LotteryFragment : Fragment() {
     private lateinit var llResultRedBalls: ViewGroup
     private lateinit var llResultBlueBalls: ViewGroup
     private lateinit var resultContainer: LinearLayout
+    // 按期号查询相关
+    private lateinit var etIssueQuery: android.widget.EditText
+    private lateinit var btnQueryByIssue: TextView
+    private lateinit var tvIssueHint: TextView
     // 后区相关容器（单区彩种时隐藏）
     private lateinit var secondarySection: View
     private lateinit var tvSecondaryTitle: TextView
@@ -89,6 +93,9 @@ class LotteryFragment : Fragment() {
         btnQuery = view.findViewById(R.id.btnQuery)
         btnQueryHistory = view.findViewById(R.id.btnQueryHistory)
         cardResult = view.findViewById(R.id.cardResult)
+        etIssueQuery = view.findViewById(R.id.etIssueQuery)
+        btnQueryByIssue = view.findViewById(R.id.btnQueryByIssue)
+        tvIssueHint = view.findViewById(R.id.tvIssueHint)
         tvSelectedNumbers = view.findViewById(R.id.tvSelectedNumbers)
         llResultRedBalls = view.findViewById(R.id.llResultRedBalls)
         llResultBlueBalls = view.findViewById(R.id.llResultBlueBalls)
@@ -135,6 +142,16 @@ class LotteryFragment : Fragment() {
             // 单区彩种：没有蓝球/后区/特别号 → 直接隐藏命中次号表头列
             headerHitSec?.visibility = View.GONE
         }
+
+        // ===== 按期号查询：按彩种动态设置 hint / 最近一期期号示例 =====
+        val sampleLatest = LotteryDataManager.getCached(config).firstOrNull()?.issue
+        tvIssueHint.text = buildString {
+            append("格式示例：")
+            append(config.issueHint)
+            if (sampleLatest != null) append(" ｜ 最新：$sampleLatest")
+            append(" ｜ 支持输后几位模糊匹配")
+        }
+        etIssueQuery.hint = "如 ${config.issuePattern}"
     }
 
     private fun setupBallGrids() {
@@ -325,6 +342,37 @@ class LotteryFragment : Fragment() {
                     performQuery()
                 }
             ).show()
+        }
+
+        // ===== 按期号查询按钮：直接从缓存中按 issue 定位一期并弹开奖详情 =====
+        btnQueryByIssue.setOnClickListener {
+            val raw = etIssueQuery.text?.toString() ?: ""
+            if (raw.isBlank()) {
+                android.widget.Toast.makeText(
+                    requireContext(),
+                    "请先输入期号",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+                return@setOnClickListener
+            }
+            val draw = LotteryDataManager.findDrawByIssue(config, raw)
+            if (draw == null) {
+                android.widget.Toast.makeText(
+                    requireContext(),
+                    buildString {
+                        append("未找到【${config.displayName}】期号「$raw」")
+                        val sample = LotteryDataManager.getCached(config).firstOrNull()?.issue
+                        if (sample != null) append("，最新期号示例：$sample")
+                    },
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+                return@setOnClickListener
+            }
+            // 隐藏输入法，弹开奖详情（显示所有奖项+金额+注数）
+            (requireActivity().getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as?
+                android.view.inputmethod.InputMethodManager)
+                ?.hideSoftInputFromWindow(etIssueQuery.windowToken, 0)
+            DrawDetailDialog(requireContext(), config, draw).show()
         }
     }
 
