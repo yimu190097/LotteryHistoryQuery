@@ -98,7 +98,7 @@ class LotteryFragment : Fragment() {
         llResultSecondaryRow = view.findViewById(R.id.llResultSecondaryRow)
     }
 
-    /** 根据彩种配置设置标签文字和后区可见性 */
+    /** 根据彩种配置设置标签文字和后区可见性（含结果表头动态重命名 + 单区隐藏蓝球列） */
     private fun setupLabels() {
         // 卡片标题
         view?.findViewById<TextView>(R.id.tvPrimaryLabel)?.text = "选号对比"
@@ -107,14 +107,33 @@ class LotteryFragment : Fragment() {
         // 结果区前区标签
         view?.findViewById<TextView>(R.id.tvResultPrimaryLabel)?.text = config.primaryLabel
 
+        // ============ 查询结果 5 列表头：文字描述动态匹配彩种术语 ============
+        // 列：奖项 / 命中primary / 命中secondary / 次数 / 操作
+        view?.findViewById<TextView>(R.id.tvHeaderPrizeName)?.text = "奖项"
+        view?.findViewById<TextView>(R.id.tvHeaderCount)?.text = "次数"
+        view?.findViewById<TextView>(R.id.tvHeaderAction)?.text = "操作"
+        view?.findViewById<TextView>(R.id.tvHeaderHitPrimary)?.text = "命中${config.primaryLabel}"
+        // primary label 颜色跟随实际号码球色（红球/前区红/号码 统一红顶）
+        view?.findViewById<TextView>(R.id.tvHeaderHitPrimary)?.setTextColor(
+            android.graphics.Color.parseColor("#C62828")
+        )
+
+        val headerHitSec = view?.findViewById<TextView>(R.id.tvHeaderHitSecondary)
         if (config.hasSecondary) {
             secondarySection.visibility = View.VISIBLE
             llResultSecondaryRow.visibility = View.VISIBLE
             tvSecondaryTitle.text = config.secondaryLabel
             view?.findViewById<TextView>(R.id.tvResultSecondaryLabel)?.text = config.secondaryLabel
+
+            // 次号列：按球色显示蓝顶（大乐透后区=蓝、七乐彩特别号=蓝球统一风格；福彩3D等无次号直接隐藏）
+            headerHitSec?.visibility = View.VISIBLE
+            headerHitSec?.text = "命中${config.secondaryLabel}"
+            headerHitSec?.setTextColor(android.graphics.Color.parseColor("#1565C0"))
         } else {
             secondarySection.visibility = View.GONE
             llResultSecondaryRow.visibility = View.GONE
+            // 单区彩种：没有蓝球/后区/特别号 → 直接隐藏命中次号表头列
+            headerHitSec?.visibility = View.GONE
         }
     }
 
@@ -400,8 +419,18 @@ class LotteryFragment : Fragment() {
         cardResult.visibility = View.VISIBLE
         resultContainer.removeAllViews()
 
-        tvSelectedNumbers.text = "您选的号码，在历史上："
-        tvSelectedNumbers.setTextColor(Color.parseColor("#333333"))
+        // 顶部总命中统计：把 N 个奖项的命中次数相加，给出总数，40+ 用户一眼看出有没有中奖
+        val totalHit = results.sumOf { r -> r.count }
+        val summaryText = if (totalHit > 0) {
+            "您选的号码，在历史上共命中 ${totalHit} 期："
+        } else {
+            "您选的号码，在历史上暂未命中任何奖项："
+        }
+        tvSelectedNumbers.text = summaryText
+        tvSelectedNumbers.setTextColor(
+            if (totalHit > 0) Color.parseColor("#C62828") else Color.parseColor("#546E7A")
+        )
+        tvSelectedNumbers.setTypeface(null, android.graphics.Typeface.BOLD)
 
         val ballSize = computeCompactBallSize()
         val margin = dpToPx(4f)
@@ -426,8 +455,15 @@ class LotteryFragment : Fragment() {
         val btnPadV = (8 * density).toInt()
         val cornerRadius = 8 * density
 
+        // 双区彩种 5 列，单区彩种 4 列（直接移除命中蓝球那一列），总权重按比例扩张填满整行
+        val (wPrize, wPri, wSec, wCount, wAction) = if (config.hasSecondary) {
+            arrayOf(1.3f, 1.1f, 1.1f, 0.9f, 1.1f)
+        } else {
+            // 单区彩种：把原本 wSec=1.1f 按比例均摊到其他列，让视觉间距不变
+            arrayOf(1.6f, 1.4f, 0f, 1.15f, 1.35f)
+        }
+
         results.forEachIndexed { index, item ->
-            // 表格行：5列（奖项/命中红球/命中蓝球/次数/操作），权重分配宽度自适应屏幕，无横向滚动
             val row = LinearLayout(requireContext()).apply {
                 orientation = LinearLayout.HORIZONTAL
                 layoutParams = LinearLayout.LayoutParams(
@@ -440,8 +476,8 @@ class LotteryFragment : Fragment() {
                 }
             }
 
-            // 列1：奖项名称 (权重 1.3)
-            val col1 = createTableCell(item.prizeName, 1.3f)
+            // 列1：奖项名称
+            val col1 = createTableCell(item.prizeName, wPrize)
             (col1 as TextView).apply {
                 val prizeCol = when {
                     item.prizeName.contains("一等") -> 0xFFC62828.toInt()
@@ -459,41 +495,37 @@ class LotteryFragment : Fragment() {
             }
             row.addView(col1)
 
-            // 列2：命中红球数量 (权重 1.1)
-            val hitPri = "${item.matchPrimary}个"
-            val col2 = createTableCell(hitPri, 1.1f).apply {
+            // 列2：命中红球/前区/号码 数量
+            val hitPriTxt = "${item.matchPrimary}个"
+            val col2 = createTableCell(hitPriTxt, wPri).apply {
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
                 setTypeface(null, Typeface.BOLD)
                 setPadding(cellPadH, cellPadV, cellPadH, cellPadV)
                 gravity = Gravity.CENTER
-                // 命中红球：命中>=3 红色大字，<3 灰色
+                // 主号命中 ≥3 用红色加粗突出；<3 灰色正常
                 setTextColor(
                     if (item.matchPrimary >= 3) 0xFFC62828.toInt() else 0xFF546E7A.toInt()
                 )
             }
             row.addView(col2)
 
-            // 列3：命中蓝球/后区/特别号 数量 (权重 1.1)
-            val hitSecTxt = if (config.hasSecondary) "${item.matchSecondary}个" else "—"
-            val col3 = createTableCell(hitSecTxt, 1.1f).apply {
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-                setTypeface(null, Typeface.BOLD)
-                setPadding(cellPadH, cellPadV, cellPadH, cellPadV)
-                gravity = Gravity.CENTER
-                if (config.hasSecondary) {
+            // 列3：命中蓝球/后区/特别号（仅双区彩种显示；单区彩种 GONE 直接排除不占位）
+            if (config.hasSecondary) {
+                val col3 = createTableCell("${item.matchSecondary}个", wSec).apply {
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                    setTypeface(null, Typeface.BOLD)
+                    setPadding(cellPadH, cellPadV, cellPadH, cellPadV)
+                    gravity = Gravity.CENTER
                     setTextColor(
                         if (item.matchSecondary > 0) 0xFF1565C0.toInt() else 0xFF78909C.toInt()
                     )
-                } else {
-                    setTextColor(0xFFBDBDBD.toInt())
                 }
+                row.addView(col3)
             }
-            row.addView(col3)
 
-            // 列4：命中次数 (权重 0.9)
+            // 列4：命中次数
             val countText = if (item.count > 0) "中${item.count}次" else "未中"
-            val col4 = createTableCell(countText, 0.9f)
-            col4.apply {
+            val col4 = createTableCell(countText, wCount).apply {
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
                 setTypeface(null, Typeface.BOLD)
                 setPadding(cellPadH, cellPadV, cellPadH, cellPadV)
@@ -505,9 +537,9 @@ class LotteryFragment : Fragment() {
             }
             row.addView(col4)
 
-            // 列5：操作按钮 (权重 1.1)
+            // 列5：操作按钮（查看命中历史）
             val tvAction = TextView(requireContext())
-            val lp5 = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.1f)
+            val lp5 = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, wAction)
             lp5.setMargins(0, btnPadV, 0, btnPadV)
             tvAction.layoutParams = lp5
             tvAction.setPadding(cellPadH, btnPadV, cellPadH, btnPadV)

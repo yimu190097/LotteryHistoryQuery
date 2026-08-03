@@ -88,14 +88,14 @@
         android:clipChildren="false"
         android:clipToPadding="false" />
 
-    <!-- 点击查看详情提示 -->
+    <!-- 点击查看详情提示：文字描述与功能严格匹配——"点击查看本期所有奖项" + 右箭头引导 -->
     <TextView
         android:id="@+id/tvViewDetail"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:gravity="end"
-        android:text="查看详情"
+        android:text="点击查看本期所有奖项  ›"
         android:textColor="@color/primary_red"
         android:textSize="12sp"
         android:textStyle="bold" />

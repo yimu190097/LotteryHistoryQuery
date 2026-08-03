@@ -163,16 +163,31 @@
                 android:ellipsize="end" />
         </LinearLayout>
 
-        <!-- 5. 彩种Tab栏（2行4列）：无 scrollFlags → 吸顶固定，始终可见 -->
-        <GridLayout
-            android:id="@+id/gridLotteryTabs"
+        <!-- 5. 彩种Tab栏（2行4列）：无 scrollFlags → 吸顶固定，始终可见；底部1dp白线做视觉分隔 -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@color/primary_red"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp" />
+            android:orientation="vertical"
+            android:background="@color/primary_red">
+
+            <GridLayout
+                android:id="@+id/gridLotteryTabs"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:rowCount="2"
+                android:columnCount="4"
+                android:orientation="horizontal"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="6dp" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@android:color/white"
+                android:alpha="0.75" />
+        </LinearLayout>
 
     </com.google.android.material.appbar.AppBarLayout>
 

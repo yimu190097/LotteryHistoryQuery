@@ -166,16 +166,20 @@ class MainActivity : AppCompatActivity() {
             // 点击某彩种卡片 -> 弹出当期中奖具体信息（号码+全部奖级详情）
             DrawDetailDialog(this, item.config, item.draw).show()
         }
-        // reverseLayout=true: 列表最后一项在左边，index++向左滚动 = 下一张从右边滚入（右->左轮播）
-        val lm = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, true)
+        // 标准 LEFT-TO-RIGHT 横向列表（reverseLayout=false）：
+        //   第0项在屏幕可见区域最左侧，后续项依次向右排列；
+        //   调用 smoothScrollToPosition(index+1) 时，列表内容整体向左移动，
+        //   新卡片从右侧边缘滑入 → 即用户肉眼感知的"从右 → 左"轮播方向 ✔️
+        val lm = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
         binding.rvLatestDraws.layoutManager = lm
         binding.rvLatestDraws.adapter = latestDrawsAdapter
 
-        // 当用户手动滑动时，重置轮播起始位置，避免自动滚动跳回
+        // 当用户手动滑动时，重置轮播起始位置（使用最后一个完整可见项作为轮播基准，
+        // 避免自动滚动时跳回左边已展示过的卡片）
         binding.rvLatestDraws.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
-                val first = lm.findFirstVisibleItemPosition()
-                if (first >= 0) carouselIndex = first
+                val lastCompletely = lm.findLastCompletelyVisibleItemPosition()
+                if (lastCompletely >= 0) carouselIndex = lastCompletely
             }
         })
     }
@@ -457,13 +461,17 @@ class MainActivity : AppCompatActivity() {
         val tabMinSp = (resources.getDimension(R.dimen.small_text_size) / density).toInt()
         val tabMaxSp = (resources.getDimension(R.dimen.subtitle_text_size) / density).toInt()
 
+        // 8 个彩种固定 2 行 × 4 列：第 0 行放前 4 个，第 1 行放后 4 个
+        val TOTAL_COLS = 4
         LotteryType.ALL.forEachIndexed { index, type ->
+            val row = index / TOTAL_COLS   // 0 or 1
+            val col = index % TOTAL_COLS   // 0..3
             val tv = TextView(this)
             val params = GridLayout.LayoutParams()
             params.width = 0
             params.height = tabHeight
-            params.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1, 1f)
-            params.rowSpec = GridLayout.spec(GridLayout.UNDEFINED, 1, 1f)
+            params.columnSpec = GridLayout.spec(col, 1f)   // 明确列号 + 等宽 weight
+            params.rowSpec = GridLayout.spec(row, 1f)      // 明确行号
             params.setMargins(horizontalPadding, verticalPadding, horizontalPadding, verticalPadding)
             tv.layoutParams = params
             tv.gravity = Gravity.CENTER
