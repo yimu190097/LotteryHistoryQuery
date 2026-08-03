@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  主页整体布局：CoordinatorLayout + AppBarLayout + 滚动 ViewPager2
+  - AppBarLayout 内部：
+     (1) Toolbar（滚动收起：scroll|enterAlways|snap）
+     (2) 最新开奖区 - 横向滚动 RecyclerView，8个彩种最新开奖卡片（滚动收起）
+     (3) 数据更新状态条（滚动收起）
+     (4) 用户信息栏（滚动收起）
+     (5) 彩种 Tab 栏（2x4 九宫格）— 无 scrollFlags → 吸顶固定，滚动时始终可见
+  - ViewPager2（app:layout_behavior=scrolling_view_behavior）：嵌套滚动，承载各彩种 Fragment
+-->
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_light">
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/appBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/primary_red"
+        android:theme="@style/ThemeOverlay.MaterialComponents.Dark.ActionBar"
+        app:elevation="0dp">
+
+        <!-- 1. Toolbar：滚动收起。去掉 enterAlways：
+             向上滑时Toolbar先收起；
+             向下滑时先让下方NestedScrollView滚到顶，再展开Toolbar（符合先下层后上层的需求） -->
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="@color/primary_red"
+            app:title="@string/app_name"
+            app:titleTextColor="@android:color/white"
+            app:layout_scrollFlags="scroll|snap" />
+
+        <!-- 2. 最新开奖区：横向滚动 RecyclerView，8个彩种卡片，滚动收起 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@color/bg_light"
+            app:layout_scrollFlags="scroll|snap">
+
+            <!-- 最新开奖标题栏 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="4dp"
+                android:background="@android:color/white">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="最新开奖"
+                    android:textColor="@color/text_primary"
+                    android:textSize="@dimen/body_text_size"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvViewAllLatest"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:background="?attr/selectableItemBackground"
+                    android:text="查看全部"
+                    android:textColor="@color/primary_red"
+                    android:textSize="@dimen/small_text_size"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- 横向滚动卡片列表 -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvLatestDraws"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@android:color/white"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="8dp"
+                android:clipToPadding="false"
+                android:nestedScrollingEnabled="false"
+                android:overScrollMode="never" />
+        </LinearLayout>
+
+        <!-- 3. 数据更新状态：滚动收起 -->
+        <TextView
+            android:id="@+id/tvDataStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#FFF3E0"
+            android:gravity="center"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:text="@string/data_info"
+            android:textColor="#E65100"
+            android:textSize="@dimen/small_text_size"
+            android:maxLines="2"
+            android:ellipsize="end"
+            app:layout_scrollFlags="scroll|snap" />
+
+        <!-- 4. 用户信息栏：手机号 + 配额，滚动收起 -->
+        <LinearLayout
+            android:id="@+id/llUserInfoBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@color/bg_light"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            app:layout_scrollFlags="scroll|snap">
+
+            <TextView
+                android:id="@+id/tvUserPhone"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackground"
+                android:text="@string/tap_to_login"
+                android:textColor="@color/primary_red"
+                android:textSize="@dimen/body_text_size"
+                android:textStyle="bold" />
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="16dp"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
+                android:background="#E0E0E0" />
+
+            <TextView
+                android:id="@+id/tvQuotaInfo"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="@color/text_secondary"
+                android:textSize="@dimen/small_text_size"
+                android:maxLines="2"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <!-- 5. 彩种Tab栏（2行4列）：无 scrollFlags → 吸顶固定，始终可见 -->
+        <GridLayout
+            android:id="@+id/gridLotteryTabs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/primary_red"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp" />
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <!-- 主内容：ViewPager2，使用 scrolling behavior 支持 AppBar 协同滚动 -->
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/viewPager"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior" />
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

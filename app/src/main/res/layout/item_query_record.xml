@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:clipChildren="false"
+    android:paddingStart="10dp"
+    android:paddingEnd="10dp"
+    android:paddingTop="6dp"
+    android:paddingBottom="6dp">
+
+    <!-- 顶部：查询时间 + 导入/删除按钮 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="3dp">
+
+        <TextView
+            android:id="@+id/tvQrTime"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="@dimen/small_text_size"
+            android:textColor="@color/text_secondary" />
+
+        <TextView
+            android:id="@+id/tvQrImport"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="3dp"
+            android:paddingBottom="3dp"
+            android:textSize="@dimen/small_text_size"
+            android:textColor="@color/primary_red"
+            android:textStyle="bold"
+            android:text="导入" />
+
+        <TextView
+            android:id="@+id/tvQrQuery"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="3dp"
+            android:paddingBottom="3dp"
+            android:textSize="@dimen/small_text_size"
+            android:textColor="@color/primary_blue"
+            android:textStyle="bold"
+            android:text="查询" />
+
+        <TextView
+            android:id="@+id/tvQrDelete"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:paddingTop="3dp"
+            android:paddingBottom="3dp"
+            android:textSize="@dimen/small_text_size"
+            android:textColor="#D32F2F"
+            android:text="删除" />
+    </LinearLayout>
+
+    <!-- 号码球：自适应换行 -->
+    <com.lottery.history.widget.FlowLayout
+        android:id="@+id/llQrNumbers"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:clipChildren="false"
+        android:clipToPadding="false" />
+
+</LinearLayout>

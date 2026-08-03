@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- 号码/期号等数字专用文字外观：等宽字体，保证 01-99 宽度一致对齐整齐 -->
+    <style name="TextAppearance.Lottery.Number" parent="android:TextAppearance">
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+</resources>

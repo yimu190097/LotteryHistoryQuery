@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@android:color/white"
+    android:padding="@dimen/card_padding">
+
+    <TextView
+        android:id="@+id/tvAuthTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:text="@string/login_title"
+        android:textColor="@color/text_primary"
+        android:textSize="@dimen/subtitle_text_size"
+        android:textStyle="bold"
+        android:layout_marginBottom="10dp" />
+
+    <TextView
+        android:id="@+id/tvAuthHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/text_hint"
+        android:textSize="@dimen/small_text_size"
+        android:layout_marginBottom="10dp" />
+
+    <EditText
+        android:id="@+id/etPhone"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/hint_phone"
+        android:inputType="phone"
+        android:maxLength="11"
+        android:textSize="@dimen/body_text_size"
+        android:layout_marginBottom="8dp" />
+
+    <EditText
+        android:id="@+id/etPassword"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/hint_password"
+        android:inputType="textPassword"
+        android:maxLength="20"
+        android:textSize="@dimen/body_text_size"
+        android:layout_marginBottom="8dp" />
+
+    <EditText
+        android:id="@+id/etNewPassword"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/hint_new_password"
+        android:inputType="textPassword"
+        android:maxLength="20"
+        android:textSize="@dimen/body_text_size"
+        android:visibility="gone"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/tvAuthError"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/primary_red"
+        android:textSize="@dimen/small_text_size"
+        android:visibility="gone"
+        android:layout_marginBottom="6dp" />
+
+    <TextView
+        android:id="@+id/btnAuthAction"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/button_height"
+        android:background="@color/button_red"
+        android:gravity="center"
+        android:text="@string/login"
+        android:textColor="@android:color/white"
+        android:textSize="@dimen/body_text_size"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tvAuthSwitch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:padding="8dp"
+        android:text="@string/switch_to_register"
+        android:textColor="@color/primary_blue"
+        android:textSize="@dimen/small_text_size"
+        android:layout_marginTop="4dp" />
+
+</LinearLayout>

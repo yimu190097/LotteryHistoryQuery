@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 页面级间距：增大间隔，避免40岁以上用户误读 -->
+    <dimen name="page_padding">14dp</dimen>
+    <dimen name="card_padding">14dp</dimen>
+    <dimen name="card_margin">12dp</dimen>
+
+    <!-- 字号层级：micro < tiny < small < body < title < subtitle
+         面向40岁以上中老年用户，最小字号不低于13sp，正文17sp。
+         所有文字全部放大1~2sp级别，保证可读性强。
+    -->
+    <dimen name="micro_text_size">13sp</dimen>
+    <dimen name="tiny_text_size">14sp</dimen>
+    <dimen name="small_text_size">15sp</dimen>
+    <dimen name="body_text_size">17sp</dimen>
+    <dimen name="title_text_size">19sp</dimen>
+    <dimen name="subtitle_text_size">21sp</dimen>
+
+    <!-- 控件高度：配合大字号，增大点击区域 -->
+    <dimen name="button_height">48dp</dimen>
+    <dimen name="tab_item_height">46dp</dimen>
+    <dimen name="ball_min_size">32dp</dimen>
+    <dimen name="ball_max_size">38dp</dimen>
+    <dimen name="ball_compact_size">28dp</dimen>
+
+    <!-- 球内文字字号（配合大球尺寸，两位数字清晰可读） -->
+    <dimen name="ball_text_size">12sp</dimen>
+    <dimen name="ball_text_compact_size">10sp</dimen>
+    <dimen name="ball_text_tiny_size">8sp</dimen>
+</resources>

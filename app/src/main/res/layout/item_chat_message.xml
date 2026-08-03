@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 聊天消息条目：双头像切换（左右各一个），避免 bind 时 removeView/addView 重排导致闪退 -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingStart="6dp"
+    android:paddingEnd="6dp"
+    android:paddingTop="4dp"
+    android:paddingBottom="4dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- 智能时间戳：仅与上一条间隔>5分钟时显示 -->
+        <TextView
+            android:id="@+id/tvTime"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:layout_marginTop="6dp"
+            android:layout_marginBottom="6dp"
+            android:textColor="#999999"
+            android:textSize="@dimen/tiny_text_size"
+            android:visibility="gone" />
+
+        <!-- 整行容器：发送方（我）靠右，接收方（客服）靠左 -->
+        <LinearLayout
+            android:id="@+id/llRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical|start"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp">
+
+            <!-- 左侧头像（客服）：默认显示 -->
+            <TextView
+                android:id="@+id/ivAvatarLeft"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:gravity="center"
+                android:text="客服"
+                android:textColor="@android:color/white"
+                android:textSize="@dimen/small_text_size"
+                android:textStyle="bold"
+                android:visibility="visible"
+                android:background="@drawable/bg_avatar_circle" />
+
+            <!-- 气泡容器 -->
+            <LinearLayout
+                android:id="@+id/llBubble"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:layout_marginStart="6dp"
+                android:layout_marginEnd="6dp"
+                android:minWidth="80dp">
+
+                <!-- 文本消息 -->
+                <TextView
+                    android:id="@+id/tvText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_primary"
+                    android:textSize="@dimen/body_text_size"
+                    android:lineSpacingExtra="3dp"
+                    android:autoLink="web|phone"
+                    android:visibility="gone" />
+
+                <!-- 图片消息：付款截图等。限制最大宽高避免拉伸 -->
+                <ImageView
+                    android:id="@+id/ivImage"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:maxWidth="220dp"
+                    android:maxHeight="280dp"
+                    android:minHeight="100dp"
+                    android:contentDescription="图片消息"
+                    android:scaleType="fitCenter"
+                    android:adjustViewBounds="true"
+                    android:background="@drawable/bg_chat_image"
+                    android:visibility="gone" />
+
+                <!-- 图片下方文字标签（如"付款截图"） -->
+                <TextView
+                    android:id="@+id/tvImageLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="@dimen/small_text_size"
+                    android:visibility="gone" />
+
+                <!-- 语音消息：文字"语音"+ 时长，避免图标不直观 -->
+                <LinearLayout
+                    android:id="@+id/llVoice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:minWidth="90dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/ivVoiceIcon"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="语音"
+                        android:textColor="@color/text_primary"
+                        android:textSize="@dimen/body_text_size"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvDuration"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:textColor="@color/text_primary"
+                        android:textSize="@dimen/body_text_size"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:text="秒"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="@dimen/small_text_size" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 右侧头像（我）：默认隐藏，发送消息时显示 -->
+            <TextView
+                android:id="@+id/ivAvatarRight"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:gravity="center"
+                android:text="我"
+                android:textColor="@android:color/white"
+                android:textSize="@dimen/small_text_size"
+                android:textStyle="bold"
+                android:visibility="gone"
+                android:background="@drawable/bg_avatar_me_red" />
+
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

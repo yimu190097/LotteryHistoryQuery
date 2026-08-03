@@ -1,0 +1,25 @@
+# Gradle / Android 构建产物
+.gradle/
+build/
+app/build/
+**/build/
+captures/
+.cxx/
+
+# 本地配置（含 SDK 路径，不应提交）
+local.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+
+# Kotlin 缓存
+.kotlin/

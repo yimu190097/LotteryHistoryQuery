@@ -1,0 +1,8 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.LotteryHistory" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">@color/primary_red</item>
+        <item name="colorPrimaryDark">@color/primary_red</item>
+        <item name="colorAccent">@color/primary_red</item>
+        <item name="android:windowBackground">@color/bg_light</item>
+    </style>
+</resources>

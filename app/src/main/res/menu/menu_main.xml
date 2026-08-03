@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 主页菜单：全部使用文字，去除图标，适合年长用户 -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/action_refresh"
+        android:title="刷新"
+        app:showAsAction="always|withText" />
+    <item
+        android:id="@+id/action_latest"
+        android:title="@string/action_latest"
+        app:showAsAction="ifRoom|withText" />
+    <item
+        android:id="@+id/action_customer_service"
+        android:title="联系客服"
+        app:showAsAction="always|withText" />
+</menu>
