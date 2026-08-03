@@ -34,6 +34,9 @@ class DrawDetailDialog(
     private val draw: LotteryDraw?
 ) : Dialog(context) {
 
+    /** 中奖规则折叠容器（点击按钮展开/收起） */
+    private lateinit var rulesToggleContainer: LinearLayout
+
     init {
         requestWindowFeature(Window.FEATURE_NO_TITLE)
         val view = LayoutInflater.from(context).inflate(R.layout.dialog_draw_detail, null)
@@ -199,18 +202,47 @@ class DrawDetailDialog(
                 setBackgroundColor(Color.parseColor("#BDBDBD"))
             })
 
-            // "中奖规则说明" 小标题
-            llRules.addView(TextView(context).apply {
-                text = "各等级中奖规则"
+            // "查看中奖规则" 按钮：点击展开/收起，避免默认占用大量空间
+            val rulesContainer = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+                visibility = View.GONE
+            }
+            val toggleBtn = TextView(context).apply {
+                text = "查看中奖规则 ▼"
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
                 setTypeface(null, Typeface.BOLD)
-                setTextColor(0xFF212121.toInt())
+                setTextColor(0xFFC62828.toInt())
                 val pad = (10 * density).toInt()
-                setPadding(pad, pad, pad, 0)
-            })
+                setPadding(pad, pad, pad, pad)
+                isClickable = true
+                isFocusable = true
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                    cornerRadius = 6 * density
+                    setColor(0xFFFFF3E0.toInt())
+                    setStroke(1, 0xFFFFCC80.toInt())
+                }
+                setOnClickListener {
+                    if (rulesContainer.visibility == View.VISIBLE) {
+                        rulesContainer.visibility = View.GONE
+                        text = "查看中奖规则 ▼"
+                    } else {
+                        rulesContainer.visibility = View.VISIBLE
+                        text = "收集中奖规则 ▲"
+                    }
+                }
+            }
+            llRules.addView(toggleBtn)
+            llRules.addView(rulesContainer)
+            rulesToggleContainer = rulesContainer
         }
 
-        // ----------- 全部等级规则列表 -----------
+        // ----------- 全部等级规则列表（装入可折叠容器） -----------
+        val rulesHost = if (::rulesToggleContainer.isInitialized) rulesToggleContainer else llRules
         config.rules.forEachIndexed { index, rule ->
             val row = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -270,7 +302,7 @@ class DrawDetailDialog(
             }
             row.addView(tvDesc)
 
-            llRules.addView(row)
+            rulesHost.addView(row)
 
             if (index < config.rules.size - 1) {
                 val divider = View(context).apply {
@@ -280,7 +312,7 @@ class DrawDetailDialog(
                     )
                     setBackgroundColor(Color.parseColor("#EEEEEE"))
                 }
-                llRules.addView(divider)
+                rulesHost.addView(divider)
             }
         }
     }

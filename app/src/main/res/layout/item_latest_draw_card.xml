@@ -27,7 +27,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="@color/primary_red"
-            android:textSize="13sp"
+            android:textSize="14sp"
             android:textStyle="bold"
             android:maxLines="1"
             android:ellipsize="end" />
@@ -39,7 +39,7 @@
             android:layout_weight="1"
             android:layout_marginStart="4dp"
             android:textColor="@color/text_secondary"
-            android:textSize="11sp"
+            android:textSize="12sp"
             android:gravity="end"
             android:maxLines="1"
             android:ellipsize="end" />
@@ -52,11 +52,34 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
         android:textColor="@color/text_secondary"
-        android:textSize="11sp"
+        android:textSize="12sp"
         android:maxLines="1"
         android:ellipsize="end" />
 
-    <!-- 第三行：号码球（FlowLayout 自动换行） -->
+    <!-- 奖项标签（一等奖/二等奖），仅奖级卡片显示 -->
+    <TextView
+        android:id="@+id/tvTier"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textColor="#C62828"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <!-- 中奖信息（中X注 · 单注X元），仅奖级卡片显示 -->
+    <TextView
+        android:id="@+id/tvPrizeInfo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:textColor="#212121"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:maxLines="2"
+        android:visibility="gone" />
+
+    <!-- 号码球（FlowLayout 自动换行），fallback 卡片显示 -->
     <com.lottery.history.widget.FlowLayout
         android:id="@+id/llBalls"
         android:layout_width="match_parent"
@@ -65,7 +88,7 @@
         android:clipChildren="false"
         android:clipToPadding="false" />
 
-    <!-- 第四行：点击查看详情提示 -->
+    <!-- 点击查看详情提示 -->
     <TextView
         android:id="@+id/tvViewDetail"
         android:layout_width="match_parent"
@@ -74,7 +97,7 @@
         android:gravity="end"
         android:text="查看详情"
         android:textColor="@color/primary_red"
-        android:textSize="11sp"
+        android:textSize="12sp"
         android:textStyle="bold" />
 
 </LinearLayout>

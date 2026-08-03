@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 彩种Tab选中：纯白色底 + 圆角，红色大字对比极明显，面向40+用户一眼可见 -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="#33FFFFFF" />
-    <corners android:radius="4dp" />
+    <solid android:color="@android:color/white" />
+    <stroke android:width="2dp" android:color="@color/primary_red" />
+    <corners android:radius="10dp" />
 </shape>

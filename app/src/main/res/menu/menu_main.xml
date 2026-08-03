@@ -7,6 +7,10 @@
         android:title="刷新"
         app:showAsAction="always|withText" />
     <item
+        android:id="@+id/action_search_issue"
+        android:title="按期号查询"
+        app:showAsAction="ifRoom|withText" />
+    <item
         android:id="@+id/action_latest"
         android:title="@string/action_latest"
         app:showAsAction="ifRoom|withText" />

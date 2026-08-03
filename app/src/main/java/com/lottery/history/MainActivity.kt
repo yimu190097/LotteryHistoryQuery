@@ -8,6 +8,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
 import android.view.ViewGroup
 import android.widget.GridLayout
 import android.widget.TextView
@@ -31,6 +32,7 @@ import com.lottery.history.model.LotteryTypeConfig
 import com.lottery.history.ui.AuthDialog
 import com.lottery.history.ui.CustomerServiceActivity
 import com.lottery.history.ui.DrawDetailDialog
+import com.lottery.history.ui.IssueSearchDialog
 import com.lottery.history.ui.LatestDrawsDialog
 import com.lottery.history.util.BallTextHelper
 import kotlinx.coroutines.Dispatchers
@@ -84,6 +86,10 @@ class MainActivity : AppCompatActivity() {
         setSupportActionBar(binding.toolbar)
 
         binding.viewPager.adapter = ViewPagerAdapter(this)
+        // 面向40+客户：禁用 ViewPager2 左右滑动手势，彻底杜绝手指滑动误切彩种；
+        // 所有彩种切换只通过 2×4 吸顶大按钮点击触发，操作清晰不易误点
+        binding.viewPager.isUserInputEnabled = false
+        binding.viewPager.offscreenPageLimit = 2
 
         // 最新开奖横向滚动卡片列表
         setupLatestDrawsRecycler()
@@ -131,18 +137,27 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ================== 最新开奖卡片列表 ==================
+    /**
+     * 轮播卡片：优先展示各彩种一等奖/二等奖的中奖详情；
+     * 若该彩种无奖级数据（seed），fallback 展示最新一期号码球。
+     * tierLabel=null 表示 fallback 卡片。
+     */
     data class LatestDrawItem(
         val config: LotteryTypeConfig,
-        val draw: LotteryDraw?
+        val draw: LotteryDraw?,
+        val tierLabel: String? = null,   // "一等奖" / "二等奖" / null
+        val tierCount: Int? = null,      // 中奖注数
+        val tierAmount: Long? = null     // 单注奖金（元）
     )
 
     companion object {
         /** DIFF 放在顶层伴生对象中，避免内部类 companion object 限制 */
         private val LATEST_DIFF = object : DiffUtil.ItemCallback<LatestDrawItem>() {
             override fun areItemsTheSame(a: LatestDrawItem, b: LatestDrawItem) =
-                a.config.code == b.config.code
+                a.config.code + (a.tierLabel ?: "") == b.config.code + (b.tierLabel ?: "")
             override fun areContentsTheSame(a: LatestDrawItem, b: LatestDrawItem) =
-                a.draw?.issue == b.draw?.issue
+                a.draw?.issue == b.draw?.issue && a.tierLabel == b.tierLabel &&
+                    a.tierCount == b.tierCount && a.tierAmount == b.tierAmount
         }
     }
 
@@ -189,7 +204,7 @@ class MainActivity : AppCompatActivity() {
     ) : RecyclerView.ViewHolder(card.root) {
 
         fun bind(item: LatestDrawItem) {
-            val (cfg, draw) = item
+            val (cfg, draw, tierLabel, tierCount, tierAmount) = item
             card.tvLotteryName.text = cfg.displayName
             card.tvLotteryName.setTextColor(
                 Color.parseColor(if (cfg.code == "dlt") "#1565C0" else "#C62828")
@@ -201,11 +216,38 @@ class MainActivity : AppCompatActivity() {
                 card.tvIssue.text = "暂无数据"
                 card.tvDate.text = ""
             }
-            // 渲染号码球
-            card.llBalls.removeAllViews()
-            draw?.let { renderBalls(it, cfg) }
+
+            if (tierLabel != null) {
+                // 奖级卡片：展示奖项 + 中奖注数 + 单注奖金
+                card.tvTier.visibility = View.VISIBLE
+                card.tvPrizeInfo.visibility = View.VISIBLE
+                card.llBalls.visibility = View.GONE
+                card.tvTier.text = tierLabel
+                card.tvTier.setTextColor(
+                    if (tierLabel.contains("一等")) Color.parseColor("#C62828")
+                    else Color.parseColor("#D84315")
+                )
+                val countText = if (tierCount != null && tierCount > 0) "中奖 ${tierCount} 注" else "本期空开"
+                val amountText = tierAmount?.let { "单注 ${formatAmount(it)}" } ?: ""
+                card.tvPrizeInfo.text = if (amountText.isNotEmpty()) "$countText · $amountText" else countText
+            } else {
+                // fallback 卡片：展示号码球
+                card.tvTier.visibility = View.GONE
+                card.tvPrizeInfo.visibility = View.GONE
+                card.llBalls.visibility = View.VISIBLE
+                card.llBalls.removeAllViews()
+                draw?.let { renderBalls(it, cfg) }
+            }
             card.root.setOnClickListener { onClick(item) }
         }
+
+        private fun formatAmount(amount: Long): String =
+            if (amount >= 10000) {
+                val wan = amount / 10000.0
+                if (wan % 1.0 == 0.0) "${wan.toInt()}万元" else String.format("%.1f万元", wan)
+            } else {
+                "${amount}元"
+            }
 
         private fun renderBalls(draw: LotteryDraw, cfg: LotteryTypeConfig) {
             val density = itemView.resources.displayMetrics.density
@@ -305,6 +347,10 @@ class MainActivity : AppCompatActivity() {
             LatestDrawsDialog(this).show()
             return true
         }
+        if (item.itemId == R.id.action_search_issue) {
+            IssueSearchDialog(this).show()
+            return true
+        }
         if (item.itemId == R.id.action_customer_service) {
             startActivity(
                 android.content.Intent(this, CustomerServiceActivity::class.java)
@@ -387,25 +433,46 @@ class MainActivity : AppCompatActivity() {
     // ================== 最新开奖 ==================
     private fun updateLatestInfo() {
         runOnUiThread {
-            // 横向卡片：依次填入 8 个彩种的最新一期
-            val items = LotteryType.ALL.map { cfg ->
-                LatestDrawItem(cfg, LotteryDataManager.getCached(cfg.code).firstOrNull())
+            // 横向卡片：为每个彩种生成一等奖/二等奖中奖详情卡片；
+            // 无奖级数据时 fallback 一张号码球卡片
+            val items = mutableListOf<LatestDrawItem>()
+            LotteryType.ALL.forEach { cfg ->
+                val draw = LotteryDataManager.getCached(cfg.code).firstOrNull()
+                if (draw != null && (draw.firstPrizeCount != null || draw.secondPrizeCount != null)) {
+                    if (draw.firstPrizeCount != null) {
+                        items.add(LatestDrawItem(cfg, draw, "一等奖", draw.firstPrizeCount, draw.firstPrizeAmount))
+                    }
+                    if (draw.secondPrizeCount != null) {
+                        items.add(LatestDrawItem(cfg, draw, "二等奖", draw.secondPrizeCount, draw.secondPrizeAmount))
+                    }
+                } else {
+                    items.add(LatestDrawItem(cfg, draw, null, null, null))
+                }
             }
             latestDrawsAdapter.submitList(items)
         }
     }
 
-    // ================== 彩种Tab栏（吸顶固定） ==================
+    // ================== 彩种Tab栏（吸顶固定 · 40+ 优化版） ==================
+    // 优化要点：
+    //   1) Tab 高度 56dp，点击区域≥48dp 无障碍标准，40+ 手指点按轻松
+    //   2) 字号 18sp 加粗（body_text_size=17sp 基础上加粗），AutoSize 最大 22sp
+    //   3) 选中态：白底红字 + 2dp 红边圆角，对比极明显，一眼可见当前彩种
+    //   4) 未选中态：半透明白色描边 + 白字，清晰可辨
+    //   5) 点击切换彩种时添加高亮反馈（viewPager.currentItem + 取消手势滑动上一步已设置）
     private fun setupLotteryTabs() {
         val grid = binding.gridLotteryTabs
         grid.removeAllViews()
         val density = resources.displayMetrics.density
-        val tabTextSize = resources.getDimension(R.dimen.small_text_size)
+        // 40+：Tab默认字号改为 18sp（body_text_size=17sp + 1sp额外放大）
+        val tabTextSize = resources.getDimension(R.dimen.body_text_size) + 1 * density
         val tabHeight = resources.getDimensionPixelSize(R.dimen.tab_item_height)
-        val horizontalPadding = (2 * density).toInt()
-        val verticalPadding = (6 * density).toInt()
-        val tabMinSp = (resources.getDimension(R.dimen.tiny_text_size) / density).toInt()
-        val tabMaxSp = (resources.getDimension(R.dimen.body_text_size) / density).toInt()
+        // 按钮间距放大（水平6dp / 垂直8dp），避免相邻按钮连按错
+        val horizontalPadding = (6 * density).toInt()
+        val verticalPadding = (8 * density).toInt()
+        // AutoSize 范围：最小 15sp → 最大 22sp，允许 40+ 系统放大字体时自适应
+        val tabMinSp = (resources.getDimension(R.dimen.small_text_size) / density).toInt()
+        val tabMaxSp = (resources.getDimension(R.dimen.subtitle_text_size) / density).toInt()
 
         LotteryType.ALL.forEachIndexed { index, type ->
             val tv = TextView(this)
@@ -418,18 +485,26 @@ class MainActivity : AppCompatActivity() {
             tv.layoutParams = params
             tv.gravity = Gravity.CENTER
             tv.text = type.displayName
+            // 40+ 字体加粗 + 字号加大，老花眼一眼看清
+            tv.setTypeface(null, android.graphics.Typeface.BOLD)
             tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, tabTextSize)
             TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
                 tv, tabMinSp, tabMaxSp, 1, TypedValue.COMPLEX_UNIT_SP
             )
             tv.maxLines = 1
-            tv.setTextColor(Color.parseColor("#E0FFFFFF"))
+            tv.setTextColor(Color.parseColor("#E6FFFFFF"))
             tv.setBackgroundResource(R.drawable.bg_tab_item)
             tv.setPadding(0, 0, 0, 0)
-            tv.setOnClickListener { binding.viewPager.currentItem = index }
+            // 点击高亮反馈 + 切换彩种
+            tv.setOnClickListener {
+                // 先更新 Tab 选中视觉，再跳转 fragment，避免用户觉得"没点到"
+                updateTabSelection(index)
+                binding.viewPager.setCurrentItem(index, false)
+            }
             grid.addView(tv)
         }
 
+        // 禁用手势滑动后，仍保留页面切换回调（防 viewpager 代码内部切换）以同步 Tab
         binding.viewPager.registerOnPageChangeCallback(object :
             androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
@@ -439,15 +514,19 @@ class MainActivity : AppCompatActivity() {
         updateTabSelection(0)
     }
 
+    // 选中态：白底+红字（primary_red 主色）+加粗，对比极强；未选中：白字+半透明描边
     private fun updateTabSelection(selected: Int) {
         val grid = binding.gridLotteryTabs
+        val primaryRed = Color.parseColor("#C62828")
         for (i in 0 until grid.childCount) {
             val tv = grid.getChildAt(i) as TextView
             if (i == selected) {
-                tv.setTextColor(Color.WHITE)
+                tv.setTextColor(primaryRed)
+                tv.setTypeface(null, android.graphics.Typeface.BOLD)
                 tv.setBackgroundResource(R.drawable.bg_tab_item_selected)
             } else {
-                tv.setTextColor(Color.parseColor("#E0FFFFFF"))
+                tv.setTextColor(Color.parseColor("#E6FFFFFF"))
+                tv.setTypeface(null, android.graphics.Typeface.BOLD)
                 tv.setBackgroundResource(R.drawable.bg_tab_item)
             }
         }
