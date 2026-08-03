@@ -2,6 +2,7 @@ package com.lottery.history.network
 
 import com.lottery.history.model.LotteryDraw
 import com.lottery.history.model.LotteryTypeConfig
+import com.lottery.history.model.PrizeTierEntry
 import jxl.Sheet
 import jxl.Workbook
 import java.io.ByteArrayInputStream
@@ -118,7 +119,7 @@ object LotteryXlsParser {
                 // 号码之后的剩余部分：销售额、奖池、成对奖级数据
                 val extraStart = numStart + config.parsePrimaryCount +
                     (if (config.hasSecondary) config.parseSecondaryCount else 0)
-                val prize = extractPrizeTiers(parts, extraStart)
+                val allTiers = extractAllPrizeTiers(parts, extraStart)
 
                 result.add(
                     LotteryDraw(
@@ -126,10 +127,11 @@ object LotteryXlsParser {
                         primaryNumbers = primary.sorted(),
                         secondaryNumbers = secondary.sorted(),
                         date = date,
-                        firstPrizeCount = prize.firstCount,
-                        firstPrizeAmount = prize.firstAmount,
-                        secondPrizeCount = prize.secondCount,
-                        secondPrizeAmount = prize.secondAmount
+                        firstPrizeCount = allTiers.getOrNull(0)?.count,
+                        firstPrizeAmount = allTiers.getOrNull(0)?.amount,
+                        secondPrizeCount = allTiers.getOrNull(1)?.count,
+                        secondPrizeAmount = allTiers.getOrNull(1)?.amount,
+                        allPrizeTiers = allTiers
                     )
                 )
             } catch (_: Exception) {
@@ -140,48 +142,40 @@ object LotteryXlsParser {
         return result
     }
 
-    private data class PrizeTier(
-        val firstCount: Int?, val firstAmount: Long?,
-        val secondCount: Int?, val secondAmount: Long?
-    )
-
-    // 从 parts 尾部的数值字段中提取一等奖/二等奖 (注数,金额) 对
+    // 从 parts 尾部的数值字段中提取【全部奖级】(注数,金额) 对列表（一等奖、二等奖、三等奖…按顺序）
     // 三步：
     //   1) 跳过紧随号码之后的重复/排序号码段（值 0-35 连续数字；ssq/dlt/7lc 常见）
     //   2) 跳过超大销售额/奖池（> 100 亿）
     //   3) 跳过销售额/奖池残留（> 20 万的单个大值），然后找 0..20 万注数+金额对；
     //      count==0 的空开也视为有效对，避免组三 0 注 320 元错位到组六
-    private fun extractPrizeTiers(parts: List<String>, start: Int): PrizeTier {
+    // 返回：按顺序的奖级列表，空开 entry 也保留（amount 为额定单注或 0）。最多提取 15 级（全彩种覆盖）。
+    private fun extractAllPrizeTiers(parts: List<String>, start: Int): List<PrizeTierEntry> {
         val nums = (start until parts.size).mapNotNull { idx ->
             val v = parts[idx]
             if (v == "-" || v.isEmpty()) null else v.toLongOrNull()
         }
-        if (nums.size < 4) return PrizeTier(null, null, null, null)
-        val pairs = mutableListOf<Pair<Int, Long>>()
+        val all = mutableListOf<PrizeTierEntry>()
+        if (nums.size < 2) return all
         var i = 0
-        // 1) 跳过紧随号码之后的重复/排序号码段（值 0..35，ssq/dlt/7lc 常见）
+        // 1) 跳过紧随号码之后的重复/排序号码段（值 0..35）
         while (i < nums.size && nums[i] in 0..35) { i++ }
-        // 2) 再跳过销售额/奖池（> 100 亿的视为销售额/奖池）
+        // 2) 跳过销售额/奖池（> 100 亿）
         while (i < nums.size && nums[i] > 100_0000_0000L) { i++ }
-        // 3) 若销售额/奖池没有超过 100 亿（百万/千万级常见），跳过单个超限 count（> 200000 的大值视为销售额/奖池残留）
+        // 3) 跳过销售额/奖池残留（> 20 万的单个大值）
         while (i < nums.size && nums[i] > 200000) { i++ }
-        while (i + 1 < nums.size && pairs.size < 2) {
+        // 最多 15 级（大乐透规则最多到九等奖，加冗余到 15 足够）
+        while (i + 1 < nums.size && all.size < 15) {
             val count = nums[i]
             val amount = nums[i + 1]
             // count==0：该奖级空开（amount 为额定单注，仍视为有效对）
             if (count in 0..200000 && (amount >= 100 || count == 0L)) {
-                pairs.add(count.toInt() to amount)
+                all.add(PrizeTierEntry(count = count.toInt(), amount = amount))
                 i += 2
             } else {
                 i += 1
             }
         }
-        val first = pairs.getOrNull(0)
-        val second = pairs.getOrNull(1)
-        return PrizeTier(
-            firstCount = first?.first, firstAmount = first?.second,
-            secondCount = second?.first, secondAmount = second?.second
-        )
+        return all
     }
 
     private fun normalizeDate(raw: String): String? {

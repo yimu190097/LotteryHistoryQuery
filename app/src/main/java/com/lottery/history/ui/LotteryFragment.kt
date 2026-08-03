@@ -421,13 +421,13 @@ class LotteryFragment : Fragment() {
 
     private fun renderResultRows(results: List<QueryResultItem>) {
         val density = resources.displayMetrics.density
-        val cellPadV = (12 * density).toInt()
-        val cellPadH = (6 * density).toInt()
+        val cellPadV = (10 * density).toInt()
+        val cellPadH = (4 * density).toInt()
         val btnPadV = (8 * density).toInt()
         val cornerRadius = 8 * density
 
         results.forEachIndexed { index, item ->
-            // 表格行：3列（奖项/命中次数/操作），权重分配宽度自适应屏幕，无横向滚动
+            // 表格行：5列（奖项/命中红球/命中蓝球/次数/操作），权重分配宽度自适应屏幕，无横向滚动
             val row = LinearLayout(requireContext()).apply {
                 orientation = LinearLayout.HORIZONTAL
                 layoutParams = LinearLayout.LayoutParams(
@@ -440,28 +440,61 @@ class LotteryFragment : Fragment() {
                 }
             }
 
-            // 列1：奖项名称 (权重 1.6)
-            val col1 = createTableCell(item.prizeName, 1.6f)
+            // 列1：奖项名称 (权重 1.3)
+            val col1 = createTableCell(item.prizeName, 1.3f)
             (col1 as TextView).apply {
                 val prizeCol = when {
                     item.prizeName.contains("一等") -> 0xFFC62828.toInt()
                     item.prizeName.contains("二等") -> 0xFFD84315.toInt()
                     item.prizeName.contains("三等") -> 0xFFEF6C00.toInt()
+                    item.prizeName.contains("未中") -> 0xFF9E9E9E.toInt()
                     else -> 0xFF212121.toInt()
                 }
                 setTextColor(prizeCol)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
                 setTypeface(null, Typeface.BOLD)
                 setPadding(cellPadH, cellPadV, cellPadH, cellPadV)
                 gravity = Gravity.CENTER
+                maxLines = 1
             }
             row.addView(col1)
 
-            // 列2：命中次数 (权重 1.0)
+            // 列2：命中红球数量 (权重 1.1)
+            val hitPri = "${item.matchPrimary}个"
+            val col2 = createTableCell(hitPri, 1.1f).apply {
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                setTypeface(null, Typeface.BOLD)
+                setPadding(cellPadH, cellPadV, cellPadH, cellPadV)
+                gravity = Gravity.CENTER
+                // 命中红球：命中>=3 红色大字，<3 灰色
+                setTextColor(
+                    if (item.matchPrimary >= 3) 0xFFC62828.toInt() else 0xFF546E7A.toInt()
+                )
+            }
+            row.addView(col2)
+
+            // 列3：命中蓝球/后区/特别号 数量 (权重 1.1)
+            val hitSecTxt = if (config.hasSecondary) "${item.matchSecondary}个" else "—"
+            val col3 = createTableCell(hitSecTxt, 1.1f).apply {
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                setTypeface(null, Typeface.BOLD)
+                setPadding(cellPadH, cellPadV, cellPadH, cellPadV)
+                gravity = Gravity.CENTER
+                if (config.hasSecondary) {
+                    setTextColor(
+                        if (item.matchSecondary > 0) 0xFF1565C0.toInt() else 0xFF78909C.toInt()
+                    )
+                } else {
+                    setTextColor(0xFFBDBDBD.toInt())
+                }
+            }
+            row.addView(col3)
+
+            // 列4：命中次数 (权重 0.9)
             val countText = if (item.count > 0) "中${item.count}次" else "未中"
-            val col2 = createTableCell(countText, 1.0f)
-            col2.apply {
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+            val col4 = createTableCell(countText, 0.9f)
+            col4.apply {
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
                 setTypeface(null, Typeface.BOLD)
                 setPadding(cellPadH, cellPadV, cellPadH, cellPadV)
                 gravity = Gravity.CENTER
@@ -470,19 +503,19 @@ class LotteryFragment : Fragment() {
                     else 0xFF9E9E9E.toInt()
                 )
             }
-            row.addView(col2)
+            row.addView(col4)
 
-            // 列3：操作按钮 (权重 1.4)
+            // 列5：操作按钮 (权重 1.1)
             val tvAction = TextView(requireContext())
-            val lp3 = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.4f)
-            lp3.setMargins(0, btnPadV, 0, btnPadV)
-            tvAction.layoutParams = lp3
+            val lp5 = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.1f)
+            lp5.setMargins(0, btnPadV, 0, btnPadV)
+            tvAction.layoutParams = lp5
             tvAction.setPadding(cellPadH, btnPadV, cellPadH, btnPadV)
             tvAction.gravity = Gravity.CENTER
             if (item.count > 0) {
                 tvAction.text = getString(R.string.view_history)
                 tvAction.setTextColor(0xFFFFFFFF.toInt())
-                tvAction.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                tvAction.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
                 tvAction.setTypeface(null, Typeface.BOLD)
                 tvAction.background = android.graphics.drawable.GradientDrawable().apply {
                     shape = android.graphics.drawable.GradientDrawable.RECTANGLE
@@ -495,7 +528,7 @@ class LotteryFragment : Fragment() {
             } else {
                 tvAction.text = "—"
                 tvAction.setTextColor(0xFFFFFFFF.toInt())
-                tvAction.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                tvAction.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
                 tvAction.background = android.graphics.drawable.GradientDrawable().apply {
                     shape = android.graphics.drawable.GradientDrawable.RECTANGLE
                     this.cornerRadius = cornerRadius

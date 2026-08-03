@@ -17,7 +17,8 @@ class HistoryAdapter(
     private var historyList: List<LotteryDraw>,
     private val config: LotteryTypeConfig,
     private val selectedPrimary: Set<Int> = emptySet(),
-    private val selectedSecondary: Set<Int> = emptySet()
+    private val selectedSecondary: Set<Int> = emptySet(),
+    private val onDrawDetailClick: ((LotteryDraw) -> Unit)? = null
 ) : RecyclerView.Adapter<HistoryAdapter.ViewHolder>() {
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -25,6 +26,10 @@ class HistoryAdapter(
         val tvIssue: TextView = view.findViewById(R.id.tvIssue)
         val tvDate: TextView = view.findViewById(R.id.tvDate)
         val llNumbers: ViewGroup = view.findViewById(R.id.llNumbers)
+        val llHitSummary: View = view.findViewById(R.id.llHitSummary)
+        val tvHitPrimary: TextView = view.findViewById(R.id.tvHitPrimary)
+        val tvHitSecondary: TextView = view.findViewById(R.id.tvHitSecondary)
+        val btnViewDrawDetail: TextView = view.findViewById(R.id.btnViewDrawDetail)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -38,6 +43,37 @@ class HistoryAdapter(
         holder.tvIndex.text = (position + 1).toString()
         holder.tvIssue.text = draw.issue
         holder.tvDate.text = draw.date.orEmpty()
+
+        val hasSelection = selectedPrimary.isNotEmpty() || selectedSecondary.isNotEmpty()
+
+        // 命中统计：选号与当期开奖的交集
+        val hitPrimaryCount = draw.primaryNumbers.count { it in selectedPrimary }
+        val hitSecondaryCount = if (config.hasSecondary) {
+            draw.secondaryNumbers.count { it in selectedSecondary }
+        } else 0
+
+        if (hasSelection) {
+            holder.llHitSummary.visibility = View.VISIBLE
+            holder.tvHitPrimary.text = "中${hitPrimaryCount}${config.primaryUnit}"
+            if (config.hasSecondary) {
+                holder.tvHitSecondary.visibility = View.VISIBLE
+                holder.tvHitSecondary.text = "中${hitSecondaryCount}${config.secondaryUnit}"
+            } else {
+                holder.tvHitSecondary.visibility = View.GONE
+            }
+        } else {
+            holder.llHitSummary.visibility = View.GONE
+        }
+
+        // 查看当期所有奖项按钮：点击回调
+        if (onDrawDetailClick != null) {
+            holder.btnViewDrawDetail.visibility = View.VISIBLE
+            holder.btnViewDrawDetail.setOnClickListener {
+                onDrawDetailClick.invoke(draw)
+            }
+        } else {
+            holder.btnViewDrawDetail.visibility = View.GONE
+        }
 
         val res = holder.itemView.resources
         val density = res.displayMetrics.density

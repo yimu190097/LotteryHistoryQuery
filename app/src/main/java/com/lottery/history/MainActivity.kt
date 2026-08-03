@@ -138,32 +138,32 @@ class MainActivity : AppCompatActivity() {
 
     // ================== 最新开奖卡片列表 ==================
     /**
-     * 轮播卡片：优先展示各彩种一等奖/二等奖的中奖详情；
-     * 若该彩种无奖级数据（seed），fallback 展示最新一期号码球。
-     * tierLabel=null 表示 fallback 卡片。
+     * 轮播卡片（面向40+客户优化版）：
+     *   - 固定展示"开奖号码"（不再混合一等奖/二等奖信息），用户一眼看清8个彩种最新开的号
+     *   - 每张卡片：彩种名 + 期号 + 日期 + 号码球
+     *   - 从右到左循环轮播（rvLatestDraws LinearLayoutManager.HORIZONTAL + reverseLayout=true 实现）
+     *   - 点击卡片 → 弹出开奖详情，列出全部奖项具体情况
      */
     data class LatestDrawItem(
         val config: LotteryTypeConfig,
-        val draw: LotteryDraw?,
-        val tierLabel: String? = null,   // "一等奖" / "二等奖" / null
-        val tierCount: Int? = null,      // 中奖注数
-        val tierAmount: Long? = null     // 单注奖金（元）
+        val draw: LotteryDraw?
     )
 
     companion object {
         /** DIFF 放在顶层伴生对象中，避免内部类 companion object 限制 */
         private val LATEST_DIFF = object : DiffUtil.ItemCallback<LatestDrawItem>() {
             override fun areItemsTheSame(a: LatestDrawItem, b: LatestDrawItem) =
-                a.config.code + (a.tierLabel ?: "") == b.config.code + (b.tierLabel ?: "")
+                a.config.code == b.config.code
             override fun areContentsTheSame(a: LatestDrawItem, b: LatestDrawItem) =
-                a.draw?.issue == b.draw?.issue && a.tierLabel == b.tierLabel &&
-                    a.tierCount == b.tierCount && a.tierAmount == b.tierAmount
+                a.draw?.issue == b.draw?.issue &&
+                    a.draw?.primaryNumbers == b.draw?.primaryNumbers &&
+                    a.draw?.secondaryNumbers == b.draw?.secondaryNumbers
         }
     }
 
     private fun setupLatestDrawsRecycler() {
         latestDrawsAdapter = LatestDrawsAdapter { item ->
-            // 点击某彩种卡片 -> 弹出当期中奖具体信息（号码+规则）
+            // 点击某彩种卡片 -> 弹出当期中奖具体信息（号码+全部奖级详情）
             DrawDetailDialog(this, item.config, item.draw).show()
         }
         // reverseLayout=true: 列表最后一项在左边，index++向左滚动 = 下一张从右边滚入（右->左轮播）
@@ -180,8 +180,7 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    /** 最新开奖卡片 ListAdapter，按彩种顺序展示8个彩种最新一期。
-     *  改为普通类而非 inner class，避免 companion object 限制；onClick 通过构造传入 */
+    /** 最新开奖卡片 ListAdapter：每个彩种一张，展示最新一期开奖号码（从右到左轮播） */
     inner class LatestDrawsAdapter(
         private val onClick: (LatestDrawItem) -> Unit
     ) : ListAdapter<LatestDrawItem, LatestDrawItemVH>(LATEST_DIFF) {
@@ -204,7 +203,8 @@ class MainActivity : AppCompatActivity() {
     ) : RecyclerView.ViewHolder(card.root) {
 
         fun bind(item: LatestDrawItem) {
-            val (cfg, draw, tierLabel, tierCount, tierAmount) = item
+            val cfg = item.config
+            val draw = item.draw
             card.tvLotteryName.text = cfg.displayName
             card.tvLotteryName.setTextColor(
                 Color.parseColor(if (cfg.code == "dlt") "#1565C0" else "#C62828")
@@ -217,54 +217,48 @@ class MainActivity : AppCompatActivity() {
                 card.tvDate.text = ""
             }
 
-            if (tierLabel != null) {
-                // 奖级卡片：展示奖项 + 中奖注数 + 单注奖金
-                card.tvTier.visibility = View.VISIBLE
-                card.tvPrizeInfo.visibility = View.VISIBLE
-                card.llBalls.visibility = View.GONE
-                card.tvTier.text = tierLabel
-                card.tvTier.setTextColor(
-                    if (tierLabel.contains("一等")) Color.parseColor("#C62828")
-                    else Color.parseColor("#D84315")
-                )
-                val countText = if (tierCount != null && tierCount > 0) "中奖 ${tierCount} 注" else "本期空开"
-                val amountText = tierAmount?.let { "单注 ${formatAmount(it)}" } ?: ""
-                card.tvPrizeInfo.text = if (amountText.isNotEmpty()) "$countText · $amountText" else countText
-            } else {
-                // fallback 卡片：展示号码球
-                card.tvTier.visibility = View.GONE
-                card.tvPrizeInfo.visibility = View.GONE
-                card.llBalls.visibility = View.VISIBLE
-                card.llBalls.removeAllViews()
-                draw?.let { renderBalls(it, cfg) }
-            }
+            // 轮播卡片统一展示开奖号码（面向40+客户，一眼看清号码；奖级详情在点进去后的弹窗里列出）
+            card.tvTier.visibility = View.GONE
+            card.tvPrizeInfo.visibility = View.GONE
+            card.llBalls.visibility = View.VISIBLE
+            card.llBalls.removeAllViews()
+            // 查看详情提示文字改成更醒目+更清楚
+            card.tvViewDetail.text = "点击查看全部奖项"
+            card.tvViewDetail.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            draw?.let { renderBalls(it, cfg) }
             card.root.setOnClickListener { onClick(item) }
         }
 
-        private fun formatAmount(amount: Long): String =
-            if (amount >= 10000) {
-                val wan = amount / 10000.0
-                if (wan % 1.0 == 0.0) "${wan.toInt()}万元" else String.format("%.1f万元", wan)
-            } else {
-                "${amount}元"
-            }
-
         private fun renderBalls(draw: LotteryDraw, cfg: LotteryTypeConfig) {
             val density = itemView.resources.displayMetrics.density
-            val ballSize = (18 * density).toInt()
+            val ballSize = (20 * density).toInt()   // 号码球略放大，40+更清晰
             val margin = (2 * density).toInt()
             draw.primaryNumbers.sorted().forEach { num ->
-                card.llBalls.addView(createBall(num, true, ballSize, margin, cfg))
+                card.llBalls.addView(createBall(num, true, ballSize, margin))
             }
-            if (cfg.hasSecondary) {
+            if (cfg.hasSecondary && draw.secondaryNumbers.isNotEmpty()) {
+                // 主号/次号之间加"+"分隔，清晰可见
+                val sep = TextView(this@MainActivity).apply {
+                    text = "+"
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                    setTextColor(Color.parseColor("#757575"))
+                    gravity = Gravity.CENTER
+                    val lp = ViewGroup.MarginLayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                    lp.setMargins(margin, 0, margin, 0)
+                    layoutParams = lp
+                }
+                card.llBalls.addView(sep)
                 draw.secondaryNumbers.sorted().forEach { num ->
-                    card.llBalls.addView(createBall(num, false, ballSize, margin, cfg))
+                    card.llBalls.addView(createBall(num, false, ballSize, margin))
                 }
             }
         }
 
         private fun createBall(
-            num: Int, isPrimary: Boolean, size: Int, margin: Int, cfg: LotteryTypeConfig
+            num: Int, isPrimary: Boolean, size: Int, margin: Int
         ): TextView {
             val b = TextView(this@MainActivity)
             val params = ViewGroup.MarginLayoutParams(size, size)
@@ -275,10 +269,9 @@ class MainActivity : AppCompatActivity() {
             b.typeface = android.graphics.Typeface.MONOSPACE
             BallTextHelper.apply(b, size)
             b.setBackgroundResource(
-                if (isPrimary) R.drawable.bg_ball_normal_red
-                else R.drawable.bg_ball_normal_blue
+                if (isPrimary) R.drawable.bg_ball_red else R.drawable.bg_ball_blue
             )
-            b.setTextColor(Color.parseColor("#333333"))
+            b.setTextColor(Color.WHITE)
             return b
         }
     }
@@ -433,21 +426,11 @@ class MainActivity : AppCompatActivity() {
     // ================== 最新开奖 ==================
     private fun updateLatestInfo() {
         runOnUiThread {
-            // 横向卡片：为每个彩种生成一等奖/二等奖中奖详情卡片；
-            // 无奖级数据时 fallback 一张号码球卡片
-            val items = mutableListOf<LatestDrawItem>()
-            LotteryType.ALL.forEach { cfg ->
+            // 面向40+客户优化：横向卡片每彩种一张，统一展示最新一期开奖号码（红球+蓝球）
+            // 从右到左循环轮播；点击卡片→弹窗列出该期所有奖项具体情况
+            val items = LotteryType.ALL.map { cfg ->
                 val draw = LotteryDataManager.getCached(cfg.code).firstOrNull()
-                if (draw != null && (draw.firstPrizeCount != null || draw.secondPrizeCount != null)) {
-                    if (draw.firstPrizeCount != null) {
-                        items.add(LatestDrawItem(cfg, draw, "一等奖", draw.firstPrizeCount, draw.firstPrizeAmount))
-                    }
-                    if (draw.secondPrizeCount != null) {
-                        items.add(LatestDrawItem(cfg, draw, "二等奖", draw.secondPrizeCount, draw.secondPrizeAmount))
-                    }
-                } else {
-                    items.add(LatestDrawItem(cfg, draw, null, null, null))
-                }
+                LatestDrawItem(cfg, draw)
             }
             latestDrawsAdapter.submitList(items)
         }

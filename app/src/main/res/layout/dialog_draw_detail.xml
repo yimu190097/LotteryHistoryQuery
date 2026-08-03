@@ -101,15 +101,15 @@
         android:layout_height="0.5dp"
         android:background="@color/divider" />
 
-    <!-- 中奖规则说明：使用ConstraintLayout限制最大高度 -->
+    <!-- 全部奖项开奖情况说明 -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:paddingStart="16dp"
         android:paddingEnd="16dp"
         android:paddingTop="10dp"
-        android:text="各等级中奖规则说明"
-        android:textColor="@color/text_primary"
+        android:text="本期全部奖项开奖情况"
+        android:textColor="@color/primary_red"
         android:textSize="@dimen/body_text_size"
         android:textStyle="bold" />
 
@@ -122,7 +122,7 @@
             android:id="@+id/svRules"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:layout_constraintHeight_max="360dp"
+            app:layout_constraintHeight_max="420dp"
             android:fillViewport="true">
 
             <LinearLayout

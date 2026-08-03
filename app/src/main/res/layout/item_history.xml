@@ -51,6 +51,44 @@
             android:ellipsize="end" />
     </LinearLayout>
 
+    <!-- 命中情况标签：命中红球N个 + 命中蓝球N个（仅当选号存在时显示） -->
+    <LinearLayout
+        android:id="@+id/llHitSummary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="3dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvHitPrimary"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="@dimen/micro_text_size"
+            android:textStyle="bold"
+            android:background="@drawable/bg_chip_red"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:layout_marginEnd="4dp"
+            android:textColor="@android:color/white" />
+
+        <TextView
+            android:id="@+id/tvHitSecondary"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="@dimen/micro_text_size"
+            android:textStyle="bold"
+            android:background="@drawable/bg_chip_blue"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:textColor="@android:color/white" />
+    </LinearLayout>
+
     <!-- 号码球：自适应换行，红球/蓝球全部可见不重叠 -->
     <com.lottery.history.widget.FlowLayout
         android:id="@+id/llNumbers"
@@ -58,5 +96,24 @@
         android:layout_height="wrap_content"
         android:clipChildren="false"
         android:clipToPadding="false" />
+
+    <!-- 查看当期开奖详情按钮：仅当选号存在时显示 -->
+    <TextView
+        android:id="@+id/btnViewDrawDetail"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:layout_marginTop="4dp"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:background="@drawable/bg_button_red_small"
+        android:clickable="true"
+        android:focusable="true"
+        android:text="查看当期所有奖项"
+        android:textColor="@android:color/white"
+        android:textSize="@dimen/micro_text_size"
+        android:textStyle="bold" />
 
 </LinearLayout>

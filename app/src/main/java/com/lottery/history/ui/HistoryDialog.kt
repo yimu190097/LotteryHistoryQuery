@@ -50,7 +50,16 @@ class HistoryDialog(
         val ivClose: TextView = view.findViewById(R.id.ivClose)
         val rvHistory: RecyclerView = view.findViewById(R.id.rvHistory)
 
-        adapter = HistoryAdapter(initialMatches, config, selectedPrimary, selectedSecondary)
+        adapter = HistoryAdapter(
+            historyList = initialMatches,
+            config = config,
+            selectedPrimary = selectedPrimary,
+            selectedSecondary = selectedSecondary,
+            onDrawDetailClick = { draw ->
+                // 打开该期所有奖项详情弹窗
+                DrawDetailDialog(context, config, draw).show()
+            }
+        )
         rvHistory.layoutManager = LinearLayoutManager(context)
         rvHistory.adapter = adapter
 
