@@ -46,6 +46,27 @@ android {
     buildFeatures {
         viewBinding = true
     }
+
+    testOptions {
+        // Robolectric 需要读取项目资源/Manifest，在本地 JVM 上模拟 Android
+        unitTests {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+            // 将 android-all-instrumented 本地路径注入 Robolectric 离线搜索路径，
+            // 避免首次运行时从 Maven Central 下载（沙箱环境外网连接不稳定）
+            all { testTask ->
+                testTask.systemProperty(
+                    "robolectric.dependency.repo.url",
+                    "file://${rootDir}/../.m2/repository"
+                )
+                testTask.jvmArgs(
+                    // 给 Robolectric maven-resolver 加本地 maven 仓库优先
+                    "-Drobolectric.dependency.repo.url=file://${System.getProperty("user.home")}/.m2/repository",
+                    "-Drobolectric.offline=false"
+                )
+            }
+        }
+    }
 }
 
 dependencies {
@@ -77,4 +98,12 @@ dependencies {
     // Excel (xls 97-2003) 解析 —— 官方公开开奖数据表格格式
     // 本地 JAR，避免 Gradle 镜像仓库因网络波动拉取失败
     implementation(files("libs/jxl-2.6.12.jar"))
+
+    // ============ 本地 JVM 单元测试（test）依赖 ============
+    // Robolectric：在本地 JVM 上运行 Android 组件，无需模拟器
+    // 用途：FlowLayoutKL8InstrumentedTest 在 JVM 上真实调用 FlowLayout.onMeasure/onLayout 验证分行逻辑
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.11.1")
+    testImplementation("androidx.test:core:1.5.0")
+    testImplementation("androidx.test.ext:junit:1.1.5")
 }
