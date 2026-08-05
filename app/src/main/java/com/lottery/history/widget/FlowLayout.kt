@@ -12,12 +12,18 @@ import android.view.ViewGroup
  * 相比 HorizontalScrollView 不会隐藏信息，相比 LinearLayout(horizontal) 不会挤压重叠。
  *
  * 子元素通过 margin 控制间距，本布局不再额外加间距。
+ *
+ * maxPerLine: 每行最大子元素数量（0=不限制，仅按宽度换行）。
+ *             用于快乐8（20个号码）强制每行10个，避免宽屏单行过长。
  */
 class FlowLayout @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
 ) : ViewGroup(context, attrs, defStyleAttr) {
+
+    /** 每行最大子元素数量；0 表示不限制（仅按宽度换行）。 */
+    var maxPerLine: Int = 0
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val widthMode = MeasureSpec.getMode(widthMeasureSpec)
@@ -32,6 +38,7 @@ class FlowLayout @JvmOverloads constructor(
         var lineHeight = 0
         var totalHeight = 0
         var maxLineWidth = 0
+        var countInLine = 0
 
         for (i in 0 until childCount) {
             val child = getChildAt(i)
@@ -41,15 +48,19 @@ class FlowLayout @JvmOverloads constructor(
             val cw = child.measuredWidth + lp.leftMargin + lp.rightMargin
             val ch = child.measuredHeight + lp.topMargin + lp.bottomMargin
 
-            if (lineWidth + cw > contentMaxWidth && lineWidth > 0) {
-                // 当前行放不下，换行
+            val widthExceeded = lineWidth + cw > contentMaxWidth && lineWidth > 0
+            val countExceeded = maxPerLine > 0 && countInLine >= maxPerLine
+            if (widthExceeded || countExceeded) {
+                // 当前行放不下，或已达 maxPerLine，换行
                 totalHeight += lineHeight
                 maxLineWidth = maxOf(maxLineWidth, lineWidth)
                 lineWidth = cw
                 lineHeight = ch
+                countInLine = 1
             } else {
                 lineWidth += cw
                 lineHeight = maxOf(lineHeight, ch)
+                countInLine++
             }
         }
         totalHeight += lineHeight
@@ -73,6 +84,7 @@ class FlowLayout @JvmOverloads constructor(
         var x = paddingLeft
         var y = paddingTop
         var lineHeight = 0
+        var countInLine = 0
 
         for (i in 0 until childCount) {
             val child = getChildAt(i)
@@ -81,17 +93,21 @@ class FlowLayout @JvmOverloads constructor(
             val cw = child.measuredWidth
             val ch = child.measuredHeight
 
-            if (x + lp.leftMargin + cw + lp.rightMargin > paddingLeft + contentWidth && x > paddingLeft) {
+            val widthExceeded = x + lp.leftMargin + cw + lp.rightMargin > paddingLeft + contentWidth && x > paddingLeft
+            val countExceeded = maxPerLine > 0 && countInLine >= maxPerLine
+            if (widthExceeded || countExceeded) {
                 // 换行
                 x = paddingLeft
                 y += lineHeight
                 lineHeight = 0
+                countInLine = 0
             }
             val childLeft = x + lp.leftMargin
             val childTop = y + lp.topMargin
             child.layout(childLeft, childTop, childLeft + cw, childTop + ch)
             x += lp.leftMargin + cw + lp.rightMargin
             lineHeight = maxOf(lineHeight, lp.topMargin + ch + lp.bottomMargin)
+            countInLine++
         }
     }
 

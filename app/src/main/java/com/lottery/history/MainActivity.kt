@@ -139,7 +139,7 @@ class MainActivity : AppCompatActivity() {
     // ================== 最新开奖卡片列表 ==================
     /**
      * 轮播卡片（面向40+客户优化版）：
-     *   - 固定展示"开奖号码"（不再混合一等奖/二等奖信息），用户一眼看清8个彩种最新开的号
+     *   - 固定展示“开奖号码”（不再混合一等奖/二等奖信息），用户一眼看清8个彩种最新开的号
      *   - 每张卡片：彩种名 + 期号 + 日期 + 号码球
      *   - 从右到左循环轮播（rvLatestDraws LinearLayoutManager.HORIZONTAL + reverseLayout=true 实现）
      *   - 点击卡片 → 弹出开奖详情，列出全部奖项具体情况
@@ -169,7 +169,7 @@ class MainActivity : AppCompatActivity() {
         // 标准 LEFT-TO-RIGHT 横向列表（reverseLayout=false）：
         //   第0项在屏幕可见区域最左侧，后续项依次向右排列；
         //   调用 smoothScrollToPosition(index+1) 时，列表内容整体向左移动，
-        //   新卡片从右侧边缘滑入 → 即用户肉眼感知的"从右 → 左"轮播方向 ✔️
+        //   新卡片从右侧边缘滑入 → 即用户肉眼感知的“从右 → 左”轮播方向 ✔️
         val lm = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
         binding.rvLatestDraws.layoutManager = lm
         binding.rvLatestDraws.adapter = latestDrawsAdapter
@@ -237,11 +237,15 @@ class MainActivity : AppCompatActivity() {
             val density = itemView.resources.displayMetrics.density
             val ballSize = (20 * density).toInt()   // 号码球略放大，40+更清晰
             val margin = (2 * density).toInt()
+            // 快乐8（20个号码）强制每行10个，避免宽屏单行过长
+            (card.llBalls as? com.lottery.history.widget.FlowLayout)?.let { fl ->
+                fl.maxPerLine = if (cfg.parsePrimaryCount >= 15) 10 else 0
+            }
             draw.primaryNumbers.sorted().forEach { num ->
                 card.llBalls.addView(createBall(num, true, ballSize, margin))
             }
             if (cfg.hasSecondary && draw.secondaryNumbers.isNotEmpty()) {
-                // 主号/次号之间加"+"分隔，清晰可见
+                // 主号/次号之间加“+”分隔，清晰可见
                 val sep = TextView(this@MainActivity).apply {
                     text = "+"
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
@@ -488,7 +492,7 @@ class MainActivity : AppCompatActivity() {
             tv.setPadding(0, 0, 0, 0)
             // 点击高亮反馈 + 切换彩种
             tv.setOnClickListener {
-                // 先更新 Tab 选中视觉，再跳转 fragment，避免用户觉得"没点到"
+                // 先更新 Tab 选中视觉，再跳转 fragment，避免用户觉得“没点到”
                 updateTabSelection(index)
                 binding.viewPager.setCurrentItem(index, false)
             }
