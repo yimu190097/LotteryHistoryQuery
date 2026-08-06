@@ -248,6 +248,21 @@ class IssueSearchDialog(context: Context) : Dialog(context) {
             })
         }
 
+        // 政策标签：按当期开奖日期自动适配的规则版本（让客户知道本期适用哪年政策）
+        val ruleVersion = cfg.rulesForDate(draw.date)
+        container.addView(TextView(context).apply {
+            text = "【${ruleVersion.policyLabel}】"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTextColor(0xFF1B5E20.toInt())
+            setBackgroundColor(0xFFE8F5E9.toInt())
+            val pad = (6 * density).toInt()
+            setPadding(pad, (3 * density).toInt(), pad, (3 * density).toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = (4 * density).toInt() }
+        })
+
         // 号码球
         val flBalls = FlowLayout(context).apply {
             layoutParams = LinearLayout.LayoutParams(
@@ -256,6 +271,8 @@ class IssueSearchDialog(context: Context) : Dialog(context) {
             ).apply { topMargin = (10 * density).toInt() }
             clipChildren = false
             clipToPadding = false
+            // 快乐8 20个号码：强制每行10个
+            maxPerLine = if (cfg.parsePrimaryCount >= 15) 10 else 0
         }
         draw.primaryNumbers.sorted().forEach { num ->
             flBalls.addView(createBall(num, true, ballSize, ballMargin))

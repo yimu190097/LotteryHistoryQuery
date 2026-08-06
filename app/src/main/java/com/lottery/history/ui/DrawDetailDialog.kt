@@ -138,6 +138,22 @@ class DrawDetailDialog(
         titleRow.addView(tvTitle)
         llRules.addView(titleRow)
 
+        // ===== 政策标签：按当期开奖日期自动适配的规则版本 =====
+        val ruleVersion = config.rulesForDate(draw?.date)
+        val policyBanner = TextView(context).apply {
+            text = "【${ruleVersion.policyLabel}】${ruleVersion.changeNote}"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTextColor(0xFF1B5E20.toInt())
+            setBackgroundColor(0xFFE8F5E9.toInt())
+            val pad = (8 * density).toInt()
+            setPadding(pad, (6 * density).toInt(), pad, (6 * density).toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = (4 * density).toInt() }
+        }
+        llRules.addView(policyBanner)
+
         // 表头：奖项名称 / 命中规则 / 中奖注数 / 单注奖金
         val headerRow = buildPrizeRow(
             prizeName = "奖项",
@@ -157,8 +173,8 @@ class DrawDetailDialog(
             setBackgroundColor(0xFFC62828.toInt())
         })
 
-        // ----- 按 rules 顺序逐行渲染所有奖级（100%真实数据展示，绝不兜底）-----
-        val merged = mergePrizeTiersWithRules(config.rules, draw?.allPrizeTiers.orEmpty())
+        // ----- 按 ruleVersion 顺序逐行渲染所有奖级（按期自动适配政策版本）-----
+        val merged = mergePrizeTiersWithRules(ruleVersion, draw?.allPrizeTiers.orEmpty())
         // 顶部提示：若当期真实 allPrizeTiers 少于规则去重后的奖级数，显式提示客户"部分未公布"
         val haveAnyRealTiers = merged.any { it.tierEntry != null }
         val missingCount = merged.groupBy { it.prizeName }.keys.size -
@@ -245,24 +261,24 @@ class DrawDetailDialog(
     )
 
     /**
-     * 【真实性红线】：
+     * 【真实性红线 + 按期自动适配】：
      *   - 注数/单注奖金两列**只能**来自真实 draw.allPrizeTiers（官方公开开奖数据）
-     *   - 规则 MatchRuleDef.fixedAmountYuan 只能拼到 matchText 规则描述里，标注「规则固定¥X」，
-     *     明确告知客户这是游戏规则本身设定，不代表本期实际兑付金额。
-     *   - 规则中"连续同名奖级"（如 4+0 和 3+1 都叫四等奖）视为一个真实奖级，共享同一 entry
-     *   - 【快乐8 多子玩法奖级隔离】：config.realTiersToUse 指定从真实 allPrizeTiers 中只取前 N 个
-     *     真实奖级对参与规则对齐（避免快乐8 allPrizeTiers 中 70+ 对子玩法奖级混入选十）
+     *   - 规则版本由当期开奖日期决定（ruleVersion），不同阶段奖项设立可能不同
+     *   - 自动适配：展示奖级数 = min(realTiersToUse, 实际解析到的奖级对数)，
+     *     数据少几对就少展示几行（如双色球福运奖停发时只有6对，自动不显示福运奖行）
+     *   - 规则中"连续同名奖级"视为一个真实奖级，共享同一 entry
      */
     private fun mergePrizeTiersWithRules(
-        rules: List<LotteryTypeConfig.MatchRuleDef>,
+        ruleVersion: LotteryTypeConfig.RuleVersion,
         tiers: List<PrizeTierEntry?>
     ): List<MergedPrizeRow> {
         val merged = mutableListOf<MergedPrizeRow>()
-        // 只截取真实奖级前 N 对 —— N = config.realTiersToUse（快乐8=7，其他=rules.size）
-        val trimmedTiers = tiers.take(config.realTiersToUse)
+        // 自动适配：实际数据奖级对数 ≤ realTiersToUse 时按实际数据为准
+        val effectiveCount = minOf(ruleVersion.realTiersToUse, tiers.size)
+        val trimmedTiers = tiers.take(effectiveCount)
         var dedupIdx = -1
         var lastName: String? = null
-        rules.forEach { rule ->
+        ruleVersion.rules.forEach { rule ->
             if (rule.prizeName.contains("未中奖") || rule.prizeName.contains("无奖项")) {
                 return@forEach
             }

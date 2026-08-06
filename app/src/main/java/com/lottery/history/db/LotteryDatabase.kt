@@ -14,7 +14,7 @@ import androidx.room.RoomDatabase
         PendingSyncEntity::class,
         ChatMessageEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class LotteryDatabase : RoomDatabase() {

@@ -162,10 +162,17 @@ object LotteryXlsParser {
                     if (secondary.size < config.parseSecondaryCount) continue
                 }
 
-                // 号码之后的剩余部分：销售额、奖池、成对奖级数据
+                // 按当期开奖日期选择适用的规则版本（不同阶段奖项结构可能不同）
+                val ruleVersion = config.rulesForDate(date)
+
+                // 号码之后的剩余部分：extraFieldCount 个额外字段（销售额/奖池/出球顺序）+ 成对奖级
                 val extraStart = numStart + config.parsePrimaryCount +
                     (if (config.hasSecondary) config.parseSecondaryCount else 0)
-                val allTiers = extractAllPrizeTiers(parts, extraStart)
+                val allTiers = extractAllPrizeTiers(
+                    parts, extraStart,
+                    extraFieldCount = ruleVersion.extraFieldCount,
+                    prizeTierPairCount = ruleVersion.prizeTierPairCount
+                )
 
                 result.add(
                     LotteryDraw(
@@ -188,58 +195,29 @@ object LotteryXlsParser {
         return result
     }
 
-    // 从 parts 尾部的数值字段中提取【全部奖级】(注数,金额) 对列表（一等奖、二等奖、三等奖…按顺序）
-    // 五步（100% 真实奖级，绝不回退 / 伪造）：
-    //   0) '-' 号当作 null（七乐彩最新一期延迟公开：尾部16个全'-'，跳过整段不解析）
-    //   1) 跳过紧随号码之后的重复/排序号码段（值 0..35 连续数字；ssq/dlt/7lc 常见）
-    //   2) **预扫描：跳过销售额/奖池大数**：单个值 > 2_000_000（200万）的数字一律视为
-    //        销售额 / 奖池 / 累计金额，直接跳过。—— 全国任何彩种的「中奖注数」从未超过 200 万：
-    //        双色球六等奖（末等奖）最高一期约 170 万注，七乐彩六等奖最高 6 万注。
-    //        （注：一等奖单注奖金 ≥ 500万，会被 "count≤500 && amount≥100万" 的白名单捞回来，
-    //          因为「count 是注数，肯定在跳过之前已经先被校验了」，不会漏头奖。）
-    //   3) 然后找 (count, amount) 成对
-    //   4) 白名单/普通过滤：高奖金 count≤500 且 amount≥100万 直接通过；普通 amount 0..200万；
-    //        count==0 && amount==0 空开保留。
-    // 返回：按顺序的奖级列表。最多提取 15 级（覆盖全彩种）。
-    private fun extractAllPrizeTiers(parts: List<String>, start: Int): List<PrizeTierEntry> {
-        val nums = (start until parts.size).mapNotNull { idx ->
-            val v = parts[idx]
-            // 七乐彩最新一期尾部全 '-'，全部跳过后 nums.size<2 → 直接返回空
-            if (v == "-" || v.isEmpty()) null else parseNumberSafe(v)
-        }
+    // ============ 结构化奖级提取（按已知数据格式精确提取，不猜测）============
+    //  数据格式（已用 17500.cn 各彩种真实数据交叉验证 2026-08-06）：
+    //    号码之后 → extraFieldCount 个额外字段（销售额/奖池/出球顺序等）→ prizeTierPairCount 对 (注数,金额)
+    //  每期的 extraFieldCount / prizeTierPairCount 由该期适用的 RuleVersion 决定（按日期自动适配）。
+    //  容错：'-' 视为未公布跳过；字段不足时提前结束（实际奖级对数 < 配置上限，由展示层自动适配）。
+    private fun extractAllPrizeTiers(
+        parts: List<String>,
+        start: Int,
+        extraFieldCount: Int,
+        prizeTierPairCount: Int
+    ): List<PrizeTierEntry> {
         val all = mutableListOf<PrizeTierEntry>()
-        if (nums.size < 2) return all
-        var i = 0
-        // 1) 跳过紧随号码之后的重复/排序号码段（值 0..35）
-        while (i < nums.size && nums[i] in 0..35) { i++ }
-        // 2) 预扫描：单个值 > 2_000_000（200万）一律视为销售额/奖池/累计额 → 跳过
-        //    七乐彩典型：销售额 5,264,472；奖池 2,583,654；都是 > 200 万，这一步全部吃掉。
-        while (i < nums.size && nums[i] > 2_000_000L) { i++ }
-        // 最多 15 级（大乐透规则最多到九等奖，加冗余到 15 足够）
-        while (i + 1 < nums.size && all.size < 15) {
-            val count = nums[i]
-            val amount = nums[i + 1]
-            // 注数上限严格 200 万（同 step2），避免奖池金额被误当 count，造成 pair 错位
-            if (count !in 0..2_000_000L) {
-                i += 1
-                continue
-            }
-            if (amount < 0) {
-                i += 1
-                continue
-            }
-            // 高奖金白名单：count 很少（≤500注）且 amount ≥ 100万 → 典型浮动头奖/二等奖，直接通过
-            val isBigPrize = count <= 500L && amount >= 1_000_000L
-            // 普通奖金：0 ≤ amount ≤ 2_000_000（200万封顶，如双色球三等奖 3000、大乐透三等奖 10000 都在范围内）
-            val isNormalPrize = amount in 0..2_000_000L
-            // count==0 且 amount==0 也允许（空开）
-            val isZeroOpen = count == 0L && amount == 0L
-            if (isBigPrize || isNormalPrize || isZeroOpen) {
-                all.add(PrizeTierEntry(count = count.toInt(), amount = amount))
-                i += 2
-            } else {
-                i += 1
-            }
+        val prizeStart = start + extraFieldCount
+        for (i in 0 until prizeTierPairCount) {
+            val countIdx = prizeStart + i * 2
+            val amountIdx = prizeStart + i * 2 + 1
+            val countRaw = parts.getOrNull(countIdx) ?: break
+            val amountRaw = parts.getOrNull(amountIdx) ?: break
+            // '-' 表示未公布（如最新一期延迟公开），跳过该对
+            if (countRaw == "-" || amountRaw == "-") break
+            val count = parseNumberSafe(countRaw) ?: break
+            val amount = parseNumberSafe(amountRaw) ?: break
+            all.add(PrizeTierEntry(count = count.toInt(), amount = amount))
         }
         return all
     }
