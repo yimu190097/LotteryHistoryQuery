@@ -58,6 +58,15 @@ class DrawDetailDialog(
     private fun render(view: View) {
         val density = context.resources.displayMetrics.density
 
+        // ===== 优先用 draw 已解析确定的 ruleVersionKey，不依赖运行时日期（保证历史数据不错位）=====
+        val ruleVersion = draw?.resolveRuleVersion(config) ?: config.ruleVersions.first()
+
+        // ============== 顶部：销售额 + 奖池 信息栏（新增v9） ==============
+        val salesJackpotBar = buildSalesJackpotBar(density)
+        val contentMain = view.findViewById<LinearLayout>(R.id.llRulesContainer)
+        contentMain.removeAllViews()
+        contentMain.addView(salesJackpotBar)
+
         // 彩种名（强化醒目，用户一眼看到现在查的是哪个彩种）
         view.findViewById<TextView>(R.id.tvLotteryName).apply {
             text = config.displayName
@@ -115,9 +124,8 @@ class DrawDetailDialog(
             })
         }
 
-        // 全部奖项列表容器
-        val llRules = view.findViewById<LinearLayout>(R.id.llRulesContainer)
-        llRules.removeAllViews()
+        // 全部奖项列表容器（复用上面的 contentMain = llRulesContainer，奖项区域从这里开始）
+        val llRules = contentMain
 
         // 标题：当期全部奖项情况（40+客户一目了然）
         val titleRow = LinearLayout(context).apply {
@@ -138,21 +146,46 @@ class DrawDetailDialog(
         titleRow.addView(tvTitle)
         llRules.addView(titleRow)
 
-        // ===== 政策标签：按当期开奖日期自动适配的规则版本 =====
-        val ruleVersion = config.rulesForDate(draw?.date)
-        val policyBanner = TextView(context).apply {
-            text = "【${ruleVersion.policyLabel}】${ruleVersion.changeNote}"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            setTextColor(0xFF1B5E20.toInt())
-            setBackgroundColor(0xFFE8F5E9.toInt())
-            val pad = (8 * density).toInt()
-            setPadding(pad, (6 * density).toInt(), pad, (6 * density).toInt())
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = (4 * density).toInt() }
+        // ===== 结构一致性审计标记（v9新增：数据异常立即告警） =====
+        draw?.tierMatchStatus?.let { status ->
+            val warnText: String? = when (status) {
+                com.lottery.history.model.TierMatchStatus.MATCH -> null
+                com.lottery.history.model.TierMatchStatus.FEWER ->
+                    "⚠ 结构提示：本期实际公布 ${draw.actualTierCount ?: 0} 个奖级，少于规则配置 " +
+                        "${ruleVersion.realTiersToUse} 个（部分奖级可能停发或未公布）"
+                com.lottery.history.model.TierMatchStatus.MORE ->
+                    "✖ 数据异常：本期实际解析到 ${draw.actualTierCount ?: 0} 个奖级，多于规则配置 " +
+                        "${ruleVersion.realTiersToUse} 个（数据源结构可能已变化，请更新应用）"
+                com.lottery.history.model.TierMatchStatus.MISMATCH ->
+                    "✖ 数据异常：未能解析到有效奖级数据，请稍后刷新或联系客服"
+                else -> null
+            }
+            if (warnText != null) {
+                val isError = status == com.lottery.history.model.TierMatchStatus.MORE ||
+                    status == com.lottery.history.model.TierMatchStatus.MISMATCH
+                val warn = TextView(context).apply {
+                    text = warnText
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                    if (isError) {
+                        setTextColor(0xFFFFFFFF.toInt())
+                        setBackgroundColor(0xFFB71C1C.toInt())
+                    } else {
+                        setTextColor(0xFF5D4037.toInt())
+                        setBackgroundColor(0xFFFFF3E0.toInt())
+                    }
+                    val pad = (8 * density).toInt()
+                    setPadding(pad, (6 * density).toInt(), pad, (6 * density).toInt())
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { topMargin = (4 * density).toInt() }
+                }
+                llRules.addView(warn)
+            }
         }
-        llRules.addView(policyBanner)
+
+        // ===== 政策标签：可展开查看本期政策 + 所有历史版本变更说明 =====
+        llRules.addView(buildPolicyExpandableCard(ruleVersion, density))
 
         // 表头：奖项名称 / 命中规则 / 中奖注数 / 单注奖金
         val headerRow = buildPrizeRow(
@@ -242,15 +275,165 @@ class DrawDetailDialog(
             }
         }
 
-        // 末行：精炼说明（不暴露数据来源，只保留必要信息）
+        // 末行：精炼说明（含奖池联动提示）
+        val extraHint = buildString {
+            append("空开=本期无人中；\"规则固定¥X\"为基础额度，每期实际金额以官方公布为准。")
+            if (config.code == "dlt" && ruleVersion.key.startsWith("dlt_2026")) {
+                val jp = draw?.jackpotAmount ?: 0L
+                append("\n★大乐透2026新规奖池联动：当前奖池${formatAmount(jp)}，")
+                append(if (jp >= 800_000_000L) "≥8亿已上浮（三6666/四380/五200/六18/七7）"
+                else "<8亿未上浮（三5000/四300/五150/六15/七5）")
+            }
+            if (config.code == "ssq" && ruleVersion.key.startsWith("ssq_2026")) {
+                val jp = draw?.jackpotAmount ?: 0L
+                append("\n★双色球福运奖双门槛：奖池${formatAmount(jp)}，")
+                append(when {
+                    jp >= 1_500_000_000L -> "≥15亿福运奖已开启（中3红=5元）"
+                    jp < 300_000_000L -> "<3亿福运奖已停止（中3红不中奖）"
+                    else -> "3亿~15亿之间福运奖维持上期状态"
+                })
+            }
+        }
         val footer = TextView(context).apply {
-            text = "空开=本期无人中；\"规则固定¥X\"为基础额度，每期实际金额以官方公布为准（含派奖/浮动）。"
+            text = extraHint
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setTextColor(0xFF9E9E9E.toInt())
             val pad = (10 * density).toInt()
             setPadding(pad, pad, pad, pad)
         }
         llRules.addView(footer)
+    }
+
+    // ============ v9新增：顶部销售额 + 奖池 信息栏 ============
+    private fun buildSalesJackpotBar(density: Float): View {
+        val bar = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            val pad = (10 * density).toInt()
+            setPadding(pad, (6 * density).toInt(), pad, (6 * density).toInt())
+            setBackgroundColor(0xFFE3F2FD.toInt())
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        // 左：销售额
+        val leftInfo = TextView(context).apply {
+            val sales = draw?.salesAmount
+            text = "销售额：${if (sales != null) formatAmount(sales) else "未公布"}"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextColor(0xFF0D47A1.toInt())
+            setTypeface(null, Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        bar.addView(leftInfo)
+        // 右：奖池（仅彩种有奖池概念时显示）
+        val showJackpot = config.code in listOf("ssq", "dlt", "7lc", "7xc", "kl8")
+        if (showJackpot) {
+            val rightInfo = TextView(context).apply {
+                val jp = draw?.jackpotAmount
+                text = "奖池：${if (jp != null) formatAmount(jp) else "未公布"}"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setTextColor(0xFFC62828.toInt())
+                setTypeface(null, Typeface.BOLD)
+                gravity = Gravity.END
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            bar.addView(rightInfo)
+        }
+        return bar
+    }
+
+    // ============ v9新增：政策标签 + 可展开历史变更说明卡 ============
+    private fun buildPolicyExpandableCard(currentRule: LotteryTypeConfig.RuleVersion, density: Float): View {
+        val card = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = (4 * density).toInt() }
+            setBackgroundColor(0xFFE8F5E9.toInt())
+        }
+        val pad = (10 * density).toInt()
+        // 标题行：本期政策标签 + "展开历史"按钮
+        val headerRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            setPadding(pad, (8 * density).toInt(), pad, (4 * density).toInt())
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val tvCurrent = TextView(context).apply {
+            text = "【本期适用】${currentRule.policyLabel}\n生效日期：${currentRule.effectiveFromDate}起"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextColor(0xFF1B5E20.toInt())
+            setTypeface(null, Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        headerRow.addView(tvCurrent)
+        // 展开/收起 按钮（如果有多个历史版本）
+        val detailContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            visibility = View.GONE
+        }
+        if (config.ruleVersions.size > 1) {
+            val btnToggle = TextView(context).apply {
+                text = "查看全部变更 ▼"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextColor(0xFF2E7D32.toInt())
+                setBackgroundColor(0xFFC8E6C9.toInt())
+                val p = (6 * density).toInt()
+                setPadding(p, (3 * density).toInt(), p, (3 * density).toInt())
+                setOnClickListener {
+                    if (detailContainer.visibility == View.VISIBLE) {
+                        detailContainer.visibility = View.GONE
+                        text = "查看全部变更 ▼"
+                    } else {
+                        detailContainer.visibility = View.VISIBLE
+                        text = "收起历史变更 ▲"
+                    }
+                }
+            }
+            headerRow.addView(btnToggle)
+            // 展开内容：本期说明 + 所有历史版本
+            val currentNote = TextView(context).apply {
+                text = "● 本期说明：${currentRule.changeNote}"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextColor(0xFF2E7D32.toInt())
+                setPadding(pad, (4 * density).toInt(), pad, (6 * density).toInt())
+            }
+            detailContainer.addView(currentNote)
+            // 其他版本（按生效日期从新到旧，排除本期）
+            config.ruleVersions.filter { it.key != currentRule.key }.forEach { rv ->
+                val versionLine = TextView(context).apply {
+                    text = "○ ${rv.policyLabel}（${rv.effectiveFromDate}起）：\n   ${rv.changeNote}"
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                    setTextColor(0xFF558B2F.toInt())
+                    setPadding(pad, (3 * density).toInt(), pad, (3 * density).toInt())
+                }
+                detailContainer.addView(versionLine)
+            }
+        } else {
+            // 只有一个版本：直接显示说明，不用展开
+            val currentNote = TextView(context).apply {
+                text = "● 规则说明：${currentRule.changeNote}"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextColor(0xFF2E7D32.toInt())
+                setPadding(pad, (4 * density).toInt(), pad, (6 * density).toInt())
+            }
+            card.addView(headerRow)
+            card.addView(currentNote)
+            return card
+        }
+        card.addView(headerRow)
+        card.addView(detailContainer)
+        return card
     }
 
     // ================ 数据对齐：rules ↔ allPrizeTiers 合并 ================

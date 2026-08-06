@@ -168,11 +168,48 @@ object LotteryXlsParser {
                 // 号码之后的剩余部分：extraFieldCount 个额外字段（销售额/奖池/出球顺序）+ 成对奖级
                 val extraStart = numStart + config.parsePrimaryCount +
                     (if (config.hasSecondary) config.parseSecondaryCount else 0)
+
+                // —— 提取销售额和奖池（从 extra 字段中）——
+                // 约定：extraFieldCount >= 2 时，最后一个 extra = 奖池，倒数第二个 extra = 销售额
+                //       extraFieldCount == 1 时，唯一的 extra = 销售额（无奖池，如P3/P5）
+                //       FC3D extraFieldCount=6：最后一个 extra = 销售额（无奖池概念）
+                var salesAmount: Long? = null
+                var jackpotAmount: Long? = null
+                val ef = ruleVersion.extraFieldCount
+                if (ef >= 1) {
+                    val salesIdx: Int
+                    val jackpotIdx: Int
+                    if (config.code == "3d") {
+                        salesIdx = extraStart + ef - 1
+                        jackpotIdx = -1
+                    } else if (ef == 1) {
+                        salesIdx = extraStart
+                        jackpotIdx = -1
+                    } else {
+                        salesIdx = extraStart + ef - 2
+                        jackpotIdx = extraStart + ef - 1
+                    }
+                    salesAmount = parts.getOrNull(salesIdx)?.let { parseNumberSafe(it) }
+                    if (jackpotIdx >= 0) {
+                        jackpotAmount = parts.getOrNull(jackpotIdx)?.let { parseNumberSafe(it) }
+                    }
+                }
+
                 val allTiers = extractAllPrizeTiers(
                     parts, extraStart,
                     extraFieldCount = ruleVersion.extraFieldCount,
                     prizeTierPairCount = ruleVersion.prizeTierPairCount
                 )
+
+                // —— 结构一致性审计 ——
+                val actualTierCount = allTiers.size
+                val expected = ruleVersion.realTiersToUse
+                val tierMatchStatus = when {
+                    actualTierCount == expected -> com.lottery.history.model.TierMatchStatus.MATCH
+                    actualTierCount == 0 -> com.lottery.history.model.TierMatchStatus.MISMATCH
+                    actualTierCount < expected -> com.lottery.history.model.TierMatchStatus.FEWER
+                    else -> com.lottery.history.model.TierMatchStatus.MORE
+                }
 
                 result.add(
                     LotteryDraw(
@@ -184,7 +221,13 @@ object LotteryXlsParser {
                         firstPrizeAmount = allTiers.getOrNull(0)?.amount,
                         secondPrizeCount = allTiers.getOrNull(1)?.count,
                         secondPrizeAmount = allTiers.getOrNull(1)?.amount,
-                        allPrizeTiers = allTiers
+                        allPrizeTiers = allTiers,
+                        // —— v9 新增：按期自适应元数据（解析时一次性确定，存DB后不再重算）——
+                        ruleVersionKey = ruleVersion.key,
+                        actualTierCount = actualTierCount,
+                        tierMatchStatus = tierMatchStatus,
+                        jackpotAmount = jackpotAmount,
+                        salesAmount = salesAmount
                     )
                 )
             } catch (_: Exception) {

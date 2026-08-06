@@ -3,65 +3,51 @@ package com.lottery.history.model
 /**
  * 彩种配置：统一描述每个彩种的号码区间、选号数量、匹配规则和解析参数。
  *
- * 【按期自动适配政策版本】：
- *   每个彩种拥有 [ruleVersions]（按生效日期降序排列），展示开奖详情时根据当期开奖日期
- *   选择对应的 [RuleVersion]——因为不同阶段奖项设立存在差异（如大乐透2026-01-31由9级改7级、
- *   双色球2026-02-01增设福运奖）。解析器也按期日期选用对应的 extraFieldCount / prizeTierPairCount
- *   做结构化解析，确保注数/金额与当期数据完全对齐。
+ * 【按期自动适配政策版本——核心架构】：
+ *  每个彩种拥有 ruleVersions（按生效日期降序排列），每期开奖数据在**解析时**就根据当期
+ *  开奖日期选择对应的 RuleVersion，并将 ruleVersionKey、actualTierCount、tierMatchStatus、
+ *  jackpotAmount、salesAmount 一起写入数据库。展示时直接读取数据库里的 ruleVersionKey
+ *  定位规则版本——**不依赖运行时重新按日期匹配**，避免未来规则再变更时历史数据展示错位。
  *
- * 规则数据均来自官方公开规则（联网核查2026-08-06）：
- *   - 双色球/七乐彩/福彩3D：中国福利彩票 cwl.gov.cn / gdfc.org.cn
- *   - 大乐透/七星彩/排列三/排列五：国家体彩 lottery.gov.cn
- *   - 快乐8：全国联网福彩规则
- *   - 数据源格式：data.17500.cn（真实开奖数据交叉验证）
+ * 规则数据均来自官方公开规则，且用 17500.cn 真实数据交叉验证（2026-08-06）：
+ *   - 双色球2026090期：NF=31，7对奖级，T30/T31 福运奖0/5（奖池<15亿停发，占位置0/5）
+ *   - 大乐透26088期：NF=38，[12-25]为基本投注7对（2/9662603→9077777/5正确），
+ *     [26-38]为追加投注且仅前两等浮动（5000/300/150/15/5，奖池7.92亿<8亿未上浮正确）
+ *   - 七星彩20099期：三1800/四300/五20（旧2004版）；20100期：三3000/四500/五30（新2020版）
+ *   - 快乐82026208期：选十中八=720元（真实数据验证非800）
  */
 data class LotteryTypeConfig(
-    val code: String,           // "ssq", "dlt", "3d" ...
-    val displayName: String,    // "双色球"
-    val url: String,            // 主数据源 URL
-    val txtFallbackUrl: String, // 兜底数据源 URL
+    val code: String,
+    val displayName: String,
+    val url: String,
+    val txtFallbackUrl: String,
 
-    // 前区/主号码配置
-    val primaryMin: Int,
-    val primaryMax: Int,
-    val primaryPickCount: Int,
-    val primaryLabel: String,
-
-    // 后区/次号码配置（hasSecondary=false 时忽略）
-    val secondaryMin: Int = 0,
-    val secondaryMax: Int = 0,
-    val secondaryPickCount: Int = 0,
+    val primaryMin: Int, val primaryMax: Int, val primaryPickCount: Int, val primaryLabel: String,
+    val secondaryMin: Int = 0, val secondaryMax: Int = 0, val secondaryPickCount: Int = 0,
     val secondaryLabel: String = "",
-
     val hasSecondary: Boolean = true,
 
-    /** 规则版本列表（按生效日期降序，最新的在前） */
     val ruleVersions: List<RuleVersion>,
 
-    // 解析参数：日期后取多少个主号码、多少个次号码
-    val parsePrimaryCount: Int,
-    val parseSecondaryCount: Int = 0,
-
-    // 结果描述用词
-    val primaryUnit: String,
-    val secondaryUnit: String,
-
-    val issuePattern: String,
-    val issueHint: String
+    val parsePrimaryCount: Int, val parseSecondaryCount: Int = 0,
+    val primaryUnit: String, val secondaryUnit: String,
+    val issuePattern: String, val issueHint: String
 ) {
 
     /**
-     * 规则版本：某个生效日期起适用的奖项规则。
+     * 一个规则版本：某个生效日期起适用的奖项规则。
      *
-     * @param effectiveFromDate 生效日期（"2026-01-31"），用 ISO 日期字符串比较即可
-     * @param policyLabel       政策标签（展示用，如"2026年新规（7级）"）
-     * @param changeNote        变更说明（简述与其他阶段的差异原因）
-     * @param rules             匹配规则（含描述、奖项名、固定奖金）；同名连续奖项共享一个真实奖级对
-     * @param realTiersToUse    从真实 allPrizeTiers 取前 N 个奖级对参与展示（=去重后奖级数）
-     * @param prizeTierPairCount 结构化解析：号码后跳过 extraFieldCount 个额外字段，提取 N 对 (注数,金额)
-     * @param extraFieldCount   号码之后、奖级数据之前的额外字段数（销售额/奖池/出球顺序等）
+     * @param key               唯一标识（= ruleVersionKey，存数据库用），格式 "{code}_{yyyymmdd}"
+     * @param effectiveFromDate 生效日期（"2026-01-31"）
+     * @param policyLabel       政策标签（展示用短名，如"2026新规·7级"）
+     * @param changeNote        变更说明（简述与其他阶段的差异原因，让客户知道为什么不同）
+     * @param rules             匹配规则（含描述、奖项名、固定奖金）；同名连续奖项共享同一奖级对
+     * @param realTiersToUse    真实 allPrizeTiers 中取前 N 个奖级对参与展示（=去重后的奖级数）
+     * @param prizeTierPairCount 结构化解析：号码后跳过 extraFieldCount 个额外字段，提取 N 对基本投注(注数,金额)
+     * @param extraFieldCount   号码之后、基本投注奖级之前的额外字段数（销售额、奖池、出球顺序等）
      */
     data class RuleVersion(
+        val key: String,
         val effectiveFromDate: String,
         val policyLabel: String,
         val changeNote: String,
@@ -71,7 +57,6 @@ data class LotteryTypeConfig(
         val extraFieldCount: Int = 0
     )
 
-    /** 匹配规则定义：命中数 + 奖项名 + 官方单注固定奖金（浮动奖填 null） */
     data class MatchRuleDef(
         val matchPrimary: Int,
         val matchSecondary: Int,
@@ -80,16 +65,13 @@ data class LotteryTypeConfig(
         val fixedAmountYuan: Long? = null
     )
 
-    // ============ 向后兼容：默认取最新版本的属性（供 Matcher 等不区分日期的逻辑使用）============
+    // ============ 向后兼容：默认取最新版本（供不区分日期的逻辑使用）============
     val rules: List<MatchRuleDef> get() = ruleVersions.first().rules
     val realTiersToUse: Int get() = ruleVersions.first().realTiersToUse
     val extraFieldCount: Int get() = ruleVersions.first().extraFieldCount
     val prizeTierPairCount: Int get() = ruleVersions.first().prizeTierPairCount
 
-    /**
-     * 按开奖日期选择适用的规则版本（核心：按期自动适配政策）。
-     * date 为 "yyyy-MM-dd" 格式；null 时返回最新版本。
-     */
+    /** 按开奖日期选择适用的规则版本（解析时用此函数确定当期版本） */
     fun rulesForDate(date: String?): RuleVersion {
         if (date.isNullOrEmpty()) return ruleVersions.first()
         return ruleVersions.firstOrNull { date >= it.effectiveFromDate }
@@ -99,28 +81,23 @@ data class LotteryTypeConfig(
 
 object LotteryType {
 
-    // ==================== 双色球（2026-02-01起新增福运奖）====================
-    //  福运奖：中3红球(蓝球未中)=5元，奖池≥15亿时启动特别规定，<3亿时停止
-    //  数据源验证（ssq_desc.txt 2026090期 NF=31）：6出球顺序+销售额+奖池=8额外字段，7对奖级(含福运奖)
+    // ==================== 双色球（2026-02-01起增设福运奖）====================
     val SSQ = LotteryTypeConfig(
-        code = "ssq",
-        displayName = "双色球",
+        code = "ssq", displayName = "双色球",
         url = "http://data.17500.cn/ssq_desc.txt",
         txtFallbackUrl = "http://data.17500.cn/ssq_desc.txt",
-        primaryMin = 1, primaryMax = 33, primaryPickCount = 6,
-        primaryLabel = "红球",
-        secondaryMin = 1, secondaryMax = 16, secondaryPickCount = 1,
-        secondaryLabel = "蓝球",
+        primaryMin = 1, primaryMax = 33, primaryPickCount = 6, primaryLabel = "红球",
+        secondaryMin = 1, secondaryMax = 16, secondaryPickCount = 1, secondaryLabel = "蓝球",
         hasSecondary = true,
         ruleVersions = listOf(
             LotteryTypeConfig.RuleVersion(
+                key = "ssq_20260201",
                 effectiveFromDate = "2026-02-01",
-                policyLabel = "2026年新规（含福运奖）",
-                changeNote = "2026年2月1日(第2026014期)起增设福运奖：中3红球=5元。" +
-                    "奖池≥15亿时启动，<3亿时停止；停发期间3+0不中奖。",
-                realTiersToUse = 7,
-                prizeTierPairCount = 7,
-                extraFieldCount = 8,  // 6出球顺序 + 销售额 + 奖池
+                policyLabel = "2026年新规·含福运奖",
+                changeNote = "2026-02-01第2026014期起增设福运奖：奖池≥15亿自动开启（中3红=5元），" +
+                    "<3亿自动停止（占位置0/5或0/0）。每期共7对奖级。一等奖总额封顶1亿，二等奖封顶7000万。",
+                realTiersToUse = 7, prizeTierPairCount = 7,
+                extraFieldCount = 8,  // 6红球出球顺序 + 销售额 + 奖池
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(6, 1, "6红球+1蓝球全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(6, 0, "中6红球，蓝球未中", "二等奖", null),
@@ -136,11 +113,11 @@ object LotteryType {
                 )
             ),
             LotteryTypeConfig.RuleVersion(
+                key = "ssq_20030216",
                 effectiveFromDate = "1900-01-01",
-                policyLabel = "2003-2026年规则（6级，无福运奖）",
-                changeNote = "2003年上市至2026年1月的6级规则，中3红球(蓝球未中)不中奖。",
-                realTiersToUse = 6,
-                prizeTierPairCount = 6,
+                policyLabel = "2003-2026·经典6级",
+                changeNote = "2003年上市至2026年1月的6级经典规则，中3红球（蓝球未中）不中奖。",
+                realTiersToUse = 6, prizeTierPairCount = 6,
                 extraFieldCount = 8,
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(6, 1, "6红球+1蓝球全中", "一等奖", null),
@@ -156,38 +133,30 @@ object LotteryType {
                 )
             )
         ),
-        parsePrimaryCount = 6,
-        parseSecondaryCount = 1,
-        primaryUnit = "个红球",
-        secondaryUnit = "个蓝球",
-        issuePattern = "7 位数字（例 26090）",
-        issueHint = "例如：26090"
+        parsePrimaryCount = 6, parseSecondaryCount = 1,
+        primaryUnit = "个红球", secondaryUnit = "个蓝球",
+        issuePattern = "7位数字（例26090）", issueHint = "例如：26090"
     )
 
-    // ==================== 超级大乐透（2026-01-31起9级→7级）====================
-    //  新规：13个中奖条件不变，9级合并为7级；一二等奖浮动(总额各封顶1亿)
-    //  奖池<8亿：三5000/四300/五150/六15/七5；奖池≥8亿：三6666/四380/五200/六18/七7
-    //  数据源验证（dlt2_desc.txt 26088期 NF=38）：销售额+奖池=2额外字段，9基本对(末2对为0占位)
+    // ==================== 大乐透（6次规则调整，5个奖级版本）====================
+    //  真实解析：号码 → 2额外(销售额/奖池) → N对基本投注奖级 → 追加投注奖级(忽略)
+    //  26088期验证：[12-25]正好7对基本投注（一等2/9662603→七等9077777/5全对），后续是追加
     val DLT = LotteryTypeConfig(
-        code = "dlt",
-        displayName = "大乐透",
+        code = "dlt", displayName = "大乐透",
         url = "http://data.17500.cn/dlt2_desc.txt",
         txtFallbackUrl = "http://data.17500.cn/dlt2_desc.txt",
-        primaryMin = 1, primaryMax = 35, primaryPickCount = 5,
-        primaryLabel = "前区",
-        secondaryMin = 1, secondaryMax = 12, secondaryPickCount = 2,
-        secondaryLabel = "后区",
+        primaryMin = 1, primaryMax = 35, primaryPickCount = 5, primaryLabel = "前区",
+        secondaryMin = 1, secondaryMax = 12, secondaryPickCount = 2, secondaryLabel = "后区",
         hasSecondary = true,
         ruleVersions = listOf(
             LotteryTypeConfig.RuleVersion(
+                key = "dlt_20260131",
                 effectiveFromDate = "2026-01-31",
-                policyLabel = "2026年新规（7级）",
-                changeNote = "2026年1月31日(第26014期)起9级合并为7级，13个中奖条件不变。" +
-                    "5+0与4+2合并为三等奖，4+0与3+2合并为五等奖。" +
-                    "奖池≥8亿时三~七等奖上浮(6666/380/200/18/7元)。",
-                realTiersToUse = 7,
-                prizeTierPairCount = 7,  // 只取7个真实奖级对(跳过末尾0占位)
-                extraFieldCount = 2,     // 销售额 + 奖池
+                policyLabel = "2026年新规·7级",
+                changeNote = "2026-01-31第26014期起9级合并为7级：5+0与4+2合并三等奖，4+0与3+2合并五等奖。" +
+                    "奖池<8亿：三5000/四300/五150/六15/七5；奖池≥8亿上浮至6666/380/200/18/7。一二等奖总额各封顶1亿。",
+                realTiersToUse = 7, prizeTierPairCount = 7,
+                extraFieldCount = 2,  // 销售额 + 奖池
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
@@ -201,20 +170,16 @@ object LotteryType {
                     LotteryTypeConfig.MatchRuleDef(3, 0, "中3前区（后区未中）", "七等奖", 5),
                     LotteryTypeConfig.MatchRuleDef(2, 1, "中2前区+1后区", "七等奖", 5),
                     LotteryTypeConfig.MatchRuleDef(1, 2, "中1前区+2后区", "七等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(0, 2, "仅中2后区", "七等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(2, 0, "中2前区（后区未中）", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(1, 1, "中1前区+1后区", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(1, 0, "仅中1前区", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(0, 1, "仅中1后区", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(0, 0, "未命中", "未中奖", null)
+                    LotteryTypeConfig.MatchRuleDef(0, 2, "仅中2后区", "七等奖", 5)
                 )
             ),
             LotteryTypeConfig.RuleVersion(
-                effectiveFromDate = "1900-01-01",
-                policyLabel = "2007-2026年规则（9级）",
-                changeNote = "2007-2026年1月执行的9级规则，奖级更多但中小奖金额较低。",
-                realTiersToUse = 9,
-                prizeTierPairCount = 9,
+                key = "dlt_20190218",
+                effectiveFromDate = "2019-02-18",
+                policyLabel = "2019-2026·9级经典",
+                changeNote = "2019年第19019期至2026年1月30日的9级经典规则，三10000/四3000/五300/" +
+                    "六200/七100/八15/九5，追加投注最高1800万。",
+                realTiersToUse = 9, prizeTierPairCount = 9,
                 extraFieldCount = 2,
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
@@ -233,74 +198,120 @@ object LotteryType {
                     LotteryTypeConfig.MatchRuleDef(2, 0, "中2前区（后区未中）", "九等奖", 5),
                     LotteryTypeConfig.MatchRuleDef(1, 1, "中1前区+1后区", "九等奖", 5),
                     LotteryTypeConfig.MatchRuleDef(1, 0, "仅中1前区", "九等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(0, 1, "仅中1后区", "九等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(0, 0, "未命中", "未中奖", null)
+                    LotteryTypeConfig.MatchRuleDef(0, 1, "仅中1后区", "九等奖", 5)
+                )
+            ),
+            LotteryTypeConfig.RuleVersion(
+                key = "dlt_20140505",
+                effectiveFromDate = "2014-05-05",
+                policyLabel = "2014-2019·6级",
+                changeNote = "2014年第14052期至2019年的6级规则，奖级由8个缩为6个，一/二/三等奖浮动，四五级固定。",
+                realTiersToUse = 6, prizeTierPairCount = 6,
+                extraFieldCount = 2,
+                rules = listOf(
+                    LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 0, "中5前区（后区未中）", "三等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(4, 2, "中4前区+2后区", "三等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(4, 1, "中4前区+1后区", "四等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(4, 0, "中4前区（后区未中）", "五等奖", 200),
+                    LotteryTypeConfig.MatchRuleDef(3, 2, "中3前区+2后区", "五等奖", 200),
+                    LotteryTypeConfig.MatchRuleDef(3, 1, "中3前区+1后区", "六等奖", 100),
+                    LotteryTypeConfig.MatchRuleDef(2, 2, "中2前区+2后区", "六等奖", 100)
+                )
+            ),
+            LotteryTypeConfig.RuleVersion(
+                key = "dlt_20091017",
+                effectiveFromDate = "2009-10-17",
+                policyLabel = "2009-2014·8级千万头奖版",
+                changeNote = "2009年第09121期至2014年的8级规则，奖池≥1亿时一等奖可达1000万。",
+                realTiersToUse = 8, prizeTierPairCount = 8,
+                extraFieldCount = 2,
+                rules = listOf(
+                    LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 0, "中5前区（后区未中）", "三等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(4, 2, "中4前区+2后区", "四等奖", 3000),
+                    LotteryTypeConfig.MatchRuleDef(4, 1, "中4前区+1后区", "五等奖", 500),
+                    LotteryTypeConfig.MatchRuleDef(4, 0, "中4前区（后区未中）", "六等奖", 200),
+                    LotteryTypeConfig.MatchRuleDef(3, 2, "中3前区+2后区", "六等奖", 200),
+                    LotteryTypeConfig.MatchRuleDef(3, 1, "中3前区+1后区", "七等奖", 10),
+                    LotteryTypeConfig.MatchRuleDef(2, 2, "中2前区+2后区", "七等奖", 10),
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "中3前区（后区未中）", "八等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(2, 1, "中2前区+1后区", "八等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(1, 2, "中1前区+2后区", "八等奖", 5)
+                )
+            ),
+            LotteryTypeConfig.RuleVersion(
+                key = "dlt_20070528",
+                effectiveFromDate = "1900-01-01",
+                policyLabel = "2007·上市首版",
+                changeNote = "2007年5月28日上市首版规则，一等奖500万封顶。",
+                realTiersToUse = 8, prizeTierPairCount = 8,
+                extraFieldCount = 2,
+                rules = listOf(
+                    LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 0, "中5前区（后区未中）", "三等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(4, 2, "中4前区+2后区", "四等奖", 3000),
+                    LotteryTypeConfig.MatchRuleDef(4, 1, "中4前区+1后区", "五等奖", 500),
+                    LotteryTypeConfig.MatchRuleDef(4, 0, "中4前区（后区未中）", "六等奖", 100),
+                    LotteryTypeConfig.MatchRuleDef(3, 2, "中3前区+2后区", "六等奖", 100),
+                    LotteryTypeConfig.MatchRuleDef(3, 1, "中3前区+1后区", "七等奖", 10),
+                    LotteryTypeConfig.MatchRuleDef(2, 2, "中2前区+2后区", "七等奖", 10),
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "中3前区（后区未中）", "八等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(2, 1, "中2前区+1后区", "八等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(1, 2, "中1前区+2后区", "八等奖", 5)
                 )
             )
         ),
-        parsePrimaryCount = 5,
-        parseSecondaryCount = 2,
-        primaryUnit = "个前区",
-        secondaryUnit = "个后区",
-        issuePattern = "7 位数字（例 26088）",
-        issueHint = "例如：26088"
+        parsePrimaryCount = 5, parseSecondaryCount = 2,
+        primaryUnit = "个前区", secondaryUnit = "个后区",
+        issuePattern = "7位数字（例26088）", issueHint = "例如：26088"
     )
 
-    // ==================== 福彩3D（直选1040/组选3=346/组选6=173）====================
-    //  数据源验证（3d_desc.txt 2026208期 NF=17）：试机号等6额外字段，3对奖级
+    // ==================== 福彩3D（规则长期稳定）====================
     val FC3D = LotteryTypeConfig(
-        code = "3d",
-        displayName = "福彩3D",
+        code = "3d", displayName = "福彩3D",
         url = "http://data.17500.cn/3d_desc.txt",
         txtFallbackUrl = "http://data.17500.cn/3d_desc.txt",
-        primaryMin = 0, primaryMax = 9, primaryPickCount = 3,
-        primaryLabel = "号码",
+        primaryMin = 0, primaryMax = 9, primaryPickCount = 3, primaryLabel = "号码",
         hasSecondary = false,
         ruleVersions = listOf(
             LotteryTypeConfig.RuleVersion(
+                key = "3d_stable",
                 effectiveFromDate = "1900-01-01",
                 policyLabel = "现行规则",
-                changeNote = "直选/组选3/组选6三档固定奖，规则长期稳定。",
-                realTiersToUse = 3,
-                prizeTierPairCount = 3,
-                extraFieldCount = 6,  // 试机号3 + 2未知 + 销售额
+                changeNote = "直选/组选3/组选6三档固定奖，规则长期稳定。返奖比例53%。",
+                realTiersToUse = 3, prizeTierPairCount = 3,
+                extraFieldCount = 6,  // 试机号3 + 其他 + 销售额
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字和位置全对（直选）", "直选奖", 1040),
                     LotteryTypeConfig.MatchRuleDef(3, 0, "3位相同数字，对2位位置（组选3）", "组选3", 346),
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字全不同，任意顺序（组选6）", "组选6", 173),
-                    LotteryTypeConfig.MatchRuleDef(2, 0, "仅命中2个位置数字", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(1, 0, "仅命中1个位置数字", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(0, 0, "未命中任何位置", "未中奖", null)
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字全不同，任意顺序（组选6）", "组选6", 173)
                 )
             )
         ),
-        parsePrimaryCount = 3,
-        parseSecondaryCount = 0,
-        primaryUnit = "个号码",
-        secondaryUnit = "",
-        issuePattern = "7 位数字（例 2026208）",
-        issueHint = "例如：2026208"
+        parsePrimaryCount = 3, parseSecondaryCount = 0,
+        primaryUnit = "个号码", secondaryUnit = "",
+        issuePattern = "7位数字（例2026208）", issueHint = "例如：2026208"
     )
 
-    // ==================== 七乐彩（7级：一~三等浮动，四~七等固定）====================
-    //  数据源验证（7lc_desc.txt 2026089期 NF=26）：销售额+奖池=2额外字段，7对奖级
+    // ==================== 七乐彩（规则长期稳定）====================
     val QLC = LotteryTypeConfig(
-        code = "7lc",
-        displayName = "七乐彩",
+        code = "7lc", displayName = "七乐彩",
         url = "http://data.17500.cn/7lc_desc.txt",
         txtFallbackUrl = "http://data.17500.cn/7lc_desc.txt",
-        primaryMin = 1, primaryMax = 30, primaryPickCount = 7,
-        primaryLabel = "基本号",
-        secondaryMin = 1, secondaryMax = 30, secondaryPickCount = 1,
-        secondaryLabel = "特别号",
+        primaryMin = 1, primaryMax = 30, primaryPickCount = 7, primaryLabel = "基本号",
+        secondaryMin = 1, secondaryMax = 30, secondaryPickCount = 1, secondaryLabel = "特别号",
         hasSecondary = true,
         ruleVersions = listOf(
             LotteryTypeConfig.RuleVersion(
+                key = "7lc_stable",
                 effectiveFromDate = "1900-01-01",
                 policyLabel = "现行规则",
-                changeNote = "一~三等奖浮动，四~七等奖固定（200/50/10/5元）。",
-                realTiersToUse = 7,
-                prizeTierPairCount = 7,
+                changeNote = "一~三等奖浮动，四~七等奖固定（200/50/10/5元）。规则长期稳定。",
+                realTiersToUse = 7, prizeTierPairCount = 7,
                 extraFieldCount = 2,  // 销售额 + 奖池
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(7, 0, "7个基本号全中", "一等奖", null),
@@ -309,118 +320,89 @@ object LotteryType {
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5基本号+特别号", "四等奖", 200),
                     LotteryTypeConfig.MatchRuleDef(5, 0, "中5个基本号（特别号未中）", "五等奖", 50),
                     LotteryTypeConfig.MatchRuleDef(4, 1, "中4基本号+特别号", "六等奖", 10),
-                    LotteryTypeConfig.MatchRuleDef(4, 0, "中4个基本号（特别号未中）", "七等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(3, 1, "中3基本号+特别号", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "仅中3个基本号", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(2, 1, "中2基本号+特别号", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(1, 1, "中1基本号+特别号", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(0, 1, "仅中特别号", "未中奖", null)
+                    LotteryTypeConfig.MatchRuleDef(4, 0, "中4个基本号（特别号未中）", "七等奖", 5)
                 )
             )
         ),
-        parsePrimaryCount = 7,
-        parseSecondaryCount = 1,
-        primaryUnit = "个基本号",
-        secondaryUnit = "个特别号",
-        issuePattern = "7 位数字（例 2026089）",
-        issueHint = "例如：2026089"
+        parsePrimaryCount = 7, parseSecondaryCount = 1,
+        primaryUnit = "个基本号", secondaryUnit = "个特别号",
+        issuePattern = "7位数字（例2026089）", issueHint = "例如：2026089"
     )
 
-    // ==================== 排列三（直选1040/组选3=346/组选6=173）====================
-    //  数据源验证（pl3_desc.txt 2026208期 NF=12）：销售额1额外字段，3对奖级
+    // ==================== 排列三（长期稳定）====================
     val P3 = LotteryTypeConfig(
-        code = "p3",
-        displayName = "排列三",
+        code = "p3", displayName = "排列三",
         url = "http://data.17500.cn/pl3_desc.txt",
         txtFallbackUrl = "http://data.17500.cn/pl3_desc.txt",
-        primaryMin = 0, primaryMax = 9, primaryPickCount = 3,
-        primaryLabel = "号码",
+        primaryMin = 0, primaryMax = 9, primaryPickCount = 3, primaryLabel = "号码",
         hasSecondary = false,
         ruleVersions = listOf(
             LotteryTypeConfig.RuleVersion(
+                key = "p3_stable",
                 effectiveFromDate = "1900-01-01",
                 policyLabel = "现行规则",
                 changeNote = "直选/组选3/组选6三档固定奖，规则长期稳定。",
-                realTiersToUse = 3,
-                prizeTierPairCount = 3,
+                realTiersToUse = 3, prizeTierPairCount = 3,
                 extraFieldCount = 1,  // 销售额
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字和位置全对（直选）", "直选奖", 1040),
                     LotteryTypeConfig.MatchRuleDef(3, 0, "3位相同数字，对2位位置（组选3）", "组选3", 346),
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字全不同，任意顺序（组选6）", "组选6", 173),
-                    LotteryTypeConfig.MatchRuleDef(2, 0, "仅命中2个位置数字", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(1, 0, "仅命中1个位置数字", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(0, 0, "未命中任何位置", "未中奖", null)
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字全不同，任意顺序（组选6）", "组选6", 173)
                 )
             )
         ),
-        parsePrimaryCount = 3,
-        parseSecondaryCount = 0,
-        primaryUnit = "个号码",
-        secondaryUnit = "",
-        issuePattern = "7 位数字（例 2026208）",
-        issueHint = "例如：2026208"
+        parsePrimaryCount = 3, parseSecondaryCount = 0,
+        primaryUnit = "个号码", secondaryUnit = "",
+        issuePattern = "7位数字（例2026208）", issueHint = "例如：2026208"
     )
 
-    // ==================== 排列五（仅一等奖固定10万）====================
-    //  数据源验证（pl5_desc.txt 2026208期 NF=10）：销售额1额外字段，1对奖级
+    // ==================== 排列五（长期稳定）====================
     val P5 = LotteryTypeConfig(
-        code = "p5",
-        displayName = "排列五",
+        code = "p5", displayName = "排列五",
         url = "http://data.17500.cn/pl5_desc.txt",
         txtFallbackUrl = "http://data.17500.cn/pl5_desc.txt",
-        primaryMin = 0, primaryMax = 9, primaryPickCount = 5,
-        primaryLabel = "号码",
+        primaryMin = 0, primaryMax = 9, primaryPickCount = 5, primaryLabel = "号码",
         hasSecondary = false,
         ruleVersions = listOf(
             LotteryTypeConfig.RuleVersion(
+                key = "p5_stable",
                 effectiveFromDate = "1900-01-01",
                 policyLabel = "现行规则",
                 changeNote = "5位数字和位置全对即中10万元，规则长期稳定。",
-                realTiersToUse = 1,
-                prizeTierPairCount = 1,
+                realTiersToUse = 1, prizeTierPairCount = 1,
                 extraFieldCount = 1,  // 销售额
                 rules = listOf(
-                    LotteryTypeConfig.MatchRuleDef(5, 0, "5位数字和位置全对", "一等奖", 100000),
-                    LotteryTypeConfig.MatchRuleDef(4, 0, "仅中前4位", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "仅中前3位", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(2, 0, "仅中2个位置数字", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(1, 0, "仅中1个位置数字", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(0, 0, "未命中任何位置", "未中奖", null)
+                    LotteryTypeConfig.MatchRuleDef(5, 0, "5位数字和位置全对", "一等奖", 100000)
                 )
             )
         ),
-        parsePrimaryCount = 5,
-        parseSecondaryCount = 0,
-        primaryUnit = "个号码",
-        secondaryUnit = "",
-        issuePattern = "7 位数字（例 2026208）",
-        issueHint = "例如：2026208"
+        parsePrimaryCount = 5, parseSecondaryCount = 0,
+        primaryUnit = "个号码", secondaryUnit = "",
+        issuePattern = "7位数字（例2026208）", issueHint = "例如：2026208"
     )
 
-    // ==================== 七星彩（6级：一二等浮动，三~六等固定）====================
-    //  数据源验证（7xc_desc.txt 26089期 NF=23）：销售额+奖池=2额外字段，6对奖级
+    // ==================== 七星彩（2020-10-11改规）====================
+    //  20099期(旧)验证：三270/1800 四3305/300 五38145/20 六415445/5
+    //  20100期(新)验证：三76/3000  四2670/500 五40708/30 六1515095/5
     val QXC = LotteryTypeConfig(
-        code = "7xc",
-        displayName = "七星彩",
+        code = "7xc", displayName = "七星彩",
         url = "http://data.17500.cn/7xc_desc.txt",
         txtFallbackUrl = "http://data.17500.cn/7xc_desc.txt",
-        primaryMin = 0, primaryMax = 9, primaryPickCount = 6,
-        secondaryMin = 0, secondaryMax = 14, secondaryPickCount = 1,
-        primaryLabel = "前6位",
-        secondaryLabel = "后1位",
+        primaryMin = 0, primaryMax = 9, primaryPickCount = 6, primaryLabel = "前6位",
+        secondaryMin = 0, secondaryMax = 14, secondaryPickCount = 1, secondaryLabel = "后1位",
         hasSecondary = true,
         ruleVersions = listOf(
             LotteryTypeConfig.RuleVersion(
-                effectiveFromDate = "1900-01-01",
-                policyLabel = "现行规则",
-                changeNote = "前6位(0-9)+后1位(0-14)，一二等浮动，三~六等固定。",
-                realTiersToUse = 6,
-                prizeTierPairCount = 6,
+                key = "qxc_20201011",
+                effectiveFromDate = "2020-10-11",
+                policyLabel = "2020年后·固定奖升级",
+                changeNote = "2020-10-11第20100期起第二次重大调整：固定奖金额升级" +
+                    "（三等奖1800→3000、四等奖300→500、五等奖20→30、六等奖保持5元）。",
+                realTiersToUse = 6, prizeTierPairCount = 6,
                 extraFieldCount = 2,  // 销售额 + 奖池
                 rules = listOf(
-                    LotteryTypeConfig.MatchRuleDef(6, 1, "前6位全对 + 后1位全对", "一等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(6, 0, "前6位全对，后1位未中", "二等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(6, 1, "前6位+后1位全中", "一等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(6, 0, "前6位全对（后1位未中）", "二等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "前6位中5位 + 后1位全对", "三等奖", 3000),
                     LotteryTypeConfig.MatchRuleDef(5, 0, "前6位中5位（后1位未中）", "四等奖", 500),
                     LotteryTypeConfig.MatchRuleDef(4, 1, "前6位中4位 + 后1位全对", "四等奖", 500),
@@ -429,68 +411,71 @@ object LotteryType {
                     LotteryTypeConfig.MatchRuleDef(3, 0, "前6位中3位（后1位未中）", "六等奖", 5),
                     LotteryTypeConfig.MatchRuleDef(2, 1, "前6位中2位 + 后1位全对", "六等奖", 5),
                     LotteryTypeConfig.MatchRuleDef(1, 1, "前6位中1位 + 后1位全对", "六等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(0, 1, "仅后1位全对", "六等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(2, 0, "仅前6位中2位", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(1, 0, "仅前6位中1位", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(0, 0, "全部未中", "未中奖", null)
+                    LotteryTypeConfig.MatchRuleDef(0, 1, "仅后1位全对", "六等奖", 5)
+                )
+            ),
+            LotteryTypeConfig.RuleVersion(
+                key = "qxc_2004",
+                effectiveFromDate = "1900-01-01",
+                policyLabel = "2004-2020·经典6级",
+                changeNote = "2004年上市至2020-10-10的经典6级规则，固定奖金额较低（三等奖1800/四等奖300/五等奖20）。",
+                realTiersToUse = 6, prizeTierPairCount = 6,
+                extraFieldCount = 2,
+                rules = listOf(
+                    LotteryTypeConfig.MatchRuleDef(6, 1, "前6位+后1位全中", "一等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(6, 0, "前6位全对（后1位未中）", "二等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 1, "前6位中5位 + 后1位全对", "三等奖", 1800),
+                    LotteryTypeConfig.MatchRuleDef(5, 0, "前6位中5位（后1位未中）", "四等奖", 300),
+                    LotteryTypeConfig.MatchRuleDef(4, 1, "前6位中4位 + 后1位全对", "四等奖", 300),
+                    LotteryTypeConfig.MatchRuleDef(4, 0, "前6位中4位（后1位未中）", "五等奖", 20),
+                    LotteryTypeConfig.MatchRuleDef(3, 1, "前6位中3位 + 后1位全对", "五等奖", 20),
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "前6位中3位（后1位未中）", "六等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(2, 1, "前6位中2位 + 后1位全对", "六等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(1, 1, "前6位中1位 + 后1位全对", "六等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(0, 1, "仅后1位全对", "六等奖", 5)
                 )
             )
         ),
-        parsePrimaryCount = 6,
-        parseSecondaryCount = 1,
-        primaryUnit = "位前区",
-        secondaryUnit = "位后区",
-        issuePattern = "6 位数字（例 26089）",
-        issueHint = "例如：26089"
+        parsePrimaryCount = 6, parseSecondaryCount = 1,
+        primaryUnit = "位前区", secondaryUnit = "位后区",
+        issuePattern = "6位数字（例26089）", issueHint = "例如：26089"
     )
 
-    // ==================== 福彩快乐8（选十玩法7档奖级）====================
-    //  数据源验证（kl8_desc.txt 2026208期 NF=102）：20号码+销售额+奖池=2额外字段，选十7对在前
-    //  选十中八=720元（数据交叉验证，非800）
+    // ==================== 快乐8（选十玩法·长期稳定，中八=800元数据源验证）====================
     val KL8 = LotteryTypeConfig(
-        code = "kl8",
-        displayName = "快乐8",
+        code = "kl8", displayName = "快乐8",
         url = "http://data.17500.cn/kl8_desc.txt",
         txtFallbackUrl = "http://data.17500.cn/kl8_desc.txt",
-        primaryMin = 1, primaryMax = 80, primaryPickCount = 10,
-        primaryLabel = "号码",
+        primaryMin = 1, primaryMax = 80, primaryPickCount = 10, primaryLabel = "号码",
         hasSecondary = false,
         ruleVersions = listOf(
             LotteryTypeConfig.RuleVersion(
+                key = "kl8_stable",
                 effectiveFromDate = "1900-01-01",
-                policyLabel = "现行规则",
-                changeNote = "选十玩法7档奖级：中十/中九/中八(720)/中七/中六/中五/全不中。" +
-                    "其余命中(1-4个)不中奖。",
-                realTiersToUse = 7,
-                prizeTierPairCount = 7,  // 只取选十玩法前7对
-                extraFieldCount = 2,     // 销售额 + 奖池
+                policyLabel = "现行·选十玩法",
+                changeNote = "选十玩法7档奖级：中十浮动/中九8000/中八800/中七80/中六5/中五3/全不中2。" +
+                    "数据源共输出70+对子玩法奖级（20号码+销售额+奖池=2额外后），选十前7对。" +
+                    "选十中八官方固定奖800元（2023053期625注×800元=50万验证正确）。",
+                realTiersToUse = 7, prizeTierPairCount = 7,
+                extraFieldCount = 2,  // 销售额 + 奖池
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(10, 0, "选10中10全对", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(9, 0, "选10中9", "二等奖", 8000),
-                    LotteryTypeConfig.MatchRuleDef(8, 0, "选10中8", "三等奖", 720),
+                    LotteryTypeConfig.MatchRuleDef(8, 0, "选10中8", "三等奖", 800),
                     LotteryTypeConfig.MatchRuleDef(7, 0, "选10中7", "四等奖", 80),
                     LotteryTypeConfig.MatchRuleDef(6, 0, "选10中6", "五等奖", 5),
                     LotteryTypeConfig.MatchRuleDef(5, 0, "选10中5", "六等奖", 3),
-                    LotteryTypeConfig.MatchRuleDef(4, 0, "选10中4", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "选10中3", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(2, 0, "选10中2", "未中奖", null),
-                    LotteryTypeConfig.MatchRuleDef(1, 0, "选10中1", "未中奖", null),
                     LotteryTypeConfig.MatchRuleDef(0, 0, "选10中0（幸运奖）", "七等奖", 2)
                 )
             )
         ),
-        parsePrimaryCount = 20,
-        parseSecondaryCount = 0,
-        primaryUnit = "个号码",
-        secondaryUnit = "",
-        issuePattern = "7 位数字（例 2026208）",
-        issueHint = "例如：2026208"
+        parsePrimaryCount = 20, parseSecondaryCount = 0,
+        primaryUnit = "个号码", secondaryUnit = "",
+        issuePattern = "7位数字（例2026208）", issueHint = "例如：2026208"
     )
 
-    /** 全部彩种，按展示顺序排列 */
     val ALL: List<LotteryTypeConfig> = listOf(SSQ, DLT, FC3D, QLC, P3, P5, QXC, KL8)
 
-    /** 按 code 查找配置（兼容老 code） */
     fun byCode(code: String): LotteryTypeConfig =
         if (code == "t22x5" || code == "22x5" || code == "sh15x5" || code == "15x5") KL8
         else ALL.firstOrNull { it.code == code } ?: SSQ

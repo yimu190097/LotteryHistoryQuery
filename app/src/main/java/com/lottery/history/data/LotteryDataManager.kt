@@ -133,7 +133,13 @@ object LotteryDataManager {
                             firstPrizeAmount = it.firstPrizeAmount,
                             secondPrizeCount = it.secondPrizeCount,
                             secondPrizeAmount = it.secondPrizeAmount,
-                            allPrizeTiers = it.allPrizeTiers.encodeTiers()
+                            allPrizeTiers = it.allPrizeTiers.encodeTiers(),
+                            // —— v9 新增：按期自适应元数据（解析时已确定，直接存库）——
+                            ruleVersionKey = it.ruleVersionKey,
+                            actualTierCount = it.actualTierCount,
+                            tierMatchStatus = it.tierMatchStatus,
+                            jackpotAmount = it.jackpotAmount,
+                            salesAmount = it.salesAmount
                         )
                     })
                     caches[config.code] = d.getAllByType(config.code).map { e -> e.toModel() }
@@ -185,7 +191,13 @@ object LotteryDataManager {
             firstPrizeAmount = firstPrizeAmount,
             secondPrizeCount = secondPrizeCount,
             secondPrizeAmount = secondPrizeAmount,
-            allPrizeTiers = decodePrizeTiers(allPrizeTiers)
+            allPrizeTiers = decodePrizeTiers(allPrizeTiers),
+            // —— v9 新增：按期自适应元数据（DB→Model）——
+            ruleVersionKey = ruleVersionKey,
+            actualTierCount = actualTierCount,
+            tierMatchStatus = tierMatchStatus,
+            jackpotAmount = jackpotAmount,
+            salesAmount = salesAmount
         )
 
     /**

@@ -227,12 +227,20 @@ class IssueSearchDialog(context: Context) : Dialog(context) {
         val ballSize = if (cfg.parsePrimaryCount >= 15) (22 * density).toInt() else (30 * density).toInt()
         val ballMargin = if (cfg.parsePrimaryCount >= 15) (3 * density).toInt() else (4 * density).toInt()
 
-        // 彩种名 + 期号 + 日期
+        // 彩种名 + 期号 + 日期（强化醒目：让客户一眼知道当前查询的是哪种彩票）
         container.addView(TextView(context).apply {
-            text = "${cfg.displayName}  第 ${draw.issue} 期"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
-            setTextColor(Color.parseColor("#212121"))
+            text = "● ${cfg.displayName}  第 ${draw.issue} 期"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 19f)
+            setTextColor(if (cfg.hasSecondary) Color.parseColor("#C62828") else Color.parseColor("#1565C0"))
             typeface = Typeface.DEFAULT_BOLD
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            setBackgroundColor(0xFFFFF3E0.toInt())
+            val pad = (8 * density).toInt()
+            setPadding(pad, pad, pad, pad)
+            layoutParams = lp
         })
         draw.date?.let { d ->
             container.addView(TextView(context).apply {
@@ -243,24 +251,61 @@ class IssueSearchDialog(context: Context) : Dialog(context) {
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 )
-                lp.topMargin = (4 * density).toInt()
+                lp.topMargin = (6 * density).toInt()
                 layoutParams = lp
             })
         }
 
-        // 政策标签：按当期开奖日期自动适配的规则版本（让客户知道本期适用哪年政策）
-        val ruleVersion = cfg.rulesForDate(draw.date)
+        // ===== 销售额 + 奖池 信息栏（v9新增）=====
+        val showJackpot = cfg.code in listOf("ssq", "dlt", "7lc", "7xc", "kl8")
+        if (draw.salesAmount != null || (showJackpot && draw.jackpotAmount != null)) {
+            val infoBar = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = (6 * density).toInt() }
+                setBackgroundColor(0xFFE3F2FD.toInt())
+                val pad = (8 * density).toInt()
+                setPadding(pad, (5 * density).toInt(), pad, (5 * density).toInt())
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            val tvSales = TextView(context).apply {
+                text = "销售额：${draw.salesAmount?.let { formatAmount(it) } ?: "未公布"}"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextColor(0xFF0D47A1.toInt())
+                setTypeface(null, Typeface.BOLD)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            infoBar.addView(tvSales)
+            if (showJackpot) {
+                val tvJp = TextView(context).apply {
+                    text = "奖池：${draw.jackpotAmount?.let { formatAmount(it) } ?: "未公布"}"
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                    setTextColor(0xFFC62828.toInt())
+                    setTypeface(null, Typeface.BOLD)
+                    gravity = Gravity.END
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                }
+                infoBar.addView(tvJp)
+            }
+            container.addView(infoBar)
+        }
+
+        // ===== 政策标签：优先用 draw.resolveRuleVersion（已存DB的版本，历史数据不错位）=====
+        val ruleVersion = draw.resolveRuleVersion(cfg)
+        // 政策标签 + 变更简述（让客户了解本期政策与其他阶段的差异原因）
         container.addView(TextView(context).apply {
-            text = "【${ruleVersion.policyLabel}】"
+            text = "【${ruleVersion.policyLabel}】${ruleVersion.changeNote}"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setTextColor(0xFF1B5E20.toInt())
             setBackgroundColor(0xFFE8F5E9.toInt())
-            val pad = (6 * density).toInt()
-            setPadding(pad, (3 * density).toInt(), pad, (3 * density).toInt())
+            val pad = (8 * density).toInt()
+            setPadding(pad, (5 * density).toInt(), pad, (5 * density).toInt())
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = (4 * density).toInt() }
+            ).apply { topMargin = (6 * density).toInt() }
         })
 
         // 号码球

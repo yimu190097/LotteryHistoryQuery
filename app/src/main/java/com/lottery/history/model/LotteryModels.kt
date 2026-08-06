@@ -35,6 +35,14 @@ fun decodePrizeTiers(raw: String?): List<PrizeTierEntry?> =
         if (part == "null") null else PrizeTierEntry.decode(part)
     }
 
+/** 结构一致性审计状态 */
+object TierMatchStatus {
+    const val MATCH = "MATCH"         // 实际奖级对数 = 规则版本配置值
+    const val FEWER = "FEWER"         // 实际奖级对数 < 规则版本配置（部分未公布或停发）
+    const val MORE = "MORE"           // 实际奖级对数 > 规则版本配置（数据源异常或新规则）
+    const val MISMATCH = "MISMATCH"   // 完全不匹配（解析失败）
+}
+
 data class LotteryDraw(
     val issue: String,
     val primaryNumbers: List<Int>,
@@ -52,8 +60,30 @@ data class LotteryDraw(
      * 当期所有奖级，从一等奖往下按顺序排列（真实开奖数据）。
      * DrawDetailDialog 会按 rules 顺序把每个奖项名 + 该 entry 一并渲染。
      */
-    val allPrizeTiers: List<PrizeTierEntry?> = emptyList()
-)
+    val allPrizeTiers: List<PrizeTierEntry?> = emptyList(),
+
+    // ===== v9 新增：按期自适应与结构审计元数据 =====
+
+    /** 规则版本标识（解析时按当期开奖日期确定，展示时直接用，不依赖日期重算） */
+    val ruleVersionKey: String? = null,
+    /** 实际解析到的奖级对数（用于展示时自动适配行数，数据少几对就少展示几行） */
+    val actualTierCount: Int? = null,
+    /** 结构一致性审计标记：MATCH / FEWER / MORE / MISMATCH */
+    val tierMatchStatus: String? = null,
+    /** 当期奖池金额（元），SSQ福运奖启停、DLT固定奖上浮都基于当期奖池判断 */
+    val jackpotAmount: Long? = null,
+    /** 当期全国销售额（元），展示给客户参考 */
+    val salesAmount: Long? = null
+) {
+    /** 基于 ruleVersionKey 和 config 快速拿到当期应展示的 RuleVersion（展示时首选） */
+    fun resolveRuleVersion(config: LotteryTypeConfig): LotteryTypeConfig.RuleVersion {
+        if (ruleVersionKey != null) {
+            val cached = config.ruleVersions.firstOrNull { it.key == ruleVersionKey }
+            if (cached != null) return cached
+        }
+        return config.rulesForDate(date)
+    }
+}
 
 data class QueryResultItem(
     val matchPrimary: Int,
