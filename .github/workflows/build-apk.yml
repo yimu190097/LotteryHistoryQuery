@@ -1,0 +1,86 @@
+name: Build & Release APK v21
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        id: setup-java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
+      - name: Build Release APK
+        run: |
+          # 移除本地硬编码 Java 路径 + 代理（CI 无代理）
+          sed -i '/org.gradle.java.home/d' gradle.properties
+          sed -i '/proxyHost/d' gradle.properties
+          sed -i '/proxyPort/d' gradle.properties
+          sed -i '/nonProxyHosts/d' gradle.properties
+          gradle assembleRelease --no-daemon -x test
+
+      - name: 收集构建产物
+        run: |
+          APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          if [ -z "$APK" ]; then
+            echo "❌ 未找到 APK，构建失败"
+            find app/build/outputs -type f
+            exit 1
+          fi
+          cp "$APK" "LotteryHistoryQuery_v21.apk"
+          ls -lh LotteryHistoryQuery_v21.apk
+
+      - name: 创建 GitHub Release v21
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v21.0
+          name: v21.0 规则版本化 + 4段式结构化解析完整版
+          body: |
+            ## v21.0 核心升级（基于 main 分支 RuleVersion 架构）
+
+            ### 解析层（彻底解决最后几档注数相同）
+            - **RuleVersion 规则版本化架构**：8 彩种全部按期适配多版本政策
+              - 双色球：2025/2020/2019/2015/2014/2012/2009/2003 共 8 版
+              - 大乐透：2026（7级新规）/2019（9级）/2014/2009/2007 共 5 版
+              - 七星彩：2020（7位新玩法）/2004（6+1）共 2 版
+              - 快乐8：2024/2020/2019（选十/选九/选八）、3D/七乐彩/排列三/五
+            - **4段式结构化提取**：期号日期 → 号码 → skip段 → extra段 → 奖级对
+              - 不再靠数值大小猜谜，严格按位置读取
+              - 大乐透一等奖注数不再被 0-35 范围误跳
+              - 六等奖500万+注数不再触发 count>200万 阈值错位
+            - **3D 参数修正**：12 期实测 skip=5（试机号3+标志2）/extra=1（无奖池）
+            - **七星彩范围收紧**：后1位校验 0..14（原 0..99 过松）
+
+            ### DB v9（完整审计链）
+            - 新增 5+1 元数据字段：ruleVersionKey/actualTierCount/tierMatchStatus/jackpotAmount/salesAmount
+            - Entity ↔ Model ↔ insertAll/toModel 全链路贯通
+
+            ### UI 层（自适应 + 容错）
+            - LatestDrawsDialog **4态按钮**：暂无数据(灰)/暂未公布(橙)/数据不完整(深橙)/正常(红)
+            - **奖级预览栏**：头奖X注/金额 + 二奖X注/金额 + 奖池滚存X亿
+            - DrawDetailDialog **元数据栏**：销售额 / 奖池滚存 / 数据一致性状态
+            - FlowLayout 自适应换行 + 快乐8球缩小 + MATCH_PARENT 弹窗边距
+          files: LotteryHistoryQuery_v21.apk
+          prerelease: false

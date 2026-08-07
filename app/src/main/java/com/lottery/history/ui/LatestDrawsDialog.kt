@@ -172,11 +172,25 @@ class LatestDrawsDialog(context: Context) : Dialog(context) {
             }
             row.addView(ballsContainer)
 
-            // 第三行：大按钮「查看本期奖项详情」→ DrawDetailDialog 显示当期所有奖项(含金额+注数)
+            // 第三行：按钮「查看本期奖项详情」→ 4态自适应（暂无数据/暂未公布/数据不完整/正常）
+            val hasValidTierData = run {
+                if (draw == null) false
+                else {
+                    val hasAnyNonZero = draw.allPrizeTiers.any { t ->
+                        t != null && (t.count > 0 || t.amount > 0L)
+                    }
+                    val hasFirstSecond = (draw.firstPrizeCount != null && draw.firstPrizeCount > 0) ||
+                        (draw.firstPrizeAmount != null && draw.firstPrizeAmount > 0) ||
+                        (draw.secondPrizeCount != null && draw.secondPrizeCount > 0) ||
+                        (draw.secondPrizeAmount != null && draw.secondPrizeAmount > 0)
+                    hasAnyNonZero || hasFirstSecond
+                }
+            }
+            val isTierMismatch = draw != null && draw.tierMatchStatus != null &&
+                draw.tierMatchStatus != "MATCH"
+
             val btnViewIssueDetail = TextView(context).apply {
-                text = "查看本期奖项详情 ›"
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                setTextColor(Color.WHITE)
                 setTypeface(null, Typeface.BOLD)
                 gravity = Gravity.CENTER
                 val lp = LinearLayout.LayoutParams(
@@ -187,15 +201,73 @@ class LatestDrawsDialog(context: Context) : Dialog(context) {
                 lp.marginStart = (12 * density).toInt()
                 lp.marginEnd = (12 * density).toInt()
                 layoutParams = lp
-                setBackgroundResource(R.drawable.bg_button_red)
-                isClickable = true
-                isFocusable = true
-                setOnClickListener {
-                    if (draw == null) return@setOnClickListener
-                    DrawDetailDialog(context, config, draw).show()
+
+                when {
+                    draw == null -> {
+                        text = "暂无开奖数据，请下拉刷新"
+                        setTextColor(Color.parseColor("#616161"))
+                        setBackgroundColor(Color.parseColor("#EEEEEE"))
+                        isClickable = false
+                    }
+                    !hasValidTierData -> {
+                        text = "本期奖级暂未公布，请稍后再试"
+                        setTextColor(Color.parseColor("#E65100"))
+                        setBackgroundColor(Color.parseColor("#FFF3E0"))
+                        isClickable = false
+                    }
+                    isTierMismatch -> {
+                        text = "数据不完整(${draw.tierMatchStatus})，点击查看"
+                        setTextColor(Color.WHITE)
+                        setBackgroundColor(Color.parseColor("#F57C00"))
+                        setOnClickListener { DrawDetailDialog(context, config, draw).show() }
+                    }
+                    else -> {
+                        text = "查看本期奖项详情 ›"
+                        setTextColor(Color.WHITE)
+                        setBackgroundResource(R.drawable.bg_button_red)
+                        setOnClickListener { DrawDetailDialog(context, config, draw).show() }
+                    }
                 }
             }
             row.addView(btnViewIssueDetail)
+
+            // 第四行：头奖/二奖/奖池简略预览（不点击即可看关键信息）
+            if (draw != null && hasValidTierData) {
+                val sb = StringBuilder()
+                draw.allPrizeTiers.getOrNull(0)?.let { t ->
+                    if (t != null && (t.count > 0 || t.amount > 0L)) {
+                        sb.append("头奖 ").append(t.count).append("注/").append(formatAmountShort(t.amount))
+                    }
+                }
+                draw.allPrizeTiers.getOrNull(1)?.let { t ->
+                    if (t != null && (t.count > 0 || t.amount > 0L)) {
+                        if (sb.isNotEmpty()) sb.append("  ")
+                        sb.append("二奖 ").append(t.count).append("注/").append(formatAmountShort(t.amount))
+                    }
+                }
+                draw.jackpotAmount?.let { jp ->
+                    if (jp > 0L) {
+                        if (sb.isNotEmpty()) sb.append("\n")
+                        sb.append("奖池滚存：").append(formatAmountShort(jp)).append("元")
+                    }
+                }
+                if (sb.isNotEmpty()) {
+                    val preview = TextView(context).apply {
+                        text = sb.toString()
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                        setTextColor(Color.parseColor("#37474F"))
+                        val lp2 = LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.WRAP_CONTENT
+                        )
+                        lp2.topMargin = (4 * density).toInt()
+                        lp2.marginStart = (14 * density).toInt()
+                        lp2.marginEnd = (14 * density).toInt()
+                        layoutParams = lp2
+                    }
+                    row.addView(preview)
+                }
+            }
 
             container.addView(row)
 
@@ -234,5 +306,18 @@ class LatestDrawsDialog(context: Context) : Dialog(context) {
         )
         ball.setTextColor(Color.WHITE)
         return ball
+    }
+
+    /** 金额简略格式化：>=1亿→X亿；>=1万→X万；<1万→X元 */
+    private fun formatAmountShort(amount: Long): String = when {
+        amount >= 100_000_000L -> {
+            val yi = amount / 100_000_000.0
+            if (yi % 1.0 == 0.0) "${yi.toInt()}亿" else String.format("%.1f亿", yi)
+        }
+        amount >= 10_000L -> {
+            val wan = amount / 10_000.0
+            if (wan % 1.0 == 0.0) "${wan.toInt()}万" else String.format("%.1f万", wan)
+        }
+        else -> "${amount}元"
     }
 }
