@@ -1,4 +1,4 @@
-name: Build & Release APK v21
+name: Build & Release APK v22
 
 on:
   push:
@@ -49,38 +49,39 @@ jobs:
             find app/build/outputs -type f
             exit 1
           fi
-          cp "$APK" "LotteryHistoryQuery_v21.apk"
-          ls -lh LotteryHistoryQuery_v21.apk
+          cp "$APK" "LotteryHistoryQuery_v22.apk"
+          ls -lh LotteryHistoryQuery_v22.apk
 
-      - name: 创建 GitHub Release v21
+      - name: 创建 GitHub Release v22
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v21.0
-          name: v21.0 规则版本化 + 4段式结构化解析完整版
+          tag_name: v22.0
+          name: v22.0 按期自适应展示+同等奖注数合并+追加投注金额分开展示+规则版本分组标题
           body: |
-            ## v21.0 核心升级（基于 main 分支 RuleVersion 架构）
+            ## v22.0 核心升级：奖项展示逻辑随期数动态调整，彻底解决跨期跨规则混淆
 
-            ### 解析层（彻底解决最后几档注数相同）
-            - **RuleVersion 规则版本化架构**：8 彩种全部按期适配多版本政策
-              - 双色球：2025/2020/2019/2015/2014/2012/2009/2003 共 8 版
-              - 大乐透：2026（7级新规）/2019（9级）/2014/2009/2007 共 5 版
-              - 七星彩：2020（7位新玩法）/2004（6+1）共 2 版
-              - 快乐8：2024/2020/2019（选十/选九/选八）、3D/七乐彩/排列三/五
-            - **4段式结构化提取**：期号日期 → 号码 → skip段 → extra段 → 奖级对
-              - 不再靠数值大小猜谜，严格按位置读取
-              - 大乐透一等奖注数不再被 0-35 范围误跳
-              - 六等奖500万+注数不再触发 count>200万 阈值错位
-            - **3D 参数修正**：12 期实测 skip=5（试机号3+标志2）/extra=1（无奖池）
-            - **七星彩范围收紧**：后1位校验 0..14（原 0..99 过松）
+            ### 🔴 展示层：同等奖合并原则（同质合并 / 异质分开）
+            - **注数列：同等奖名累加合并**（基本投注注数 + 追加投注注数）— 注数是同质总量，可加
+            - **金额列：基本/追加投注分两行独立展示** — 金额维度不同，绝不合并（防止用户误以为总额）
+            - **命中规则列：同奖名下多条（如三等奖=5+0和4+2）换行拼接，一起呈现**
+            - DrawDetailDialog各列maxLines调大到5~10，全部支持多行自适应换行
 
-            ### DB v9（完整审计链）
-            - 新增 5+1 元数据字段：ruleVersionKey/actualTierCount/tierMatchStatus/jackpotAmount/salesAmount
-            - Entity ↔ Model ↔ insertAll/toModel 全链路贯通
+            ### 🟢 跨期分组：避免同页面展示不同期数规则（用户一眼分清规则边界）
+            - **History多期列表：按 ruleVersionKey 分组 Section 标题**
+              - 每组第一期顶部显示绿色卡片标题：【政策标签】+ 生效日期 + 本组共N期 + 变更说明概要
+              - 当连续两期的 ruleVersionKey 不一致时才插入分组标题；一致时不插入，视觉自然连续
+            - **每期item右上角政策标签徽章**（绿色圆角小标签）
+              - 即便在组内也显示，防止滚到中间忘记当前属于哪个规则阶段
+            - **LatestDraws每个彩种卡片：彩种名后加政策标签徽章**
+              - 重要：用 `draw.resolveRuleVersion(config)`（该期开奖当时适用的规则），而不是 config最新版
+              - 避免：大乐透最新一期实际是老9级，但徽章误标"2026新规·7级"
 
-            ### UI 层（自适应 + 容错）
-            - LatestDrawsDialog **4态按钮**：暂无数据(灰)/暂未公布(橙)/数据不完整(深橙)/正常(红)
-            - **奖级预览栏**：头奖X注/金额 + 二奖X注/金额 + 奖池滚存X亿
-            - DrawDetailDialog **元数据栏**：销售额 / 奖池滚存 / 数据一致性状态
-            - FlowLayout 自适应换行 + 快乐8球缩小 + MATCH_PARENT 弹窗边距
-          files: LotteryHistoryQuery_v21.apk
+            ### 🟤 新增资源
+            - bg_policy_badge.xml（绿色小圆角徽章背景）
+            - bg_policy_section_header.xml（浅绿色分组Section背景）
+            - item_history.xml：新增 tvRuleSectionHeader + tvPolicyBadge 两个视图引用
+
+            ### 🔵 数据库：DB v10 追加投注字段完整贯通（LotteryXlsParser→Entity→Model→DrawDetailDialog）
+            - appendPrizeTiers: List<PrizeTierEntry?> 从解析到展示全链路
+          files: LotteryHistoryQuery_v22.apk
           prerelease: false
