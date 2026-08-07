@@ -63,7 +63,8 @@ data class LotteryTypeConfig(
         val matchSecondary: Int,
         val description: String,
         val prizeName: String,
-        val fixedAmountYuan: Long? = null
+        val fixedAmountYuan: Long? = null,
+        val conditionalKey: String? = null
     )
 
     // ============ 向后兼容：默认取最新版本（供不区分日期的逻辑使用）============
@@ -110,7 +111,7 @@ object LotteryType {
                     LotteryTypeConfig.MatchRuleDef(2, 1, "中2红球+1蓝球", "六等奖", 5),
                     LotteryTypeConfig.MatchRuleDef(1, 1, "中1红球+1蓝球", "六等奖", 5),
                     LotteryTypeConfig.MatchRuleDef(0, 1, "仅中蓝球", "六等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "中3红球（蓝球未中）", "福运奖", 5)
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "中3红球（蓝球未中）", "福运奖", 5, ConditionalKey.SSQ_FUYUN)
                 )
             ),
             LotteryTypeConfig.RuleVersion(
@@ -162,17 +163,17 @@ object LotteryType {
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(5, 0, "中5前区（后区未中）", "三等奖", 5000),
-                    LotteryTypeConfig.MatchRuleDef(4, 2, "中4前区+2后区", "三等奖", 5000),
-                    LotteryTypeConfig.MatchRuleDef(4, 1, "中4前区+1后区", "四等奖", 300),
-                    LotteryTypeConfig.MatchRuleDef(4, 0, "中4前区（后区未中）", "五等奖", 150),
-                    LotteryTypeConfig.MatchRuleDef(3, 2, "中3前区+2后区", "五等奖", 150),
-                    LotteryTypeConfig.MatchRuleDef(3, 1, "中3前区+1后区", "六等奖", 15),
-                    LotteryTypeConfig.MatchRuleDef(2, 2, "中2前区+2后区", "六等奖", 15),
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "中3前区（后区未中）", "七等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(2, 1, "中2前区+1后区", "七等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(1, 2, "中1前区+2后区", "七等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(0, 2, "仅中2后区", "七等奖", 5)
+                    LotteryTypeConfig.MatchRuleDef(5, 0, "中5前区（后区未中）", "三等奖", 5000, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(4, 2, "中4前区+2后区", "三等奖", 5000, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(4, 1, "中4前区+1后区", "四等奖", 300, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(4, 0, "中4前区（后区未中）", "五等奖", 150, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(3, 2, "中3前区+2后区", "五等奖", 150, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(3, 1, "中3前区+1后区", "六等奖", 15, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(2, 2, "中2前区+2后区", "六等奖", 15, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "中3前区（后区未中）", "七等奖", 5, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(2, 1, "中2前区+1后区", "七等奖", 5, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(1, 2, "中1前区+2后区", "七等奖", 5, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(0, 2, "仅中2后区", "七等奖", 5, ConditionalKey.DLT_2026_FLOAT)
                 )
             ),
             LotteryTypeConfig.RuleVersion(

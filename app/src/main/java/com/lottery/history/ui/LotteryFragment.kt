@@ -445,12 +445,26 @@ class LotteryFragment : Fragment() {
 
     private fun showEmptyResultState() {
         cardResult.visibility = View.VISIBLE
-        tvSelectedNumbers.text = "请选择号码后点击查询"
+        tvSelectedNumbers.text = buildString {
+            append("请选择号码后点击查询")
+            // —— v11 P0 修复：跨多规则版本彩种（SSQ/DLT）不再只展示最新版奖项名 ——
+            //    因为空状态下"选号结果表"会变成用户对"奖级数量/名称"的视觉预期，
+            //    如果只展示最新版（如 DLT 2026 = 7 级），但历史期跨度含 DLT 2019 = 9 级，
+            //    用户会误以为"整个历史只有7级奖级"。这里给出多版本提示。
+            if (config.ruleVersions.size > 1) {
+                append("\n提示：本彩种官方规则共 ")
+                append(config.ruleVersions.size)
+                append(" 个版本（")
+                append(config.ruleVersions.joinToString(" / ") { it.policyLabel })
+                append("）\n实际命中的奖项名按各期对应规则版本展示，以「期数所在阶段」为准")
+            }
+        }
         tvSelectedNumbers.setTextColor(Color.parseColor("#616161"))
         llResultRedBalls.removeAllViews()
         llResultBlueBalls.removeAllViews()
         resultContainer.removeAllViews()
 
+        // 空状态：用 config.rules（最新版）做占位展示，但上方提示已经说明跨版本问题
         val emptyResults = config.rules.map { rule ->
             QueryResultItem(
                 matchPrimary = rule.matchPrimary,

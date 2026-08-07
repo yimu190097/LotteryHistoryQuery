@@ -45,5 +45,16 @@ data class LotteryDrawEntity(
     /** 当期全国销售额（元），展示给客户参考 */
     val salesAmount: Long? = null,
     /** 追加投注奖级数据（仅大乐透等有追加玩法的彩种有，其他彩种为null） */
-    val appendPrizeTiers: String? = null
+    val appendPrizeTiers: String? = null,
+
+    // ===== v11 新增：解析来源审计 + 条件性奖级标记 =====
+
+    /** 解析来源：SEED | NET | MIGRATE */
+    val parseSource: String? = null,
+    /** 解析时间戳（毫秒），null 表示未经过完整解析（如 seed 原始数据） */
+    val parseAt: Long? = null,
+    /** 解析器版本号，用于日后解析器升级时可追溯 */
+    val parserVersion: Int? = null,
+    /** 条件性奖级开关：JSON 字符串格式（Map<String, String> 编码），如福运奖ON/OFF/HOLD、DLT上浮NORMAL/UP */
+    val conditionalFlagsJson: String? = null
 )

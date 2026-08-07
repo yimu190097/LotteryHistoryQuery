@@ -15,6 +15,8 @@ import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.lottery.history.R
+import com.lottery.history.model.ConditionalKey
+import com.lottery.history.model.ConditionalValue
 import com.lottery.history.model.LotteryDraw
 import com.lottery.history.model.LotteryTypeConfig
 import com.lottery.history.model.PrizeTierEntry
@@ -237,8 +239,10 @@ class DrawDetailDialog(
         }
 
         merged.forEachIndexed { idx, row ->
-            // ---- 中奖注数：同等奖合并累加（基本投注+追加投注），同质信息合并 ----
+            // ---- v11：条件奖级「停发」状态专属文案（福运奖 OFF 等）----
+            //    关键：绝不出现"空开"字样；OFF 语义是"本期规则不开放"≠"本期没人中（空开）"
             val countText = when {
+                row.conditionalOff -> "—（奖池未达门槛，本奖项停发）"
                 row.totalCount == null -> "—"
                 row.totalCount > 0 -> {
                     if (row.hasAppend && row.appendCount != null && row.appendCount > 0) {
@@ -257,22 +261,23 @@ class DrawDetailDialog(
                 val countEmpty = row.totalCount == null
                 val isEmpty = row.totalCount == 0
 
-                if (countEmpty) {
-                    append("—")
-                } else if (isEmpty) {
-                    append("空开无奖金")
-                } else {
-                    var shown = false
-                    if (bAmt != null && bAmt > 0L) {
-                        append("基本投注 ").append(formatAmount(bAmt))
-                        shown = true
+                when {
+                    row.conditionalOff -> append("—（奖池未达门槛，本奖项停发）")
+                    countEmpty -> append("—")
+                    isEmpty -> append("空开无奖金")
+                    else -> {
+                        var shown = false
+                        if (bAmt != null && bAmt > 0L) {
+                            append("基本投注 ").append(formatAmount(bAmt))
+                            shown = true
+                        }
+                        if (row.hasAppend && aAmt != null && aAmt > 0L) {
+                            if (shown) append("\n")
+                            append("追加投注 ").append(formatAmount(aAmt))
+                            shown = true
+                        }
+                        if (!shown) append("—")
                     }
-                    if (row.hasAppend && aAmt != null && aAmt > 0L) {
-                        if (shown) append("\n")
-                        append("追加投注 ").append(formatAmount(aAmt))
-                        shown = true
-                    }
-                    if (!shown) append("—")
                 }
             }
 
@@ -282,7 +287,8 @@ class DrawDetailDialog(
                 countText = countText,
                 amountText = amountText,
                 density = density,
-                highlightTop = idx < 3
+                highlightTop = idx < 3,
+                conditionalOff = row.conditionalOff
             )
             llRules.addView(rowView)
             if (idx < merged.size - 1) {
@@ -473,7 +479,8 @@ class DrawDetailDialog(
         val baseAmount: Long?,              // 基本投注金额（=null代表当期该级别未公布）
         val appendAmount: Long?,            // 追加投注金额（=null代表无追加/追加数据为空/两者金额已合并不可区分）
         val appendCount: Int?,              // 追加投注单独注数，用于展示时提示"追加投注多少注"（如果有的话）
-        val hasAppend: Boolean              // 是否有追加投注数据展示（用于金额分行）
+        val hasAppend: Boolean,             // 是否有追加投注数据展示（用于金额分行）
+        val conditionalOff: Boolean = false // v11: 条件奖级本期停发 → 整行置灰 + 专属提示文字
     )
 
     /**
@@ -490,10 +497,28 @@ class DrawDetailDialog(
         val effectiveCount = minOf(ruleVersion.realTiersToUse, tiers.size)
         val trimmedTiers = tiers.take(effectiveCount)
 
+        // ===== v11 条件性奖级动态判定 =====
+        //  把 conditionalFlags 读出来，按 MatchRuleDef.conditionalKey 注入行为：
+        //    SSQ_FUYUN: ON(开启) / OFF(本期停发) / HOLD(奖池未知)
+        //    DLT_2026_FLOAT: UP(奖池≥8亿上浮) / NORMAL(未上浮) / HOLD(奖池未知)
+        //  这些判定和 XlsParser 中的 conditionalFlags 生成逻辑严格一一对应，保证展示与解析一致。
+        val flags = draw?.conditionalFlags.orEmpty()
+        val fuyunState = flags[ConditionalKey.SSQ_FUYUN]
+        val dltFloat = flags[ConditionalKey.DLT_2026_FLOAT]
+        // DLT 新规实际单注金额（只有当 conditionalKey=DLT_2026_FLOAT 的规则才替换金额）
+        //   NORMAL: 5000/300/150/15/5  (官方基础额度)
+        //   UP:     6666/380/200/18/7   (奖池≥8亿上浮)
+        val dltFloatOverrideMap: Map<String, Long>? =
+            if (dltFloat == ConditionalValue.UP) mapOf(
+                "5000" to 6666L, "300" to 380L, "150" to 200L, "15" to 18L, "5" to 7L
+            ) else null
+
         // Step1: 按奖项名分组 → 收集同奖名下的 dedup indices（规则侧）和多条命中规则文本
         data class GroupInfo(
             val matchLines: MutableList<String> = mutableListOf(),
-            val dedupIndex: Int // 取第一次出现的 index 作为基本投注 entry 的定位
+            val dedupIndex: Int, // 取第一次出现的 index 作为基本投注 entry 的定位
+            var conditionalKey: String? = null, // 该组对应的条件奖级 key（若有）
+            var fixedAmountToken: String? = null // DLT_FLOAT 时取金额字符串做 override 查询
         )
         val groups = linkedMapOf<String, GroupInfo>() // LinkedHashMap 按规则顺序保留
         var dedupIdx = -1
@@ -506,12 +531,34 @@ class DrawDetailDialog(
                 dedupIdx++
                 lastName = rule.prizeName
             }
-            val info = groups.getOrPut(rule.prizeName) { GroupInfo(dedupIndex = dedupIdx) }
+            val info = groups.getOrPut(rule.prizeName) {
+                GroupInfo(
+                    dedupIndex = dedupIdx,
+                    conditionalKey = rule.conditionalKey,
+                    fixedAmountToken = rule.fixedAmountYuan?.toString()
+                )
+            }
             val baseMatch = rule.description.ifEmpty { buildMatchText(rule) }
-            val fullMatch = if (rule.fixedAmountYuan != null) {
-                "$baseMatch（规则固定¥${rule.fixedAmountYuan}）"
-            } else {
-                baseMatch
+
+            // —— v11：条件性奖级展示逻辑 ——
+            val fullMatch = when {
+                // DLT 2026 浮动金额：显示本期实际的上下浮金额，不永远写死规则基础金额
+                rule.conditionalKey == ConditionalKey.DLT_2026_FLOAT && rule.fixedAmountYuan != null -> {
+                    val token = rule.fixedAmountYuan.toString()
+                    val actual = dltFloatOverrideMap?.get(token) ?: rule.fixedAmountYuan
+                    val prefix = when (dltFloat) {
+                        ConditionalValue.UP -> "本期奖池≥8亿已上浮"
+                        ConditionalValue.NORMAL -> "规则固定"
+                        else -> "奖池未知，暂按规则固定"
+                    }
+                    "$baseMatch（$prefix¥$actual）"
+                }
+
+                rule.fixedAmountYuan != null -> {
+                    "$baseMatch（规则固定¥${rule.fixedAmountYuan}）"
+                }
+
+                else -> baseMatch
             }
             info.matchLines.add(fullMatch)
         }
@@ -524,10 +571,23 @@ class DrawDetailDialog(
                 appendTiers.getOrNull(info.dedupIndex)
             } else null
 
+            // —— v11：条件奖级停发状态注入 ——
+            //    福运奖 OFF：整行变灰、奖名"(本期不开放)"、注数/金额显示说明文字，
+            //    **绝对不能出现"空开 无奖金"字样**（"空开"意味着规则在但没人中，
+            //    而 OFF 意味着该期此奖项根本不开放，语义完全不同，会误导）。
+            val fuyunDisabled =
+                info.conditionalKey == ConditionalKey.SSQ_FUYUN && fuyunState == ConditionalValue.OFF
+
+            val displayPrizeName = when {
+                fuyunDisabled -> "$prizeName（本期不开放）"
+                else -> prizeName
+            }
+
             // —— 注数：同等奖合并（基本投注注数 + 追加投注注数，同质信息加法合并）——
             val baseCount = baseEntry?.count
             val appCount = appendEntry?.count
-            val mergedCount = when {
+            val mergedCount: Int? = when {
+                fuyunDisabled -> null // 停发状态：用专属文字展示，不显示数字
                 baseCount != null && appCount != null && appCount > 0 -> baseCount + appCount
                 else -> baseCount
             }
@@ -537,18 +597,20 @@ class DrawDetailDialog(
             val aAmount = appendEntry?.amount?.takeIf {
                 appendEntry.count?.let { c -> c > 0 || it == 0L } ?: true
             }
-            val hasAppendData = appendEntry != null &&
+            val hasAppendData = appendEntry != null && !fuyunDisabled &&
                 (appendEntry.count?.let { it > 0 } == true || appendEntry.amount?.let { it > 0L } == true)
 
             result.add(
                 MergedPrizeRow(
-                    prizeName = prizeName,
+                    prizeName = displayPrizeName,
                     matchText = info.matchLines.joinToString("\n"),
                     totalCount = mergedCount,
-                    baseAmount = bAmount,
+                    baseAmount = if (fuyunDisabled) null else bAmount,
                     appendAmount = if (hasAppendData) aAmount else null,
                     appendCount = if (hasAppendData) appCount else null,
-                    hasAppend = hasAppendData
+                    hasAppend = hasAppendData,
+                    // v11: 条件性奖级外观标志（在 buildPrizeRow 中被用于浅灰底 + 文字）
+                    conditionalOff = fuyunDisabled
                 )
             )
         }
@@ -583,7 +645,8 @@ class DrawDetailDialog(
         amountText: String,
         density: Float,
         isHeader: Boolean = false,
-        highlightTop: Boolean = false
+        highlightTop: Boolean = false,
+        conditionalOff: Boolean = false   // v11: 条件奖级本期停发 → 整行置灰
     ): View {
         val cellPadV = if (isHeader) (8 * density).toInt() else (12 * density).toInt()
         val cellPadH = (4 * density).toInt()
@@ -595,9 +658,10 @@ class DrawDetailDialog(
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
             gravity = Gravity.CENTER_VERTICAL
-            // 非表头：奇数行浅灰底增强可读性（40+客户不串行）
-            if (!isHeader && highlightTop) {
-                setBackgroundColor(0xFFFFF8E1.toInt())  // 前三等级：浅黄底高亮
+            when {
+                isHeader -> Unit
+                conditionalOff -> setBackgroundColor(0xFFF5F5F5.toInt())   // 停发：浅灰底（视觉上降低权重）
+                highlightTop -> setBackgroundColor(0xFFFFF8E1.toInt())      // 前三等级：浅黄底高亮
             }
         }
 
@@ -615,6 +679,7 @@ class DrawDetailDialog(
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             } else {
                 val color = when {
+                    conditionalOff -> 0xFF9E9E9E.toInt()
                     prizeName.contains("一等") -> 0xFFC62828.toInt()
                     prizeName.contains("二等") -> 0xFFD84315.toInt()
                     prizeName.contains("三等") -> 0xFFEF6C00.toInt()
@@ -624,7 +689,10 @@ class DrawDetailDialog(
                 }
                 setTextColor(color)
                 setTypeface(null, Typeface.BOLD)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                setTextSize(
+                    TypedValue.COMPLEX_UNIT_SP,
+                    if (conditionalOff) 14f else 16f  // 停发稍小，视觉降权
+                )
             }
         }
         row.addView(col1)
@@ -642,8 +710,8 @@ class DrawDetailDialog(
                 setTypeface(null, Typeface.BOLD)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             } else {
-                setTextColor(0xFF546E7A.toInt())
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextColor(if (conditionalOff) 0xFFBDBDBD.toInt() else 0xFF546E7A.toInt())
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, if (conditionalOff) 13f else 14f)
             }
         }
         row.addView(col2)
@@ -661,10 +729,17 @@ class DrawDetailDialog(
                 setTypeface(null, Typeface.BOLD)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             } else {
+                val isOffText = conditionalOff
                 val isEmpty = countText == "空开" || countText == "—"
-                setTextColor(if (isEmpty) 0xFF9E9E9E.toInt() else 0xFFC62828.toInt())
+                setTextColor(
+                    when {
+                        isOffText -> 0xFFBDBDBD.toInt()
+                        isEmpty -> 0xFF9E9E9E.toInt()
+                        else -> 0xFFC62828.toInt()
+                    }
+                )
                 setTypeface(null, Typeface.BOLD)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, if (conditionalOff) 13f else 16f)
             }
         }
         row.addView(col3)
@@ -682,9 +757,9 @@ class DrawDetailDialog(
                 setTypeface(null, Typeface.BOLD)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             } else {
-                setTextColor(0xFF1565C0.toInt())
+                setTextColor(if (conditionalOff) 0xFFBDBDBD.toInt() else 0xFF1565C0.toInt())
                 setTypeface(null, Typeface.BOLD)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, if (conditionalOff) 13f else 16f)
             }
         }
         row.addView(col4)

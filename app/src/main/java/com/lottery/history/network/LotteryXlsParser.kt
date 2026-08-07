@@ -205,20 +205,58 @@ object LotteryXlsParser {
                 val tiersStart = extraStart + ruleVersion.extraFieldCount
                 val expectedPairs = ruleVersion.prizeTierPairCount
                 val appendPairs = ruleVersion.appendTierPairCount
-                val appendTiers = mutableListOf<PrizeTierEntry>()
+                val appendTiers = mutableListOf<PrizeTierEntry?>()
                 if (appendPairs > 0) {
                     val appendStart = tiersStart + expectedPairs * 2
                     for (k in 0 until appendPairs) {
                         val cStr = parts.getOrNull(appendStart + k * 2)
                         val aStr = parts.getOrNull(appendStart + k * 2 + 1)
-                        val cVal = cStr?.let { parseNumberSafe(it) }?.toInt() ?: 0
-                        val aVal = aStr?.let { parseNumberSafe(it) } ?: 0L
+                        if (cStr == "-" || aStr == "-" || cStr == null || aStr == null) {
+                            appendTiers.add(null)
+                            continue
+                        }
+                        val cVal = cStr.let { parseNumberSafe(it) }?.toInt()
+                        val aVal = aStr.let { parseNumberSafe(it) }
+                        if (cVal == null || aVal == null) {
+                            appendTiers.add(null)
+                            continue
+                        }
                         appendTiers.add(PrizeTierEntry(count = cVal, amount = aVal))
                     }
                 }
 
-                // —— 结构一致性审计 ——
-                val actualTierCount = allTiers.size
+                // ===== v11 新增：条件性奖级标志位（conditionalFlags）=====
+                //  官方政策随奖池和期数变化：同一规则版本下，某些奖级仍可能本期"不适用/不开放"
+                //  或"金额浮动"。把这些当期中有效的判定预计算出来，随 draw 持久化，
+                //  避免展示层靠 jackkpotAmount 再猜一次（展示层猜容易和解析逻辑不一致导致错乱）。
+                val conditionalFlags = buildMap<String, String> {
+                    // —— SSQ 2026 新规：福运奖（3+0）启用门槛：奖池≥3亿 => ON，<3亿 => OFF，奖池未公布 => HOLD
+                    if (config.code == "ssq" && ruleVersion.key == "ssq_2026") {
+                        put(
+                            ConditionalKey.SSQ_FUYUN,
+                            when {
+                                jackpotAmount == null -> ConditionalValue.HOLD
+                                jackpotAmount >= 300_000_000L -> ConditionalValue.ON
+                                else -> ConditionalValue.OFF
+                            }
+                        )
+                    }
+                    // —— DLT 2026 新规：三~七等奖（原 5000/300/150/15/5）奖池≥8亿时上浮 6666/380/200/18/7
+                    if (config.code == "dlt" && ruleVersion.key == "dlt_2026") {
+                        put(
+                            ConditionalKey.DLT_2026_FLOAT,
+                            when {
+                                jackpotAmount == null -> ConditionalValue.HOLD
+                                jackpotAmount >= 800_000_000L -> ConditionalValue.UP
+                                else -> ConditionalValue.NORMAL
+                            }
+                        )
+                    }
+                }
+
+                // —— 结构一致性审计 v11：不再只算 size（全 prizeTierPairCount）
+                //    而是 count { it != null }，避免 '-' 占位把 MATCH 错判成 FEWER
+                val actualTierCount = allTiers.count { it != null }
                 val expected = ruleVersion.realTiersToUse
                 val tierMatchStatus = when {
                     actualTierCount == expected -> com.lottery.history.model.TierMatchStatus.MATCH
@@ -244,7 +282,12 @@ object LotteryXlsParser {
                         tierMatchStatus = tierMatchStatus,
                         jackpotAmount = jackpotAmount,
                         salesAmount = salesAmount,
-                        appendPrizeTiers = appendTiers
+                        appendPrizeTiers = appendTiers,
+                        // —— v11 新增：条件性奖级标志 + 解析来源标记
+                        conditionalFlags = conditionalFlags,
+                        parseSource = ParseSource.NET,
+                        parseAt = System.currentTimeMillis(),
+                        parserVersion = 1
                     )
                 )
             } catch (_: Exception) {
@@ -259,24 +302,44 @@ object LotteryXlsParser {
     //  数据格式（已用 17500.cn 各彩种真实数据交叉验证 2026-08-06）：
     //    号码之后 → extraFieldCount 个额外字段（销售额/奖池/出球顺序等）→ prizeTierPairCount 对 (注数,金额)
     //  每期的 extraFieldCount / prizeTierPairCount 由该期适用的 RuleVersion 决定（按日期自动适配）。
-    //  容错：'-' 视为未公布跳过；字段不足时提前结束（实际奖级对数 < 配置上限，由展示层自动适配）。
+    //
+    //  容错 v11 升级：
+    //   - 之前：某一对遇到 '-' 就 break 全部后续奖级。官方更新习惯是先公布前几对，
+    //           后面几对次日补，这样会让前几对连带被截断，数据少展示给客户，
+    //           tierMatchStatus 判 FEWER，但其实前几对是真实有效的（P0 问题）。
+    //   - 现在：某一对遇到 '-' 或解析失败时，在该位置补 null 占位，然后 continue 后续奖级。
+    //           这样所有奖级位置都有索引，展示层 mergePrizeTiersWithRules 可以按索引
+    //           正确对应奖项名，不会错位（一等奖永远对应 index=0，福运奖永远在 index=6）。
     private fun extractAllPrizeTiers(
         parts: List<String>,
         start: Int,
         extraFieldCount: Int,
         prizeTierPairCount: Int
-    ): List<PrizeTierEntry> {
-        val all = mutableListOf<PrizeTierEntry>()
+    ): List<PrizeTierEntry?> {
+        val all = mutableListOf<PrizeTierEntry?>()
         val prizeStart = start + extraFieldCount
         for (i in 0 until prizeTierPairCount) {
             val countIdx = prizeStart + i * 2
             val amountIdx = prizeStart + i * 2 + 1
-            val countRaw = parts.getOrNull(countIdx) ?: break
-            val amountRaw = parts.getOrNull(amountIdx) ?: break
-            // '-' 表示未公布（如最新一期延迟公开），跳过该对
-            if (countRaw == "-" || amountRaw == "-") break
-            val count = parseNumberSafe(countRaw) ?: break
-            val amount = parseNumberSafe(amountRaw) ?: break
+            val countRaw = parts.getOrNull(countIdx)
+            val amountRaw = parts.getOrNull(amountIdx)
+            // 越界：后续奖级对都不存在，保持 null 占位并提前退出
+            if (countRaw == null || amountRaw == null) {
+                all.add(null)
+                continue
+            }
+            // '-'：该级未公布，补 null，continue 不截断后续
+            if (countRaw == "-" || amountRaw == "-") {
+                all.add(null)
+                continue
+            }
+            val count = parseNumberSafe(countRaw)
+            val amount = parseNumberSafe(amountRaw)
+            if (count == null || amount == null) {
+                // 解析异常（非数字、畸形逗号位置），不整体失败、单个奖级标 null
+                all.add(null)
+                continue
+            }
             all.add(PrizeTierEntry(count = count.toInt(), amount = amount))
         }
         return all

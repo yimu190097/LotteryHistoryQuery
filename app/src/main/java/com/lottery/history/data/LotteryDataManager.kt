@@ -4,10 +4,21 @@ import android.content.Context
 import com.lottery.history.db.LotteryDao
 import com.lottery.history.db.LotteryDatabase
 import com.lottery.history.db.LotteryDrawEntity
+import com.lottery.history.db.MatchRuleDefDao
+import com.lottery.history.db.MatchRuleDefEntity
+import com.lottery.history.db.PrizeTierDao
+import com.lottery.history.db.PrizeTierEntity
+import com.lottery.history.db.RuleVersionCatalogDao
+import com.lottery.history.db.RuleVersionCatalogEntity
 import com.lottery.history.model.LotteryDraw
 import com.lottery.history.model.LotteryType
 import com.lottery.history.model.LotteryTypeConfig
+import com.lottery.history.model.ParseSource
+import com.lottery.history.model.TIER_GROUP_APPEND
+import com.lottery.history.model.TIER_GROUP_BASE
+import com.lottery.history.model.decodeFlags
 import com.lottery.history.model.decodePrizeTiers
+import com.lottery.history.model.encodeFlags
 import com.lottery.history.model.encodeTiers
 import com.lottery.history.network.LotteryRepository
 import kotlinx.coroutines.Dispatchers
@@ -23,26 +34,127 @@ object LotteryDataManager {
 
     private val mutex = Mutex()
     private var dao: LotteryDao? = null
+    private var ruleVersionCatalogDao: RuleVersionCatalogDao? = null
+    private var matchRuleDefDao: MatchRuleDefDao? = null
+    private var prizeTierDao: PrizeTierDao? = null
     private var lastUpdate: Long = 0L
 
     /** 每个彩种的内存缓存 */
     private val caches = mutableMapOf<String, List<LotteryDraw>>()
 
-    private fun ensureDao(context: Context): LotteryDao {
-        return dao ?: LotteryDatabase.get(context).lotteryDao().also { dao = it }
+    private fun ensureDaos(context: Context) {
+        val db = LotteryDatabase.get(context)
+        if (dao == null) dao = db.lotteryDao()
+        if (ruleVersionCatalogDao == null) ruleVersionCatalogDao = db.ruleVersionCatalogDao()
+        if (matchRuleDefDao == null) matchRuleDefDao = db.matchRuleDefDao()
+        if (prizeTierDao == null) prizeTierDao = db.prizeTierDao()
     }
 
     /**
-     * 确保内置 seed 数据已导入（仅 ssq/dlt 有 seed）。
+     * 确保内置 seed 数据已导入（仅 ssq/dlt 有 seed），
+     * 然后将规则目录持久化，最后修补 seed 来源但缺元数据的记录。
      */
-    suspend fun ensureInitialized(context: Context) {
-        val d = ensureDao(context)
+    suspend fun ensureInitialized(context: Context) = mutex.withLock {
+        ensureDaos(context)
+        val d = dao!!
+        val ptDao = prizeTierDao!!
+
+        var didImportSsq = false
+        var didImportDlt = false
         if (d.countByType("ssq") == 0) {
             importSeed(context, d, "ssq", com.lottery.history.R.raw.ssq_seed)
+            didImportSsq = true
         }
         if (d.countByType("dlt") == 0) {
             importSeed(context, d, "dlt", com.lottery.history.R.raw.dlt_seed)
+            didImportDlt = true
         }
+
+        ensureRuleCatalogPersisted()
+
+        val seedTypesToCheck = mutableListOf<String>()
+        if (didImportSsq || d.countByType("ssq") > 0) seedTypesToCheck.add("ssq")
+        if (didImportDlt || d.countByType("dlt") > 0) seedTypesToCheck.add("dlt")
+
+        for (type in seedTypesToCheck) {
+            val draws = d.getAllByType(type)
+            val incompleteUpdates = mutableListOf<LotteryDrawEntity>()
+            for (draw in draws) {
+                val isSeedSource = draw.parseSource == null || draw.parseSource == ParseSource.SEED
+                if (isSeedSource) {
+                    val ptCount = ptDao.getByDraw(draw.issue, type).size
+                    if (ptCount == 0) {
+                        incompleteUpdates.add(
+                            draw.copy(parseSource = ParseSource.SEED_INCOMPLETE)
+                        )
+                    }
+                }
+            }
+            if (incompleteUpdates.isNotEmpty()) {
+                d.insertAll(incompleteUpdates)
+            }
+        }
+    }
+
+    /**
+     * 将 LotteryType.ALL.ruleVersions 及其中的 MatchRuleDef 分别 upsert 到
+     * rule_version_catalog 和 match_rule_def 表。
+     *
+     * dedupIndex 算法：同 DrawDetailDialog.mergePrizeTiersWithRules
+     *  - 按 prizeName 分组，第一次出现的 index 作为 dedupIndex（同组共享）
+     *  - ruleIndex 是该规则在 RuleVersion.rules 中的原始下标（0 起）
+     */
+    private suspend fun ensureRuleCatalogPersisted() {
+        val rvDao = ruleVersionCatalogDao!!
+        val mrDao = matchRuleDefDao!!
+        val now = System.currentTimeMillis()
+
+        val allRuleVersions = mutableListOf<RuleVersionCatalogEntity>()
+        val allMatchRules = mutableListOf<MatchRuleDefEntity>()
+
+        for (config in LotteryType.ALL) {
+            for (rv in config.ruleVersions) {
+                allRuleVersions.add(
+                    RuleVersionCatalogEntity(
+                        ruleVersionKey = rv.key,
+                        code = config.code,
+                        effectiveFromDate = rv.effectiveFromDate,
+                        policyLabel = rv.policyLabel,
+                        changeNote = rv.changeNote,
+                        realTiersToUse = rv.realTiersToUse,
+                        prizeTierPairCount = rv.prizeTierPairCount,
+                        extraFieldCount = rv.extraFieldCount,
+                        appendTierPairCount = rv.appendTierPairCount,
+                        snapshotAt = now
+                    )
+                )
+
+                var dedupIdx = -1
+                var lastName: String? = null
+                rv.rules.forEachIndexed { ruleIdx, rule ->
+                    if (rule.prizeName != lastName) {
+                        dedupIdx++
+                        lastName = rule.prizeName
+                    }
+                    allMatchRules.add(
+                        MatchRuleDefEntity(
+                            ruleVersionKey = rv.key,
+                            dedupIndex = dedupIdx,
+                            ruleIndex = ruleIdx,
+                            matchPrimary = rule.matchPrimary,
+                            matchSecondary = rule.matchSecondary,
+                            description = rule.description,
+                            prizeName = rule.prizeName,
+                            fixedAmountYuan = rule.fixedAmountYuan,
+                            conditionalKey = rule.conditionalKey
+                        )
+                    )
+                }
+            }
+        }
+
+        rvDao.upsert(allRuleVersions)
+        mrDao.insertAll(allMatchRules)
     }
 
     private suspend fun importSeed(
@@ -74,7 +186,11 @@ object LotteryDataManager {
                             issue = issue,
                             type = type,
                             primary = primary.joinToString(","),
-                            secondary = secondary.joinToString(",")
+                            secondary = secondary.joinToString(","),
+                            parseSource = ParseSource.SEED,
+                            parseAt = null,
+                            parserVersion = 1,
+                            conditionalFlagsJson = null
                         )
                     )
                 }
@@ -94,16 +210,16 @@ object LotteryDataManager {
     /** 加载指定彩种到内存缓存 */
     suspend fun loadCache(context: Context, config: LotteryTypeConfig) {
         ensureInitialized(context)
-        val d = ensureDao(context)
+        val d = dao!!
         caches[config.code] = d.getAllByType(config.code).map { it.toModel() }
     }
 
     /** 加载全部彩种到内存缓存 */
     suspend fun loadCaches(context: Context) = mutex.withLock {
         ensureInitialized(context)
-        val d = ensureDao(context)
+        val d = dao!!
         for (config in LotteryType.ALL) {
-            caches[config.code] = d.getAllByType(config.code).map { it.toModel() }
+            caches[config.code] = d.getAllByType(config.code).map { e -> e.toModel() }
         }
     }
 
@@ -115,39 +231,107 @@ object LotteryDataManager {
      */
     suspend fun refresh(context: Context): RefreshResult = mutex.withLock {
         ensureInitialized(context)
-        val d = ensureDao(context)
+        val d = dao!!
+        val ptDao = prizeTierDao!!
         val successTypes = mutableListOf<String>()
         val failedTypes = mutableListOf<String>()
+        val now = System.currentTimeMillis()
 
         for (config in LotteryType.ALL) {
             try {
                 val netList = withContext(Dispatchers.IO) { LotteryRepository.fetchHistory(config) }
                 if (netList.isNotEmpty()) {
-                    d.insertAll(netList.map {
-                        LotteryDrawEntity(
-                            issue = it.issue, type = config.code,
-                            primary = it.primaryNumbers.joinToString(","),
-                            secondary = it.secondaryNumbers.joinToString(","),
-                            date = it.date,
-                            firstPrizeCount = it.firstPrizeCount,
-                            firstPrizeAmount = it.firstPrizeAmount,
-                            secondPrizeCount = it.secondPrizeCount,
-                            secondPrizeAmount = it.secondPrizeAmount,
-                            allPrizeTiers = it.allPrizeTiers.encodeTiers(),
-                            // —— v9 新增：按期自适应元数据（解析时已确定，直接存库）——
-                            ruleVersionKey = it.ruleVersionKey,
-                            actualTierCount = it.actualTierCount,
-                            tierMatchStatus = it.tierMatchStatus,
-                            jackpotAmount = it.jackpotAmount,
-                            salesAmount = it.salesAmount,
-                            appendPrizeTiers = it.appendPrizeTiers.encodeTiers()
+                    // ===== v11 增量刷新保护策略（P1 修复：避免 '-' 回滚覆盖完整数据）=====
+                    //  官方数据源有时先出前几对、后面是 '-'，次日补全。如果新数据里有 '-',
+                    //  本地已有一条 tierMatchStatus=MATCH 且 nonNullTiers 更多的完整版本，
+                    //  就保留本地、不被 '-' 版本覆盖。
+                    val existingByIssue: Map<String, LotteryDrawEntity> = d.getAllByType(config.code)
+                        .associateBy { it.issue }
+
+                    val entities = mutableListOf<LotteryDrawEntity>()
+                    val ptInserts = mutableListOf<PrizeTierEntity>()
+
+                    for (draw in netList) {
+                        val local = existingByIssue[draw.issue]
+                        val netNonNullTiers = draw.allPrizeTiers.count { it != null }
+                        val localNonNullTiers =
+                            local?.let { decodePrizeTiers(it.allPrizeTiers).count { e -> e != null } }
+                                ?: 0
+
+                        val keepLocal =
+                            local != null &&
+                                local.tierMatchStatus == com.lottery.history.model.TierMatchStatus.MATCH &&
+                                draw.tierMatchStatus != com.lottery.history.model.TierMatchStatus.MATCH &&
+                                localNonNullTiers >= netNonNullTiers
+
+                        if (keepLocal) continue // 保留本地"更完整"的版本，跳过本期新解析的残缺版本
+
+                        // —— 新写入/覆盖 ——
+                        entities.add(
+                            LotteryDrawEntity(
+                                issue = draw.issue, type = config.code,
+                                primary = draw.primaryNumbers.joinToString(","),
+                                secondary = draw.secondaryNumbers.joinToString(","),
+                                date = draw.date,
+                                firstPrizeCount = draw.firstPrizeCount,
+                                firstPrizeAmount = draw.firstPrizeAmount,
+                                secondPrizeCount = draw.secondPrizeCount,
+                                secondPrizeAmount = draw.secondPrizeAmount,
+                                allPrizeTiers = draw.allPrizeTiers.encodeTiers(),
+                                ruleVersionKey = draw.ruleVersionKey,
+                                actualTierCount = draw.actualTierCount,
+                                tierMatchStatus = draw.tierMatchStatus,
+                                jackpotAmount = draw.jackpotAmount,
+                                salesAmount = draw.salesAmount,
+                                appendPrizeTiers = draw.appendPrizeTiers.encodeTiers(),
+                                parseSource = ParseSource.NET,
+                                parseAt = now,
+                                parserVersion = 1,
+                                conditionalFlagsJson = encodeFlags(draw.conditionalFlags)
+                            )
                         )
-                    })
+
+                        // 同时写入规范化新表 lottery_prize_tier（先删本期旧，再写新，保证原子性思路）
+                        ptDao.deleteForDraw(draw.issue, config.code)
+                        draw.allPrizeTiers.forEachIndexed { idx, entry ->
+                            if (entry != null) {
+                                ptInserts.add(
+                                    PrizeTierEntity(
+                                        issue = draw.issue,
+                                        type = config.code,
+                                        tierGroup = TIER_GROUP_BASE,
+                                        tierIndex = idx,
+                                        count = entry.count,
+                                        amount = entry.amount,
+                                        updatedAt = now
+                                    )
+                                )
+                            }
+                        }
+                        draw.appendPrizeTiers.forEachIndexed { idx, entry ->
+                            if (entry != null) {
+                                ptInserts.add(
+                                    PrizeTierEntity(
+                                        issue = draw.issue,
+                                        type = config.code,
+                                        tierGroup = TIER_GROUP_APPEND,
+                                        tierIndex = idx,
+                                        count = entry.count,
+                                        amount = entry.amount,
+                                        updatedAt = now
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    if (entities.isNotEmpty()) d.insertAll(entities)
+                    if (ptInserts.isNotEmpty()) ptDao.insertReplace(ptInserts)
+
                     caches[config.code] = d.getAllByType(config.code).map { e -> e.toModel() }
                     successTypes.add(config.code)
                 }
             } catch (_: Exception) {
-                // 单个彩种失败不影响其他
                 if (caches[config.code] == null) {
                     caches[config.code] = d.getAllByType(config.code).map { e -> e.toModel() }
                 }
@@ -193,13 +377,16 @@ object LotteryDataManager {
             secondPrizeCount = secondPrizeCount,
             secondPrizeAmount = secondPrizeAmount,
             allPrizeTiers = decodePrizeTiers(allPrizeTiers),
-            // —— v9 新增：按期自适应元数据（DB→Model）——
             ruleVersionKey = ruleVersionKey,
             actualTierCount = actualTierCount,
             tierMatchStatus = tierMatchStatus,
             jackpotAmount = jackpotAmount,
             salesAmount = salesAmount,
-            appendPrizeTiers = decodePrizeTiers(appendPrizeTiers)
+            appendPrizeTiers = decodePrizeTiers(appendPrizeTiers),
+            parseSource = parseSource,
+            parseAt = parseAt,
+            parserVersion = parserVersion,
+            conditionalFlags = decodeFlags(conditionalFlagsJson)
         )
 
     /**
@@ -212,13 +399,9 @@ object LotteryDataManager {
         val q = queryRaw.trim()
         if (q.isEmpty()) return null
         val list = getCached(config)
-        // 1. 完全相等
         list.firstOrNull { it.issue == q }?.let { return it }
-        // 2. 尾部匹配（客户最常见：只输最后 N 位期号）
         list.firstOrNull { it.issue.endsWith(q) }?.let { return it }
-        // 3. 前缀匹配（客户可能输 2026 开头的全写）
         list.firstOrNull { it.issue.startsWith(q) }?.let { return it }
-        // 4. 去空格/去"第""期"字后再比对（容错）
         val compact = q.replace("""[第期\s\-_]""".toRegex(), "")
         if (compact.isEmpty()) return null
         list.firstOrNull { draw ->

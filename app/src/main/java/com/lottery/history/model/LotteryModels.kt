@@ -43,6 +43,53 @@ object TierMatchStatus {
     const val MISMATCH = "MISMATCH"   // 完全不匹配（解析失败）
 }
 
+/** v11 新增：条件性奖级 key 常量 */
+object ConditionalKey {
+    const val SSQ_FUYUN = "ssq_fuyun_onoff"
+    const val DLT_2026_FLOAT = "dlt_2026_floating"
+}
+
+/** v11 新增：条件性奖级 value 常量（福运奖三态、DLT二态） */
+object ConditionalValue {
+    const val ON = "ON"
+    const val OFF = "OFF"
+    const val HOLD = "HOLD"
+    const val NORMAL = "NORMAL"
+    const val UP = "UP"
+}
+
+/**
+ * v11 新增：条件性奖级标记编解码（简单 key=value&key2=value2 格式，避免引入新依赖）。
+ * encodeFlags: Map<String, String> -> String?（空 map 返回 null）
+ * decodeFlags: String? -> Map<String, String>（null/空返回 emptyMap）
+ */
+fun encodeFlags(flags: Map<String, String>): String? =
+    if (flags.isEmpty()) null
+    else flags.entries.joinToString("&") { (k, v) -> "${k}=${v}" }
+
+fun decodeFlags(raw: String?): Map<String, String> {
+    if (raw.isNullOrEmpty()) return emptyMap()
+    val result = mutableMapOf<String, String>()
+    raw.split('&').forEach { part ->
+        val idx = part.indexOf('=')
+        if (idx > 0 && idx < part.length - 1) {
+            result[part.substring(0, idx)] = part.substring(idx + 1)
+        }
+    }
+    return result
+}
+
+/** 解析来源常量 */
+object ParseSource {
+    const val SEED = "SEED"
+    const val SEED_INCOMPLETE = "SEED_INCOMPLETE"
+    const val NET = "NET"
+    const val MIGRATE = "MIGRATE"
+}
+
+const val TIER_GROUP_BASE = "BASE"
+const val TIER_GROUP_APPEND = "APPEND"
+
 data class LotteryDraw(
     val issue: String,
     val primaryNumbers: List<Int>,
@@ -75,7 +122,18 @@ data class LotteryDraw(
     /** 当期全国销售额（元），展示给客户参考 */
     val salesAmount: Long? = null,
     /** 追加投注奖级数据（仅大乐透等有追加玩法的彩种有，其他彩种为 emptyList） */
-    val appendPrizeTiers: List<PrizeTierEntry?> = emptyList()
+    val appendPrizeTiers: List<PrizeTierEntry?> = emptyList(),
+
+    // ===== v11 新增：解析来源审计 + 条件性奖级标记 =====
+
+    /** 解析来源：SEED | NET | MIGRATE | SEED_INCOMPLETE */
+    val parseSource: String? = null,
+    /** 解析时间戳（毫秒），null 表示未经过完整解析 */
+    val parseAt: Long? = null,
+    /** 解析器版本号 */
+    val parserVersion: Int? = null,
+    /** 条件性奖级开关 Map（福运奖 ON/OFF/HOLD、DLT上浮 NORMAL/UP 等） */
+    val conditionalFlags: Map<String, String> = emptyMap()
 ) {
     /** 基于 ruleVersionKey 和 config 快速拿到当期应展示的 RuleVersion（展示时首选） */
     fun resolveRuleVersion(config: LotteryTypeConfig): LotteryTypeConfig.RuleVersion {

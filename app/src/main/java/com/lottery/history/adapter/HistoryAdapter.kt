@@ -34,6 +34,25 @@ class HistoryAdapter(
         val btnViewDrawDetail: TextView = view.findViewById(R.id.btnViewDrawDetail)
     }
 
+    // ====== v11 预计算（P2 修复：避免 onBind O(N²) 分组统计）======
+    //  ruleVersionKey → 该分组在本组 historyList 内的期数
+    private var groupCountCache: Map<String, Int> = emptyMap()
+    //  只在单版本彩种隐藏徽章/分组标题（避免给 ruleVersions.size==1 的彩种视觉噪音）
+    private val hasMultipleRuleVersions: Boolean = config.ruleVersions.size > 1
+
+    init {
+        rebuildGroupCache()
+    }
+
+    private fun rebuildGroupCache() {
+        val result = mutableMapOf<String, Int>()
+        for (draw in historyList) {
+            val key = draw.resolveRuleVersion(config).key
+            result[key] = (result[key] ?: 0) + 1
+        }
+        groupCountCache = result
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.item_history, parent, false)
@@ -46,14 +65,13 @@ class HistoryAdapter(
         val prevDraw = historyList.getOrNull(position - 1)
         val prevRuleVersion = prevDraw?.resolveRuleVersion(config)
 
-        // ======= 规则版本分组标题（仅每组第一期显示，其余GONE） =======
-        // 关键：当且仅当 当前期的ruleVersionKey 与 上一期的不同，才显示分组标题
-        // 这样可以确保同一页面不同期数（规则不同的）被视觉隔开，用户不混淆
-        val isFirstOfRuleGroup = (prevRuleVersion == null) || (prevRuleVersion.key != ruleVersion.key)
+        // ======= v11 优化：单版本彩种不显示分组标题 & 徽章，降低噪音 =======
+        val isFirstOfRuleGroup = hasMultipleRuleVersions &&
+            (prevRuleVersion == null || prevRuleVersion.key != ruleVersion.key)
         if (isFirstOfRuleGroup) {
             holder.tvRuleSectionHeader.visibility = View.VISIBLE
-            // 格式：● 【政策标签】 生效日期XXXX-XX-XX起 ｜ 共NN期 · 变更说明概要
-            val groupCount = historyList.count { it.resolveRuleVersion(config).key == ruleVersion.key }
+            // 组期数统计：O(1) 读取预计算结果，不再每次 count 全表
+            val groupCount = groupCountCache[ruleVersion.key] ?: 0
             holder.tvRuleSectionHeader.text = buildString {
                 append("● ")
                 append(ruleVersion.policyLabel)
@@ -75,9 +93,13 @@ class HistoryAdapter(
         holder.tvIssue.text = draw.issue
         holder.tvDate.text = draw.date.orEmpty()
 
-        // ======= 政策标签徽章：每期item右上角都显示，让用户一眼知道本期规则版本 =======
-        // 即便在组内也显示，防止用户滚动到中间时忘记当前属于哪个规则阶段
-        holder.tvPolicyBadge.text = ruleVersion.policyLabel
+        // ======= v11 优化：单版本彩种隐藏政策徽章（无信息增益只会增加视觉噪音）=======
+        if (hasMultipleRuleVersions) {
+            holder.tvPolicyBadge.visibility = View.VISIBLE
+            holder.tvPolicyBadge.text = ruleVersion.policyLabel
+        } else {
+            holder.tvPolicyBadge.visibility = View.GONE
+        }
 
         val hasSelection = selectedPrimary.isNotEmpty() || selectedSecondary.isNotEmpty()
 
@@ -193,6 +215,7 @@ class HistoryAdapter(
 
     fun updateData(newList: List<LotteryDraw>) {
         historyList = newList
+        rebuildGroupCache()
         notifyDataSetChanged()
     }
 }
