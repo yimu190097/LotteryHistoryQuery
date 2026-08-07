@@ -73,7 +73,9 @@ data class LotteryDraw(
     /** 当期奖池金额（元），SSQ福运奖启停、DLT固定奖上浮都基于当期奖池判断 */
     val jackpotAmount: Long? = null,
     /** 当期全国销售额（元），展示给客户参考 */
-    val salesAmount: Long? = null
+    val salesAmount: Long? = null,
+    /** 追加投注奖级数据（仅大乐透等有追加玩法的彩种有，其他彩种为 emptyList） */
+    val appendPrizeTiers: List<PrizeTierEntry?> = emptyList()
 ) {
     /** 基于 ruleVersionKey 和 config 快速拿到当期应展示的 RuleVersion（展示时首选） */
     fun resolveRuleVersion(config: LotteryTypeConfig): LotteryTypeConfig.RuleVersion {

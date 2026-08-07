@@ -10,7 +10,24 @@
     android:paddingTop="6dp"
     android:paddingBottom="6dp">
 
-    <!-- 顶部：序号 + 期号 + 日期，一行展示，文字大小按所在行信息综合考虑 -->
+    <!-- 规则版本分组标题（仅每组第一期显示，其他期GONE） -->
+    <TextView
+        android:id="@+id/tvRuleSectionHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:layout_marginBottom="4dp"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        android:background="@drawable/bg_policy_section_header"
+        android:textColor="#1B5E20"
+        android:textSize="@dimen/small_text_size"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <!-- 顶部：序号 + 期号 + 日期 + 政策标签，一行展示，文字大小按所在行信息综合考虑 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -47,6 +64,23 @@
             android:layout_marginStart="6dp"
             android:textColor="@color/text_secondary"
             android:textSize="@dimen/micro_text_size"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <!-- 政策标签徽章：每期显示，提示该期适用的规则版本（防止不同期规则混排困惑） -->
+        <TextView
+            android:id="@+id/tvPolicyBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/bg_policy_badge"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:textColor="#1B5E20"
+            android:textSize="@dimen/micro_text_size"
+            android:textStyle="bold"
             android:maxLines="1"
             android:ellipsize="end" />
     </LinearLayout>

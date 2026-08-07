@@ -14,7 +14,7 @@ import androidx.room.RoomDatabase
         PendingSyncEntity::class,
         ChatMessageEntity::class
     ],
-    version = 9,
+    version = 10, // v10：追加投注奖级字段 appendPrizeTiers
     exportSchema = false
 )
 abstract class LotteryDatabase : RoomDatabase() {

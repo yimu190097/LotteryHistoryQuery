@@ -201,6 +201,22 @@ object LotteryXlsParser {
                     prizeTierPairCount = ruleVersion.prizeTierPairCount
                 )
 
+                // ===== 追加投注段（大乐透等）：基本投注之后 appendTierPairCount 对 =====
+                val tiersStart = extraStart + ruleVersion.extraFieldCount
+                val expectedPairs = ruleVersion.prizeTierPairCount
+                val appendPairs = ruleVersion.appendTierPairCount
+                val appendTiers = mutableListOf<PrizeTierEntry>()
+                if (appendPairs > 0) {
+                    val appendStart = tiersStart + expectedPairs * 2
+                    for (k in 0 until appendPairs) {
+                        val cStr = parts.getOrNull(appendStart + k * 2)
+                        val aStr = parts.getOrNull(appendStart + k * 2 + 1)
+                        val cVal = cStr?.let { parseNumberSafe(it) }?.toInt() ?: 0
+                        val aVal = aStr?.let { parseNumberSafe(it) } ?: 0L
+                        appendTiers.add(PrizeTierEntry(count = cVal, amount = aVal))
+                    }
+                }
+
                 // —— 结构一致性审计 ——
                 val actualTierCount = allTiers.size
                 val expected = ruleVersion.realTiersToUse
@@ -227,7 +243,8 @@ object LotteryXlsParser {
                         actualTierCount = actualTierCount,
                         tierMatchStatus = tierMatchStatus,
                         jackpotAmount = jackpotAmount,
-                        salesAmount = salesAmount
+                        salesAmount = salesAmount,
+                        appendPrizeTiers = appendTiers
                     )
                 )
             } catch (_: Exception) {

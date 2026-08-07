@@ -237,21 +237,43 @@ class DrawDetailDialog(
         }
 
         merged.forEachIndexed { idx, row ->
-            val entry = row.tierEntry
-
-            // ---- 中奖注数列（只能用真实数据）----
+            // ---- 中奖注数：同等奖合并累加（基本投注+追加投注），同质信息合并 ----
             val countText = when {
-                entry == null -> "—"
-                entry.count > 0 -> "${entry.count}注"
-                else -> "空开"   // entry.count == 0：真实数据就是空开
+                row.totalCount == null -> "—"
+                row.totalCount > 0 -> {
+                    if (row.hasAppend && row.appendCount != null && row.appendCount > 0) {
+                        "${row.totalCount}注\n（追加${row.appendCount}注）"
+                    } else {
+                        "${row.totalCount}注"
+                    }
+                }
+                else -> "空开"   // totalCount == 0：真实空开
             }
 
-            // ---- 单注奖金列（只能用真实数据）----
-            val amountText = when {
-                entry == null -> "—"
-                entry.amount > 0L -> formatAmount(entry.amount)
-                entry.count == 0 -> "空开无奖金"    // count 0 + amount 0：真实空开
-                else -> "—"
+            // ---- 单注奖金：金额不同分两行展示（绝不合并基本/追加金额） ----
+            val amountText = buildString {
+                val bAmt = row.baseAmount
+                val aAmt = row.appendAmount
+                val countEmpty = row.totalCount == null
+                val isEmpty = row.totalCount == 0
+
+                if (countEmpty) {
+                    append("—")
+                } else if (isEmpty) {
+                    append("空开无奖金")
+                } else {
+                    var shown = false
+                    if (bAmt != null && bAmt > 0L) {
+                        append("基本投注 ").append(formatAmount(bAmt))
+                        shown = true
+                    }
+                    if (row.hasAppend && aAmt != null && aAmt > 0L) {
+                        if (shown) append("\n")
+                        append("追加投注 ").append(formatAmount(aAmt))
+                        shown = true
+                    }
+                    if (!shown) append("—")
+                }
             }
 
             val rowView = buildPrizeRow(
@@ -436,29 +458,44 @@ class DrawDetailDialog(
         return card
     }
 
-    // ================ 数据对齐：rules ↔ allPrizeTiers 合并 ================
+    // ================ 数据对齐：rules ↔ 基本投注 + 追加投注 合并 ================
+    /**
+     * 合并后的展示行：
+     *  - 同奖项名(prizeName)的所有命中方式（如大乐透三等奖=5+0和4+2）→ 命中规则列合并成多行文本
+     *  - 同奖项名的基本投注注数 + 追加投注注数 → 注数列**合并累加**（只合并相同维度：注数是总量，可加）
+     *  - 基本投注金额 vs 追加投注金额 → 金额列**分两行显示**（不同信息绝不合并）
+     *  - 若追加投注全0或金额=基本×80%但同奖项，仍分开展示保证不误导
+     */
     private data class MergedPrizeRow(
         val prizeName: String,
-        val matchText: String, // 命中规则（含规则固定奖金说明：「规则固定¥X」写在此处，只作规则说明，不作真实开奖数据）
-        val tierEntry: PrizeTierEntry? // 真实 allPrizeTiers 解析到的当期奖级（=null 表示本期未公开该奖级）
+        val matchText: String,              // 多个命中规则换行拼接
+        val totalCount: Int?,               // 基本投注注数 + 追加投注注数（累加合并，只合并"总注数"这类同质信息）
+        val baseAmount: Long?,              // 基本投注金额（=null代表当期该级别未公布）
+        val appendAmount: Long?,            // 追加投注金额（=null代表无追加/追加数据为空/两者金额已合并不可区分）
+        val appendCount: Int?,              // 追加投注单独注数，用于展示时提示"追加投注多少注"（如果有的话）
+        val hasAppend: Boolean              // 是否有追加投注数据展示（用于金额分行）
     )
 
     /**
-     * 【真实性红线 + 按期自动适配】：
-     *   - 注数/单注奖金两列**只能**来自真实 draw.allPrizeTiers（官方公开开奖数据）
-     *   - 规则版本由当期开奖日期决定（ruleVersion），不同阶段奖项设立可能不同
-     *   - 自动适配：展示奖级数 = min(realTiersToUse, 实际解析到的奖级对数)，
-     *     数据少几对就少展示几行（如双色球福运奖停发时只有6对，自动不显示福运奖行）
-     *   - 规则中"连续同名奖级"视为一个真实奖级，共享同一 entry
+     * 【核心原则】：
+     *  1) 同等奖名 → 合并注数（加法合并同质信息）；金额不同分多行展示（异质信息绝不合并）。
+     *  2) 规则版本按每期的 ruleVersionKey 自动适配（大乐透2026=7级 / 2019=9级，绝不混排）。
+     *  3) 缺失数据就显示"—"，绝不兜底伪数据。
      */
     private fun mergePrizeTiersWithRules(
         ruleVersion: LotteryTypeConfig.RuleVersion,
         tiers: List<PrizeTierEntry?>
     ): List<MergedPrizeRow> {
-        val merged = mutableListOf<MergedPrizeRow>()
-        // 自动适配：实际数据奖级对数 ≤ realTiersToUse 时按实际数据为准
+        val appendTiers = draw?.appendPrizeTiers.orEmpty()
         val effectiveCount = minOf(ruleVersion.realTiersToUse, tiers.size)
         val trimmedTiers = tiers.take(effectiveCount)
+
+        // Step1: 按奖项名分组 → 收集同奖名下的 dedup indices（规则侧）和多条命中规则文本
+        data class GroupInfo(
+            val matchLines: MutableList<String> = mutableListOf(),
+            val dedupIndex: Int // 取第一次出现的 index 作为基本投注 entry 的定位
+        )
+        val groups = linkedMapOf<String, GroupInfo>() // LinkedHashMap 按规则顺序保留
         var dedupIdx = -1
         var lastName: String? = null
         ruleVersion.rules.forEach { rule ->
@@ -469,23 +506,53 @@ class DrawDetailDialog(
                 dedupIdx++
                 lastName = rule.prizeName
             }
-            val entry = trimmedTiers.getOrNull(dedupIdx)
-            // 命中规则 + 规则固定奖金（如双色球三等奖「规则固定¥3,000」）→ 拼到规则列，不进金额列
+            val info = groups.getOrPut(rule.prizeName) { GroupInfo(dedupIndex = dedupIdx) }
             val baseMatch = rule.description.ifEmpty { buildMatchText(rule) }
             val fullMatch = if (rule.fixedAmountYuan != null) {
-                baseMatch + "（规则固定¥${rule.fixedAmountYuan}）"
+                "$baseMatch（规则固定¥${rule.fixedAmountYuan}）"
             } else {
                 baseMatch
             }
-            merged.add(
+            info.matchLines.add(fullMatch)
+        }
+
+        // Step2: 对每个奖项组，计算注数合并/金额分行
+        val result = mutableListOf<MergedPrizeRow>()
+        groups.forEach { (prizeName, info) ->
+            val baseEntry = trimmedTiers.getOrNull(info.dedupIndex)
+            val appendEntry = if (ruleVersion.appendTierPairCount > 0) {
+                appendTiers.getOrNull(info.dedupIndex)
+            } else null
+
+            // —— 注数：同等奖合并（基本投注注数 + 追加投注注数，同质信息加法合并）——
+            val baseCount = baseEntry?.count
+            val appCount = appendEntry?.count
+            val mergedCount = when {
+                baseCount != null && appCount != null && appCount > 0 -> baseCount + appCount
+                else -> baseCount
+            }
+
+            // —— 金额：不同信息绝不合并（基本/追加金额分两行展示）——
+            val bAmount = baseEntry?.amount?.takeIf { baseEntry.count?.let { c -> c > 0 || it == 0L } ?: true }
+            val aAmount = appendEntry?.amount?.takeIf {
+                appendEntry.count?.let { c -> c > 0 || it == 0L } ?: true
+            }
+            val hasAppendData = appendEntry != null &&
+                (appendEntry.count?.let { it > 0 } == true || appendEntry.amount?.let { it > 0L } == true)
+
+            result.add(
                 MergedPrizeRow(
-                    prizeName = rule.prizeName,
-                    matchText = fullMatch,
-                    tierEntry = entry
+                    prizeName = prizeName,
+                    matchText = info.matchLines.joinToString("\n"),
+                    totalCount = mergedCount,
+                    baseAmount = bAmount,
+                    appendAmount = if (hasAppendData) aAmount else null,
+                    appendCount = if (hasAppendData) appCount else null,
+                    hasAppend = hasAppendData
                 )
             )
         }
-        return merged
+        return result
     }
 
     private fun buildMatchText(rule: LotteryTypeConfig.MatchRuleDef): String = buildString {
@@ -540,7 +607,7 @@ class DrawDetailDialog(
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.2f)
             setPadding(cellPadH, cellPadV, cellPadH, cellPadV)
             gravity = Gravity.CENTER
-            maxLines = 2
+            maxLines = 5
             if (isHeader) {
                 setTextColor(0xFFFFFFFF.toInt())
                 setBackgroundColor(0xFFC62828.toInt())
@@ -562,13 +629,13 @@ class DrawDetailDialog(
         }
         row.addView(col1)
 
-        // 列2：命中规则（权重 2.0）
+        // 列2：命中规则（权重 2.0）—— 支持多行（5+0和4+2合并三等奖时有多条）
         val col2 = TextView(context).apply {
             text = matchText
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2.0f)
             setPadding(cellPadH, cellPadV, cellPadH, cellPadV)
             gravity = Gravity.CENTER
-            maxLines = 2
+            maxLines = 10
             if (isHeader) {
                 setTextColor(0xFFFFFFFF.toInt())
                 setBackgroundColor(0xFFD84315.toInt())
@@ -581,13 +648,13 @@ class DrawDetailDialog(
         }
         row.addView(col2)
 
-        // 列3：注数（权重 1.0）
+        // 列3：注数（权重 1.0）—— 支持多行：合并后注数换行显示追加X注
         val col3 = TextView(context).apply {
             text = countText
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
             setPadding(cellPadH, cellPadV, cellPadH, cellPadV)
             gravity = Gravity.CENTER
-            maxLines = 1
+            maxLines = 5
             if (isHeader) {
                 setTextColor(0xFFFFFFFF.toInt())
                 setBackgroundColor(0xFFEF6C00.toInt())
@@ -602,13 +669,13 @@ class DrawDetailDialog(
         }
         row.addView(col3)
 
-        // 列4：单注奖金（权重 1.2）
+        // 列4：单注奖金（权重 1.2）—— 支持多行：基本投注 + 追加投注分两行
         val col4 = TextView(context).apply {
             text = amountText
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.2f)
             setPadding(cellPadH, cellPadV, cellPadH, cellPadV)
             gravity = Gravity.CENTER
-            maxLines = 1
+            maxLines = 5
             if (isHeader) {
                 setTextColor(0xFFFFFFFF.toInt())
                 setBackgroundColor(0xFFF57C00.toInt())

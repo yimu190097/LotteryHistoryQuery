@@ -22,9 +22,11 @@ class HistoryAdapter(
 ) : RecyclerView.Adapter<HistoryAdapter.ViewHolder>() {
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val tvRuleSectionHeader: TextView = view.findViewById(R.id.tvRuleSectionHeader)
         val tvIndex: TextView = view.findViewById(R.id.tvIndex)
         val tvIssue: TextView = view.findViewById(R.id.tvIssue)
         val tvDate: TextView = view.findViewById(R.id.tvDate)
+        val tvPolicyBadge: TextView = view.findViewById(R.id.tvPolicyBadge)
         val llNumbers: ViewGroup = view.findViewById(R.id.llNumbers)
         val llHitSummary: View = view.findViewById(R.id.llHitSummary)
         val tvHitPrimary: TextView = view.findViewById(R.id.tvHitPrimary)
@@ -40,9 +42,42 @@ class HistoryAdapter(
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val draw = historyList[position]
+        val ruleVersion = draw.resolveRuleVersion(config)
+        val prevDraw = historyList.getOrNull(position - 1)
+        val prevRuleVersion = prevDraw?.resolveRuleVersion(config)
+
+        // ======= 规则版本分组标题（仅每组第一期显示，其余GONE） =======
+        // 关键：当且仅当 当前期的ruleVersionKey 与 上一期的不同，才显示分组标题
+        // 这样可以确保同一页面不同期数（规则不同的）被视觉隔开，用户不混淆
+        val isFirstOfRuleGroup = (prevRuleVersion == null) || (prevRuleVersion.key != ruleVersion.key)
+        if (isFirstOfRuleGroup) {
+            holder.tvRuleSectionHeader.visibility = View.VISIBLE
+            // 格式：● 【政策标签】 生效日期XXXX-XX-XX起 ｜ 共NN期 · 变更说明概要
+            val groupCount = historyList.count { it.resolveRuleVersion(config).key == ruleVersion.key }
+            holder.tvRuleSectionHeader.text = buildString {
+                append("● ")
+                append(ruleVersion.policyLabel)
+                append(" ｜ 生效：")
+                append(ruleVersion.effectiveFromDate)
+                append("起 ｜ 本组")
+                append(groupCount)
+                append("期")
+                append("\n")
+                append("   说明：")
+                append(ruleVersion.changeNote.take(80))
+                if (ruleVersion.changeNote.length > 80) append("…")
+            }
+        } else {
+            holder.tvRuleSectionHeader.visibility = View.GONE
+        }
+
         holder.tvIndex.text = (position + 1).toString()
         holder.tvIssue.text = draw.issue
         holder.tvDate.text = draw.date.orEmpty()
+
+        // ======= 政策标签徽章：每期item右上角都显示，让用户一眼知道本期规则版本 =======
+        // 即便在组内也显示，防止用户滚动到中间时忘记当前属于哪个规则阶段
+        holder.tvPolicyBadge.text = ruleVersion.policyLabel
 
         val hasSelection = selectedPrimary.isNotEmpty() || selectedSecondary.isNotEmpty()
 

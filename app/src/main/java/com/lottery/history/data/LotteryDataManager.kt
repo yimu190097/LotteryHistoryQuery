@@ -139,7 +139,8 @@ object LotteryDataManager {
                             actualTierCount = it.actualTierCount,
                             tierMatchStatus = it.tierMatchStatus,
                             jackpotAmount = it.jackpotAmount,
-                            salesAmount = it.salesAmount
+                            salesAmount = it.salesAmount,
+                            appendPrizeTiers = it.appendPrizeTiers.encodeTiers()
                         )
                     })
                     caches[config.code] = d.getAllByType(config.code).map { e -> e.toModel() }
@@ -197,7 +198,8 @@ object LotteryDataManager {
             actualTierCount = actualTierCount,
             tierMatchStatus = tierMatchStatus,
             jackpotAmount = jackpotAmount,
-            salesAmount = salesAmount
+            salesAmount = salesAmount,
+            appendPrizeTiers = decodePrizeTiers(appendPrizeTiers)
         )
 
     /**

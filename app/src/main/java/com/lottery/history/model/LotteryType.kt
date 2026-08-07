@@ -54,7 +54,8 @@ data class LotteryTypeConfig(
         val rules: List<MatchRuleDef>,
         val realTiersToUse: Int = rules.size,
         val prizeTierPairCount: Int = realTiersToUse,
-        val extraFieldCount: Int = 0
+        val extraFieldCount: Int = 0,
+        val appendTierPairCount: Int = 0
     )
 
     data class MatchRuleDef(
@@ -157,6 +158,7 @@ object LotteryType {
                     "奖池<8亿：三5000/四300/五150/六15/七5；奖池≥8亿上浮至6666/380/200/18/7。一二等奖总额各封顶1亿。",
                 realTiersToUse = 7, prizeTierPairCount = 7,
                 extraFieldCount = 2,  // 销售额 + 奖池
+                appendTierPairCount = 7,
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
@@ -181,6 +183,7 @@ object LotteryType {
                     "六200/七100/八15/九5，追加投注最高1800万。",
                 realTiersToUse = 9, prizeTierPairCount = 9,
                 extraFieldCount = 2,
+                appendTierPairCount = 9,
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
