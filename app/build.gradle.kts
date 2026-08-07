@@ -2,6 +2,8 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("kotlin-kapt")
+    // Detekt 模块级静态分析（分析当前 app 模块下的源码）
+    id("io.gitlab.arturbosch.detekt")
 }
 
 android {
@@ -34,6 +36,10 @@ android {
         }
         debug {
             signingConfig = signingConfigs.getByName("release")
+            // JaCoCo 覆盖率：允许 debug buildType 生成本地单元测试的执行数据（AGP 8.x 新 API）
+            testCoverage {
+                enableUnitTestCoverage = true
+            }
         }
     }
     compileOptions {
@@ -106,4 +112,79 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.11.1")
     testImplementation("androidx.test:core:1.5.0")
     testImplementation("androidx.test.ext:junit:1.1.5")
+}
+
+// ============ JaCoCo 覆盖率报告（Android debug 本地单元测试） ============
+// 使用方式：
+//   1. gradle testDebugUnitTest                      先跑单元测试生成 exec 数据
+//   2. gradle jacocoDebugUnitTestReport              生成 html/xml/csv 覆盖率报告
+//   3. 报告路径：app/build/reports/jacoco/jacocoDebugUnitTestReport/
+androidComponents {
+    onVariants(selector().withBuildType("debug")) { variant ->
+        val variantName = variant.name
+        val capitalizedVariant = variantName.replaceFirstChar(Char::uppercaseChar)
+        val buildDirFile = layout.buildDirectory.get().asFile
+
+        tasks.register<JacocoReport>("jacoco${capitalizedVariant}UnitTestReport") {
+            group = "Verification"
+            description = "生成 ${capitalizedVariant} 本地单元测试的 JaCoCo 覆盖率报告"
+            // 先跑测试，确保有覆盖率原始数据
+            dependsOn("test${capitalizedVariant}UnitTest")
+
+            // 被分析的字节码目录（排除 R.class / BuildConfig / 数据绑定生成类等）
+            classDirectories.setFrom(
+                files(
+                    fileTree("${buildDirFile}/tmp/kotlin-classes/${variantName}") {
+                        exclude(
+                            "**/R.class",
+                            "**/R$*.class",
+                            "**/BuildConfig.*",
+                            "**/Manifest*.*",
+                            "**/*Test*.*",
+                            "**/*\$ViewInjector*.*",
+                            "**/*\$ViewBinder*.*",
+                            "**/data/**/*Dao_Impl*.class",
+                            "**/db/**/*_Impl*.class",
+                            "**/databinding/**/*.*"
+                        )
+                    },
+                    fileTree("${buildDirFile}/intermediates/javac/${variantName}/classes") {
+                        exclude(
+                            "**/R.class",
+                            "**/R$*.class",
+                            "**/BuildConfig.*",
+                            "**/Manifest*.*"
+                        )
+                    }
+                )
+            )
+
+            // 源码目录：Kotlin + Java
+            sourceDirectories.setFrom(
+                files(
+                    "src/main/java",
+                    "src/main/kotlin",
+                    "src/${variantName}/java",
+                    "src/${variantName}/kotlin"
+                )
+            )
+
+            // JaCoCo 执行数据路径：testDebugUnitTest 生成的 .exec 文件
+            executionData.setFrom(
+                fileTree(buildDirFile) {
+                    include(
+                        "jacoco/test${capitalizedVariant}UnitTest.exec",
+                        "outputs/unit_test_code_coverage/${variantName}UnitTest/test${capitalizedVariant}UnitTest.exec"
+                    )
+                }
+            )
+
+            reports {
+                xml.required.set(true)   // 给 CI 覆盖率工具（Codecov / SonarQube）消费
+                csv.required.set(false)
+                html.required.set(true)  // 人类可读的覆盖率 HTML
+                html.outputLocation.set(file("${buildDirFile}/reports/jacoco/jacoco${capitalizedVariant}UnitTestReport/html"))
+            }
+        }
+    }
 }
