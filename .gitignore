@@ -24,3 +24,21 @@ Thumbs.db
 # Kotlin 缓存
 .kotlin/
 android-sdk/
+
+# 构建产物（二进制包绝对不能入 git，严重污染仓库历史）
+*.apk
+*.aab
+*.ap_
+*.dex
+*.aar
+
+# 签名密钥（绝不能提交，会让任何人能伪造你的签名APK）
+*.keystore
+*.jks
+*.p12
+*.pfx
+/signing.properties
+
+# 发布目录
+releases/*.apk
+releases/*.aab

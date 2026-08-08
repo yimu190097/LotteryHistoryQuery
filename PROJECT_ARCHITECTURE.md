@@ -1,6 +1,6 @@
 # 彩票历史开奖查询系统 - 项目架构文档
 
-> 版本：v24.1 | 更新日期：2026-08-08 | 仓库：https://github.com/yimu190097/LotteryHistoryQuery
+> 版本：v22.0 | 更新日期：2026-08-08 | 仓库：https://github.com/yimu190097/LotteryHistoryQuery
 
 ---
 
