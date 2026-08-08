@@ -73,11 +73,41 @@ data class LotteryTypeConfig(
     val extraFieldCount: Int get() = ruleVersions.first().extraFieldCount
     val prizeTierPairCount: Int get() = ruleVersions.first().prizeTierPairCount
 
-    /** 按开奖日期选择适用的规则版本（解析时用此函数确定当期版本） */
-    fun rulesForDate(date: String?): RuleVersion {
-        if (date.isNullOrEmpty()) return ruleVersions.first()
-        return ruleVersions.firstOrNull { date >= it.effectiveFromDate }
+    /**
+     * 按开奖日期选择适用的规则版本（解析时用此函数确定当期版本）。
+     *
+     * 期号兜底：当 [date] 为空（seed 数据 / 部分历史数据缺失日期字段）时，
+     * 从 [issue] 前缀推断一个假年-月-日再做版本定位，避免所有历史期被一刀切归到最新版。
+     */
+    fun rulesForDate(date: String?, issue: String? = null): RuleVersion {
+        val actualDate = when {
+            !date.isNullOrEmpty() -> date
+            !issue.isNullOrEmpty() -> inferDateFromIssue(issue, this.code)
+            else -> null
+        }
+        if (actualDate == null) return ruleVersions.first()
+        return ruleVersions.firstOrNull { actualDate >= it.effectiveFromDate }
             ?: ruleVersions.last()
+    }
+
+    /**
+     * 按期号前缀推断一个"足够用于规则版本选择"的年-月-日字符串（非精确开奖日）。
+     * 约定：SSQ issue = 年份5位（例 2026090 = 2026年第90期）；
+     *       DLT issue = 5位（例 26088 = 2026年第88期）→ 取前2位补 "20"；
+     *       其它：若前4位数字 ≥ 1900 则当作年份，否则取前2位补 20。
+     */
+    private fun inferDateFromIssue(issue: String, code: String): String? {
+        val digits = issue.filter { it.isDigit() }.ifEmpty { return null }
+        return when (code) {
+            "ssq" -> if (digits.length >= 4) "${digits.take(4)}-06-15" else null
+            "dlt" -> if (digits.length >= 2) "20${digits.take(2)}-06-15" else null
+            else -> when {
+                digits.length >= 4 && digits.take(4).toIntOrNull()
+                    ?.let { it in 1900..2100 } == true -> "${digits.take(4)}-06-15"
+                digits.length >= 2 -> "20${digits.take(2)}-06-15"
+                else -> null
+            }
+        }
     }
 }
 

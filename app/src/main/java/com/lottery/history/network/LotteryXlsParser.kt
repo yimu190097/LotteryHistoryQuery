@@ -165,8 +165,8 @@ object LotteryXlsParser {
                     if (secondary.size < config.parseSecondaryCount) continue
                 }
 
-                // 按当期开奖日期选择适用的规则版本（不同阶段奖项结构可能不同）
-                val ruleVersion = config.rulesForDate(date)
+                // 按当期开奖日期 + 期号选择适用的规则版本（不同阶段奖项结构可能不同）
+                val ruleVersion = config.rulesForDate(date, issue)
 
                 // 号码之后的剩余部分：extraFieldCount 个额外字段（销售额/奖池/出球顺序）+ 成对奖级
                 val extraStart = numStart + config.parsePrimaryCount +

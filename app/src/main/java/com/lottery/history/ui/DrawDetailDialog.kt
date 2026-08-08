@@ -400,8 +400,9 @@ class DrawDetailDialog(
             setPadding(pad, (8 * density).toInt(), pad, (4 * density).toInt())
             gravity = Gravity.CENTER_VERTICAL
         }
+        val issueTag = draw?.issue?.let { "  期号：$it" } ?: ""
         val tvCurrent = TextView(context).apply {
-            text = "【本期适用】${currentRule.policyLabel}\n生效日期：${currentRule.effectiveFromDate}起"
+            text = "【本期适用】${currentRule.policyLabel}${issueTag}\n生效日期：${currentRule.effectiveFromDate}起"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setTextColor(0xFF1B5E20.toInt())
             setTypeface(null, Typeface.BOLD)

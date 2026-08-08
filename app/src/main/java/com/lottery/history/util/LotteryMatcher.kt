@@ -84,19 +84,27 @@ object LotteryMatcher {
                     k.prizeName == rule.prizeName
             }
 
-            val allDraws = matchingEntries.flatMap { it.value }
             // 标记所有已消费的 bucket 为 visited（防止重复计入尾部）
             matchingEntries.forEach { (k, _) -> visited.add(k) }
 
-            inOrder.add(
-                QueryResultItem(
-                    matchPrimary = rule.matchPrimary,
-                    matchSecondary = rule.matchSecondary,
-                    prizeName = rule.prizeName,
-                    count = allDraws.size,
-                    matches = allDraws
+            // 【按政策版本分别输出】：不再多版本合并为一个奖项行，而是各版本独立一行 + 政策版本徽章
+            // 这样用户能明确看出"命中七等奖 105 期"是 DLT 2026 七等奖（5元/7元），
+            // "命中七等奖 160 期"是 DLT 2019 七等奖（100元），两者金额和意义完全不同。
+            for ((bk, draws) in matchingEntries) {
+                val displayName = config.ruleVersions.firstOrNull { it.key == bk.ruleVersionKey }
+                    ?.let { rv -> if (config.ruleVersions.size > 1) "${rv.policyLabel}｜${rv.realTiersToUse}级｜${rule.prizeName}" else rule.prizeName }
+                    ?: rule.prizeName
+                inOrder.add(
+                    QueryResultItem(
+                        matchPrimary = rule.matchPrimary,
+                        matchSecondary = rule.matchSecondary,
+                        prizeName = displayName,
+                        count = draws.size,
+                        matches = draws,
+                        sourceRuleVersionKey = bk.ruleVersionKey
+                    )
                 )
-            )
+            }
         }
 
         // 2b) 旧规则版本中剩余、在最新规则里已不存在的奖级（如 DLT 2019 八等奖/九等奖），
@@ -113,7 +121,8 @@ object LotteryMatcher {
                     matchSecondary = key.matchSecondary,
                     prizeName = displayName,
                     count = draws.size,
-                    matches = draws
+                    matches = draws,
+                    sourceRuleVersionKey = key.ruleVersionKey
                 )
             )
         }

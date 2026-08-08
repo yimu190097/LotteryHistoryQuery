@@ -525,7 +525,38 @@ class LotteryFragment : Fragment() {
             arrayOf(1.6f, 1.4f, 0f, 1.15f, 1.35f)
         }
 
+        // ———【按政策版本分组】：多版本彩种，版本切换时在顶部插入分组标题行———
+        // 让用户一眼看出这个七等奖是2026版7级规则的七等奖（5/7元）
+        // 还是2019版9级规则的七等奖（旧100元），两者金额和规则完全不同。
+        var lastGroupKey: String? = null
         results.forEachIndexed { index, item ->
+            val groupKey = item.sourceRuleVersionKey
+            if (config.ruleVersions.size > 1 && groupKey != null && groupKey != lastGroupKey) {
+                lastGroupKey = groupKey
+                val version = config.ruleVersions.firstOrNull { it.key == groupKey }
+                val groupTitle = version?.let { rv ->
+                    "▌【${rv.policyLabel}】${rv.realTiersToUse}级规则  生效日：${rv.effectiveFromDate}起"
+                } ?: "▌$groupKey"
+                val groupRow = LinearLayout(requireContext()).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    )
+                    setBackgroundColor(0xFFE8F5E9.toInt()) // 绿色背景，区分政策组
+                    val pad = (10 * density).toInt()
+                    setPadding(pad, (10 * density).toInt(), pad, (6 * density).toInt())
+                }
+                val tvGroup = TextView(requireContext()).apply {
+                    text = groupTitle
+                    setTextColor(0xFF1B5E20.toInt())
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                    setTypeface(null, Typeface.BOLD)
+                }
+                groupRow.addView(tvGroup)
+                resultContainer.addView(groupRow)
+            }
+
             val row = LinearLayout(requireContext()).apply {
                 orientation = LinearLayout.HORIZONTAL
                 layoutParams = LinearLayout.LayoutParams(

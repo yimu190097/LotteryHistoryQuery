@@ -102,7 +102,8 @@ class LatestDrawsDialog(context: Context) : Dialog(context) {
             // 否则：若大乐透最新一期是老9级（还没到2026-01-31），徽章会误标"2026新规·7级"
             val currentRule = draw?.resolveRuleVersion(config) ?: config.ruleVersions.first()
             val tvPolicyBadge = TextView(context).apply {
-                text = currentRule.policyLabel
+                val issueLabel = draw?.issue?.let { i -> "｜期号$i" } ?: ""
+                text = "${currentRule.policyLabel}$issueLabel"
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
                 setTextColor(Color.parseColor("#1B5E20"))
                 setTypeface(null, Typeface.BOLD)

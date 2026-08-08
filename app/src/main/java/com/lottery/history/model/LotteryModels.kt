@@ -135,13 +135,19 @@ data class LotteryDraw(
     /** 条件性奖级开关 Map（福运奖 ON/OFF/HOLD、DLT上浮 NORMAL/UP 等） */
     val conditionalFlags: Map<String, String> = emptyMap()
 ) {
-    /** 基于 ruleVersionKey 和 config 快速拿到当期应展示的 RuleVersion（展示时首选） */
+    /**
+     * 基于 ruleVersionKey + issue + date 三级兜底拿到当期应展示的 RuleVersion（展示时首选）。
+     * 优先级：① 已持久化的 ruleVersionKey（最高，来自解析时确定或 seed 按期号推导）
+     *        ② 按期号 issue 前缀推断年份定位（适用于 date 缺失的 seed 历史期）
+     *        ③ 按日期 date 定位（通用）
+     *        ④ config.ruleVersions.first()（终极保底，即最新版）
+     */
     fun resolveRuleVersion(config: LotteryTypeConfig): LotteryTypeConfig.RuleVersion {
         if (ruleVersionKey != null) {
             val cached = config.ruleVersions.firstOrNull { it.key == ruleVersionKey }
             if (cached != null) return cached
         }
-        return config.rulesForDate(date)
+        return config.rulesForDate(date, issue)
     }
 }
 
@@ -150,5 +156,7 @@ data class QueryResultItem(
     val matchSecondary: Int,
     val prizeName: String,
     val count: Int,
-    val matches: List<LotteryDraw>
+    val matches: List<LotteryDraw>,
+    /** 该命中统计桶来源的规则版本 key（=BucketKey.ruleVersionKey），用于 UI 按政策分组 */
+    val sourceRuleVersionKey: String? = null
 )
