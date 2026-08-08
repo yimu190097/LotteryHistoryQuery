@@ -53,6 +53,13 @@ android {
         viewBinding = true
     }
 
+    // Room schema 导出目录（exportSchema=true 时必须配置）
+    kapt {
+        arguments {
+            arg("room.schemaLocation", "$projectDir/schemas")
+        }
+    }
+
     testOptions {
         // Robolectric 需要读取项目资源/Manifest，在本地 JVM 上模拟 Android
         unitTests {

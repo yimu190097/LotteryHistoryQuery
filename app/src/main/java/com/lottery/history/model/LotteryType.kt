@@ -264,6 +264,7 @@ object LotteryType {
                 changeNote = "2014年第14052期至2019年的6级规则，奖级由8个缩为6个，一/二/三等奖浮动，四五级固定。",
                 realTiersToUse = 6, prizeTierPairCount = 6,
                 extraFieldCount = 2,
+                appendTierPairCount = 6,  // DLT 上市即有追加投注，追加奖级数=基本奖级数
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
@@ -283,6 +284,7 @@ object LotteryType {
                 changeNote = "2009年第09121期至2014年的8级规则，奖池≥1亿时一等奖可达1000万。",
                 realTiersToUse = 8, prizeTierPairCount = 8,
                 extraFieldCount = 2,
+                appendTierPairCount = 8,  // 追加投注奖级数=基本奖级数
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
@@ -305,6 +307,7 @@ object LotteryType {
                 changeNote = "2007年5月28日上市首版规则，一等奖500万封顶。",
                 realTiersToUse = 8, prizeTierPairCount = 8,
                 extraFieldCount = 2,
+                appendTierPairCount = 8,  // 追加投注奖级数=基本奖级数
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
@@ -327,6 +330,8 @@ object LotteryType {
     )
 
     // ==================== 福彩3D（规则长期稳定）====================
+    //  选号匹配：3 位全中 = 中奖（直选 1040 元为最高奖）。
+    //  组选3/6 是投注方式而非不同匹配条件，详情页已展示官方真实三档奖级数据。
     val FC3D = LotteryTypeConfig(
         code = "3d", displayName = "福彩3D",
         url = "http://data.17500.cn/3d_desc.txt",
@@ -338,13 +343,12 @@ object LotteryType {
                 key = "3d_stable",
                 effectiveFromDate = "1900-01-01",
                 policyLabel = "现行规则",
-                changeNote = "直选/组选3/组选6三档固定奖，规则长期稳定。返奖比例53%。",
+                changeNote = "直选1040/组选3=346/组选6=173三档固定奖，规则长期稳定。返奖比例53%。" +
+                    "组选3/6为投注方式，选号匹配统一展示为直选命中。",
                 realTiersToUse = 3, prizeTierPairCount = 3,
                 extraFieldCount = 6,  // 试机号3 + 其他 + 销售额
                 rules = listOf(
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字和位置全对（直选）", "直选奖", 1040),
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位相同数字，对2位位置（组选3）", "组选3", 346),
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字全不同，任意顺序（组选6）", "组选6", 173)
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字全中", "直选奖", 1040)
                 )
             )
         ),
@@ -386,6 +390,7 @@ object LotteryType {
     )
 
     // ==================== 排列三（长期稳定）====================
+    //  同 FC3D：3 位全中 = 中奖，组选3/6 是投注方式，详情页展示真实三档奖级。
     val P3 = LotteryTypeConfig(
         code = "p3", displayName = "排列三",
         url = "http://data.17500.cn/pl3_desc.txt",
@@ -397,13 +402,12 @@ object LotteryType {
                 key = "p3_stable",
                 effectiveFromDate = "1900-01-01",
                 policyLabel = "现行规则",
-                changeNote = "直选/组选3/组选6三档固定奖，规则长期稳定。",
+                changeNote = "直选1040/组选3=346/组选6=173三档固定奖，规则长期稳定。" +
+                    "组选3/6为投注方式，选号匹配统一展示为直选命中。",
                 realTiersToUse = 3, prizeTierPairCount = 3,
                 extraFieldCount = 1,  // 销售额
                 rules = listOf(
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字和位置全对（直选）", "直选奖", 1040),
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位相同数字，对2位位置（组选3）", "组选3", 346),
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字全不同，任意顺序（组选6）", "组选6", 173)
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字全中", "直选奖", 1040)
                 )
             )
         ),

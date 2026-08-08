@@ -33,10 +33,10 @@ import kotlinx.coroutines.withContext
 object LotteryDataManager {
 
     private val mutex = Mutex()
-    private var dao: LotteryDao? = null
-    private var ruleVersionCatalogDao: RuleVersionCatalogDao? = null
-    private var matchRuleDefDao: MatchRuleDefDao? = null
-    private var prizeTierDao: PrizeTierDao? = null
+    @Volatile private var dao: LotteryDao? = null
+    @Volatile private var ruleVersionCatalogDao: RuleVersionCatalogDao? = null
+    @Volatile private var matchRuleDefDao: MatchRuleDefDao? = null
+    @Volatile private var prizeTierDao: PrizeTierDao? = null
     private var lastUpdate: Long = 0L
 
     /** 每个彩种的内存缓存 */
@@ -197,7 +197,9 @@ object LotteryDataManager {
                     //   兜底推断；实在两者都缺就标元数据缺失。
                     val rvKey = config?.let { cfg ->
                         val yearStr = if (type == "ssq") issue.take(4) else "20${issue.take(2)}"
-                        val fakeDate = "${yearStr}-01-01"
+                        // 用 06-15 而非 01-01：SSQ 2026-02-01 新规，01-01 < 02-01 会错误归到旧版
+                        // 06-15 是年中，确保该年所有期数都能匹配到当年生效的新规
+                        val fakeDate = "${yearStr}-06-15"
                         cfg.rulesForDate(fakeDate)?.key  // 安全调用链
                     }
                     list.add(

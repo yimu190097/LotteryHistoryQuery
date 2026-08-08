@@ -20,7 +20,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PrizeTierEntity::class
     ],
     version = 12,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class LotteryDatabase : RoomDatabase() {
     abstract fun lotteryDao(): LotteryDao

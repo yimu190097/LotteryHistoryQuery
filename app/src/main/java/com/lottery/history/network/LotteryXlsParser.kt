@@ -46,49 +46,54 @@ object LotteryXlsParser {
     private val euroNumberRegex = Regex("""^[+-]?\d{1,3}(?:\.\d{3})*(?:,\d+)?$""")
 
     /**
-     * 通用安全数字解析（严格校验千分位逗号格式，截断取整不四舍五入）：
+     * 通用安全数字解析（纯字符串操作，不经过 Double，零精度丢失）：
      *
      * 数据本质：彩票销售额/奖池/中奖金额均为【整元】，.0/.00 只是浮点格式化产物，
-     * 逗号是每3位一组的千分位分隔符（方便阅读）。因此截断小数部分即可得到正确整数。
-     * 不四舍五入：若出现 7999.9999（浮点误差），四舍五入会错误变成 8000，截断保留 7999。
+     * 逗号是每3位一组的千分位分隔符（方便阅读）。
      *
-     *  ① 纯整数/纯小数（无逗号）：直接截断转 Long（8000.0→8000，84337222.00→84337222）
-     *  ② 美式千分位（逗号每3位分组、"."小数点）：校验 [1~3位][,3位]*[.小数]，
-     *     去逗号后截断（"84,337,222.00"→84337222，"1,234,567"→1234567）
-     *  ③ 欧式小数（"."每3位分组、","小数点）：校验后去"."、逗号转"."，截断
-     *  ④ 畸形逗号位置（如 "84,33,7222"、"12,34"、"1,5"）一律拒绝返回 null
+     * 解析步骤：
+     *  1. 确定小数分隔符（美式="."，欧式=","）
+     *  2. 去除千分位分隔符（美式去","，欧式去"."）
+     *  3. 截断小数部分（只取整数部分，不四舍五入）
+     *  4. 纯数字字符串直接 toLongOrNull（Long 上限 9.2e18，安全覆盖所有彩票金额）
+     *
+     *  ① 纯整数/纯小数（无逗号）：8000.0→8000，84337222.00→84337222
+     *  ② 美式千分位：84,337,222.00→84337222
+     *  ③ 欧式小数：84.337.222,00→84337222
+     *  ④ 畸形逗号位置一律拒绝返回 null
      */
     private fun parseNumberSafe(raw: String): Long? {
         val trimmed = raw.trim()
         if (trimmed.isEmpty()) return null
 
-        // 1) 无逗号：纯整数或纯小数（如 8000.0、22、84337222.00）
-        if (',' !in trimmed) {
-            return toLongTruncated(trimmed)
+        // 1) 无逗号无点：纯整数，直接 toLongOrNull
+        if (',' !in trimmed && '.' !in trimmed) {
+            return trimmed.toLongOrNull()
         }
 
-        // 2) 美式千分位：逗号每3位分组、"."小数点（如 84,337,222.00）
+        // 2) 无逗号：纯整数或纯小数（如 8000.0、84337222.00）
+        if (',' !in trimmed) {
+            // 截断小数部分
+            val intPart = trimmed.substringBefore('.')
+            return intPart.toLongOrNull()
+        }
+
+        // 3) 美式千分位：逗号每3位分组、"."小数点（如 84,337,222.00）
         if (thousandsNumberRegex.matches(trimmed)) {
             val cleaned = trimmed.replace(",", "")
-            return toLongTruncated(cleaned)
+            val intPart = cleaned.substringBefore('.')
+            return intPart.toLongOrNull()
         }
 
-        // 3) 欧式小数："."每3位分组、","小数点（如 84.337.222,00、8000,50）
+        // 4) 欧式小数："."每3位分组、","小数点（如 84.337.222,00、8000,50）
         if (euroNumberRegex.matches(trimmed)) {
-            val cleaned = trimmed.replace(".", "").replace(",", ".")
-            return toLongTruncated(cleaned)
+            val cleaned = trimmed.replace(".", "")
+            val intPart = cleaned.substringBefore(',')
+            return intPart.toLongOrNull()
         }
 
-        // 4) 畸形格式（逗号位置不合法）拒绝
+        // 5) 畸形格式（逗号位置不合法）拒绝
         return null
-    }
-
-    /** Double 字符串 → 截断取整 Long（向零取整，不四舍五入）；溢出或非法返回 null */
-    private fun toLongTruncated(s: String): Long? {
-        val d = s.toDoubleOrNull() ?: return null
-        if (!d.isFinite() || d.isNaN()) return null
-        if (d < Long.MIN_VALUE.toDouble() || d > Long.MAX_VALUE.toDouble()) return null
-        return d.toLong()
     }
 
     fun parse(config: LotteryTypeConfig, input: InputStream): List<LotteryDraw> {
