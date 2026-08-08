@@ -1,4 +1,4 @@
-name: Build & Release APK v23
+name: Build & Release APK v24
 
 on:
   push:
@@ -49,27 +49,31 @@ jobs:
             find app/build/outputs -type f
             exit 1
           fi
-          cp "$APK" "LotteryHistoryQuery_v23.apk"
-          ls -lh LotteryHistoryQuery_v23.apk
+          cp "$APK" "LotteryHistoryQuery_v24.apk"
+          ls -lh LotteryHistoryQuery_v24.apk
 
-      - name: 创建 GitHub Release v23
+      - name: 创建 GitHub Release v24
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v23.0
-          name: v23.0 期政策自适应展示 · 分组展示+期号绑定徽章+开发插件全量集成
+          tag_name: v24.0
+          name: v24.0 期政策自适应展示 · 单分支整合版（主分支直接开发·无分支）
           body: |
-            ## v23.0 核心：旧版 Release 全部清理 → 重新生成最新发行版（commit 0f0f91e，含 detekt/spotless/jacoco/versions 开发插件 + 期政策自适应）
+            ## v24.0 版本说明：单分支开发整合 + 期政策自适应核心功能全量
 
-            ### 🗂️ 旧 Release 清理清单
-            - 已删除 v22.0 / v21.0 / v20 / v9.0 以及历史 tags v14.0 / v19，保持发行版列表纯净
+            ### 🏗️ 仓库结构（单人开发 · 无多分支）
+            - 仅保留 **main** 单一分支（已删除 trae/agent-4srDeZ、trae/agent-rM9PdF 等 agent 临时分支）
+            - `releases/` 目录已清理（v2~v9/v22 共 16 个历史 APK 全部删除）
+            - 旧 Tags / 旧 Releases 全部清理：v9.0 / v14.0 / v19 / v20 / v21.0 / v22.0 / v23.0
 
-            ### 🟢 期政策自适应（核心功能）
+            ### 🟢 期政策自适应展示（核心逻辑不变）
             - **版本定位三级兜底**：ruleVersionKey（解析时写入）> 期号 issue 前缀推断年份 > date 字段 > 最新版保底
-            - **选号命中统计按政策版本独立分组**：DLT 2026 新规（7级奖池联动）七等奖 0+2 与 DLT 2019（9级）七等奖 4+0 分两行独立显示，杜绝"同奖名跨政策合并"的金额误导
+            - **选号命中统计按政策版本独立分组**：DLT 2026 新规（7级奖池联动）七等奖 0+2 与 DLT 2019（9级）七等奖 4+0 分两行独立显示
+              - 杜绝"同奖名跨政策合并"的金额误导：DLT 2026 七等奖 = 5/7元/期 vs DLT 2019 七等奖 = 100元/期
+              - LotteryMatcher 按 BucketKey(ruleVersionKey, tier) 独立输出；QueryResultItem 带 sourceRuleVersionKey；LotteryFragment 在组切换时插入绿色分组标题行
             - **政策徽章绑定期号**：LatestDrawsDialog 徽章 / DrawDetailDialog 顶部绿卡 追加显示 `期号：XXX`，明确期号↔政策映射关系
             - **Seed 老期版本定位**：断网走 seed 无 date 时，按期号前缀推断年份（SSQ 前4位=年 / DLT 前2位补20），避免老期错误套最新版规则
 
-            ### 🛠️ Gradle 开发插件（本版本新集成）
+            ### 🛠️ Gradle 开发插件（全量集成）
             - **Detekt 1.23.6**：Kotlin 静态代码分析，buildUponDefaultConfig + reportsDir 输出
             - **Spotless 6.25.0**：ktfmt 0.46 kotlinlangStyle 自动格式化，trimTrailingWhitespace + endWithNewline
             - **JaCoCo**：debug buildType 启用单元测试覆盖率，按 variant 动态注册 `jacoco{Variant}UnitTestReport` 任务（HTML + XML 双报告）
@@ -81,11 +85,26 @@ jobs:
             - 页尾提示与行内 flag 用词一致（conditionalFlags 复算开关统一）
 
             ### 📱 手机端 6 项自测要点
-            1. 启动/下拉刷新不死锁（Mutex 嵌套持锁修复）
-            2. 首页最新一期徽章：`2026新规｜期号2026090` / `超级大乐透2026新规｜期号26088`
-            3. 详情弹窗政策卡：【本期适用】超级大乐透2026新规 **期号：26088** + 展开历史版本
-            4. ★ 大乐透 0+2 选号命中 → 两个绿色分组标题（DLT 2026 7级 + DLT 2019 9级）独立分行，不合并
-            5. 断网重装 seed 老期（issue≈20020）→ 正确显示超级大乐透2019版（9级）9对奖级
-            6. SSQ 福运奖停发灰底 / DLT 上浮绿色提示 显示一致
-          files: LotteryHistoryQuery_v23.apk
+            1. **启动/下拉刷新不死锁**（Mutex 嵌套持锁修复 · P0）
+               - 冷启动 ≤3 秒显示全部 9 个彩种；下拉刷新 3-10 秒结束，不转圈卡死
+            2. **首页最新一期徽章期号绑定**
+               - 双色球：`2026年新规·含福运奖｜期号2026090`
+               - 大乐透：`超级大乐透2026新规（7级奖池联动）｜期号26088`
+               - 福彩3D/P3/P5 等单版：徽章自动 GONE，无"现行版"噪音
+            3. **详情弹窗政策卡期号绑定 + 历史版本展开**
+               - 绿底卡：【本期适用】超级大乐透2026新规（7级奖池联动）**期号：26088** / 生效日期：2026-01-31起
+               - "查看全部变更▼" → 展开 DLT 2026 说明 + DLT 2019（9级）+ DLT 2014（6级）等历史版本
+            4. **★ 选号命中统计 → 按政策版本独立分组（P0 核心验收）**
+               - 大乐透选后区 02+09（0+2 模式）→ 两个独立绿色分组标题：
+                 - ▌【超级大乐透2026新规（7级奖池联动）】7级规则 生效日2026-01-31 → 七等奖 0+2 中105次
+                 - ▌【超级大乐透2019版（9级）】9级规则 生效日2019-02-18 → 七等奖 4+0 中160次 + 八等奖 + 九等奖 三行独立
+               - ❌ 错误：只看到一条"七等奖 265 次" = 两政策被错误合并
+            5. **断网 Seed 老期版本定位（三级兜底验证）**
+               - 卸载重装 → 断网进入（强制 seed，无 date 字段）→ 打开大乐透 2020 年老期（issue≈20020）
+               - ✅ 应显示：【本期适用】超级大乐透2019版（9级）+ 9对奖级（含八等奖3+1/2+2、九等奖0+2）
+               - ❌ 错误：老期也误标"超级大乐透2026新规（7级奖池联动）"
+            6. **条件奖级标志一致不误导**
+               - 双色球奖池 < 15 亿：福运奖整行浅灰 + "奖池未达门槛，本奖项停发"
+               - 大乐透奖池 ≥ 8 亿：三~七等奖绿色显示"本期奖池≥8亿已上浮¥XXX"
+          files: LotteryHistoryQuery_v24.apk
           prerelease: false
