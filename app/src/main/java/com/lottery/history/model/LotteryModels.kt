@@ -148,19 +148,19 @@ data class LotteryDraw(
     /**
      * 基于 ruleVersionKey + issue + date 三级定位拿到当期应展示的 RuleVersion（展示时首选）。
      *
-     * 【严格模式：绝不 fallback 到最新版误导】：
-     *   ① 已持久化的 ruleVersionKey（最高，来自解析时确定或 seed 按期号推导）
-     *   ② 按期号 issue 前缀推断年份定位（适用于 date 缺失的 seed 历史期）
-     *   ③ 按日期 date 定位（通用）
-     *   ④ 以上全失败 → 返回 null，调用方必须显式展示「元数据缺失，无法确定当期规则版本」
-     *     ，**绝不拿 config.ruleVersions.first() 最新版顶上去**。
+     * 【零兜底·严格模式：只用解析时已持久化的真实 ruleVersionKey】：
+     *   ① DB 中 ruleVersionKey 非空，且能在 config.ruleVersions 里找到精确匹配 → 返回该版
+     *   ② 其他任何情况（ruleVersionKey 空 / key 已废弃 / date 有值也不行）→ 一律返回 null，
+     *     调用方必须显式展示「元数据缺失，无法确定当期规则版本」。
+     *
+     * ❌ 已废除：
+     *   · rulesForDate(date, issue) 兜底 → 废掉（解析时必须已确定 ruleVersionKey 再入库，
+     *     不在入库之后再拿 date 推断，拿 issue 更是绝对禁止）
+     *   · 任何形式的默认最新版 / 默认最旧版 → 废掉（没有 key 就是元数据缺失）
      */
     fun resolveRuleVersion(config: LotteryTypeConfig): LotteryTypeConfig.RuleVersion? {
-        if (ruleVersionKey != null) {
-            val cached = config.ruleVersions.firstOrNull { it.key == ruleVersionKey }
-            if (cached != null) return cached
-        }
-        return config.rulesForDate(date, issue)
+        val key = ruleVersionKey ?: return null
+        return config.ruleVersions.firstOrNull { it.key == key }
     }
 }
 

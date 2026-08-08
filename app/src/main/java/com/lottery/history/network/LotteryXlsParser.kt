@@ -166,12 +166,14 @@ object LotteryXlsParser {
                         }
                     }
                 } else emptyList()
+                @Suppress("DEPRECATION") // 此处仅用 rules 结构判断 secondary 是否参与匹配（固定不变），不用于按期定位规则
                 if (config.hasSecondary && config.rules.any { it.matchSecondary > 0 }) {
                     if (secondary.size < config.parseSecondaryCount) continue
                 }
 
-                // 按当期开奖日期 + 期号选择适用的规则版本（不同阶段奖项结构可能不同）
-                val ruleVersion = config.rulesForDate(date, issue)
+                // 【零兜底·严格模式】只用真实开奖 date 定位规则版本，绝不用 issue 参与（那是猜）。
+                // 解析层必须保证 date 已经从官方数据源真实解析出来；没 date 就是 SEED_INCOMPLETE。
+                val ruleVersion = config.rulesForDate(date)
                 // ===== 严格模式：date+issue 仍无法定位规则版本时，标记 SEED_INCOMPLETE 并跳过 =====
                 //   绝不拿 ruleVersions.first() 最新版去套（否则历史期被错误归类到 2026 新规）
                 if (ruleVersion == null) {

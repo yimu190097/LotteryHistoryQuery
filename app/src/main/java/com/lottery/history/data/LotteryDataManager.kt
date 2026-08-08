@@ -173,7 +173,6 @@ object LotteryDataManager {
         rawId: Int
     ) = withContext(Dispatchers.IO) {
         val list = mutableListOf<LotteryDrawEntity>()
-        val config = LotteryType.byCode(type)
         runCatching {
             context.resources.openRawResource(rawId).bufferedReader().useLines { seq ->
                 for (line in seq) {
@@ -191,17 +190,13 @@ object LotteryDataManager {
                         primary = (1..5).map { parts[it].toInt() }.sorted()
                         secondary = listOf(parts[6].toInt(), parts[7].toInt()).sorted()
                     }
-                    // —— 从期号推导规则版本（seed 无 date，用 issue 前缀年份构造日期）——
-                    //   严格模式：rulesForDate 返回 null 时 rvKey = null，绝不拿最新版保底。
-                    //   展示层 resolveRuleVersion() 会走到 rulesForDate(date=null, issue) 再试一次
-                    //   兜底推断；实在两者都缺就标元数据缺失。
-                    val rvKey = config?.let { cfg ->
-                        val yearStr = if (type == "ssq") issue.take(4) else "20${issue.take(2)}"
-                        // 用 06-15 而非 01-01：SSQ 2026-02-01 新规，01-01 < 02-01 会错误归到旧版
-                        // 06-15 是年中，确保该年所有期数都能匹配到当年生效的新规
-                        val fakeDate = "${yearStr}-06-15"
-                        cfg.rulesForDate(fakeDate)?.key  // 安全调用链
-                    }
+                    // ——【零兜底·严格模式】seed 没有真实 date → rvKey 直接存 null——
+                    //   绝对禁止用 issue 前缀拼 fakeDate 去推断规则版本（那是猜的，会错！）：
+                    //   例 SSQ 2026 新规生效日 = 2026-02-01，第 2026016 期（2月8号前后）
+                    //   拿 fakeDate 2026-06-15 去判断，一整年的都会被错归成新版。
+                    //   seed 没有真实 date，就老老实实记 null，展示层按 resolveRuleVersion()
+                    //   报「元数据缺失，无法确定当期规则版本」，绝不用任何规则硬套。
+                    val rvKey: String? = null
                     list.add(
                         LotteryDrawEntity(
                             issue = issue,

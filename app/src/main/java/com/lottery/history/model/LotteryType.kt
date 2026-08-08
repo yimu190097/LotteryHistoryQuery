@@ -86,50 +86,29 @@ data class LotteryTypeConfig(
     val prizeTierPairCount: Int get() = ruleVersions.first().prizeTierPairCount
 
     /**
-     * 按开奖日期选择适用的规则版本（解析时用此函数确定当期版本）。
+     * 【零兜底·严格模式】只凭真实开奖 date 匹配规则版本，绝不瞎猜。
      *
-     * 【严格模式·绝不用"最新版保底"误导】：
-     *  date、issue 两者都为空意味着"没有任何能用于定位规则版本的输入数据"，
-     *  这种情况下返回 null，由调用方（解析器/展示层）显式标"元数据缺失，无法确定规则版本"，
-     *  **绝不用最新版当默认**（否则老期数据会被错误套上 2026 新规，展示 7 级而实际是 9 级）。
+     * 唯一合法输入：[date] = 官方真实开奖日期（格式 YYYY-MM-DD）。
+     *   - date 非空、格式合法、且确实 ≥ 某版 effectiveFromDate → 返回该版 RuleVersion
+     *   - 其他任何情况（date 空 / date 格式不合法 / issue 传入 = 非法调用 / 找不到任何一版）→ 一律返回 null。
      *
-     *   ① date 非空 → 用 date 匹配（最准，优先级最高）
-     *   ② date 空但 issue 非空 → inferDateFromIssue(issue) 推断年份后定位（次准）
-     *   ③ 两者都空 → 返回 null（调用方自行处理"元数据缺失"展示，绝不 fallback 最新版）
+     * ❌ 已废除：
+     *   · 通过 issue 前缀推断年份的 inferDateFromIssue → 废掉（期号年份不是真实开奖日期，会错）
+     *   · ruleVersions.last() → 最旧版 fallback → 废掉（没有 date 就是元数据缺失，绝不拿任何版规则去硬套）
+     *   · 通过 issue 定位规则版本 → 废掉（解析层必须保证每条开奖先解析出真实 date，再进 DB）
      *
-     * 期号兜底：当 [date] 为空（seed 数据 / 部分历史数据缺失日期字段）时，
-     * 从 [issue] 前缀推断一个假年-月-日再做版本定位，避免所有历史期被一刀切归到最新版。
+     * 所有调用方必须保证只传真实 date；不传 date / 传 issue 就等同于"本期元数据缺失"。
      */
     fun rulesForDate(date: String?, issue: String? = null): RuleVersion? {
-        val actualDate = when {
-            !date.isNullOrEmpty() -> date
-            !issue.isNullOrEmpty() -> inferDateFromIssue(issue, this.code)
-            else -> null
-        }
-        // ===== 关键：actualDate 为 null（date+issue 都缺）时，直接返回 null，绝不保底最新版 =====
-        if (actualDate == null) return null
-        return ruleVersions.firstOrNull { actualDate >= it.effectiveFromDate }
-            ?: ruleVersions.last()
-    }
-
-    /**
-     * 按期号前缀推断一个"足够用于规则版本选择"的年-月-日字符串（非精确开奖日）。
-     * 约定：SSQ issue = 年份5位（例 2026090 = 2026年第90期）；
-     *       DLT issue = 5位（例 26088 = 2026年第88期）→ 取前2位补 "20"；
-     *       其它：若前4位数字 ≥ 1900 则当作年份，否则取前2位补 20。
-     */
-    private fun inferDateFromIssue(issue: String, code: String): String? {
-        val digits = issue.filter { it.isDigit() }.ifEmpty { return null }
-        return when (code) {
-            "ssq" -> if (digits.length >= 4) "${digits.take(4)}-06-15" else null
-            "dlt" -> if (digits.length >= 2) "20${digits.take(2)}-06-15" else null
-            else -> when {
-                digits.length >= 4 && digits.take(4).toIntOrNull()
-                    ?.let { it in 1900..2100 } == true -> "${digits.take(4)}-06-15"
-                digits.length >= 2 -> "20${digits.take(2)}-06-15"
-                else -> null
-            }
-        }
+        // 有 issue 参数就直接报错级拦截：决不允许用 issue 参与规则版本定位
+        if (!issue.isNullOrEmpty()) return null
+        // date 必须是 "YYYY-MM-DD" 合法格式（10位字符、第5/8位为'-'）
+        if (date.isNullOrEmpty() || date.length != 10 || date[4] != '-' || date[7] != '-') return null
+        val y = date.take(4).toIntOrNull() ?: return null
+        val m = date.substring(5, 7).toIntOrNull() ?: return null
+        val d = date.substring(8).toIntOrNull() ?: return null
+        if (y < 2000 || y > 2100 || m !in 1..12 || d !in 1..31) return null
+        return ruleVersions.firstOrNull { date >= it.effectiveFromDate }
     }
 }
 
