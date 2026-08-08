@@ -3,9 +3,14 @@ package com.lottery.history.model
 /**
  * 单张单项奖级：中奖注数 + 单注奖金（元）。
  * 用于存储当期每个等级的真实开奖数据（按奖项顺序排序）。
+ *
+ * 注：count 使用 Long 类型（Int 上限 21.47 亿不够覆盖极端情况），
+ *   全国每期销量可达数百亿元（3 元/注 × 100 亿注），低等奖级
+ *   （如双色球六等奖=中蓝球，理论最多 16 亿注）中奖注数可能超过 Int 上限。
+ *   金额 amount 始终用 Long。
  */
 data class PrizeTierEntry(
-    val count: Int,    // 当期该奖级中奖注数（0 表示空开）
+    val count: Long,   // 当期该奖级中奖注数（0 表示空开）— Long，防止销量极大时超 Int(21.47 亿)
     val amount: Long   // 单注奖金（元），0 表示空开无奖金
 ) {
     /** 序列化格式：count:amount（便于写入 Room 字符串列） */
@@ -14,7 +19,8 @@ data class PrizeTierEntry(
     companion object {
         fun decode(raw: String): PrizeTierEntry? {
             val p = raw.split(':').takeIf { it.size == 2 } ?: return null
-            val c = p[0].toIntOrNull() ?: return null
+            // count 使用 toLongOrNull（超 21.47 亿注兼容）
+            val c = p[0].toLongOrNull() ?: return null
             val a = p[1].toLongOrNull() ?: return null
             return PrizeTierEntry(count = c, amount = a)
         }
@@ -95,12 +101,16 @@ data class LotteryDraw(
     val primaryNumbers: List<Int>,
     val secondaryNumbers: List<Int>,
     val date: String? = null,
-    /** 一等奖注数（便捷字段，保持向后兼容） */
-    val firstPrizeCount: Int? = null,
+    /**
+     * 一等奖注数（便捷字段，保持向后兼容）。
+     * 使用 Long：极端情况下一等奖总注数理论可能大，但实际上一等奖极少有几亿注，
+     * 改为 Long 主要是与 PrizeTierEntry.count 保持一致，避免二次转换溢出。
+     */
+    val firstPrizeCount: Long? = null,
     /** 一等奖单注金额（元）（便捷字段，保持向后兼容） */
     val firstPrizeAmount: Long? = null,
-    /** 二等奖注数（便捷字段，保持向后兼容） */
-    val secondPrizeCount: Int? = null,
+    /** 二等奖注数（便捷字段，保持向后兼容）— Long，对齐 PrizeTierEntry.count */
+    val secondPrizeCount: Long? = null,
     /** 二等奖单注金额（元）（便捷字段，保持向后兼容） */
     val secondPrizeAmount: Long? = null,
     /**
@@ -155,7 +165,7 @@ data class QueryResultItem(
     val matchPrimary: Int,
     val matchSecondary: Int,
     val prizeName: String,
-    val count: Int,
+    val count: Long,
     val matches: List<LotteryDraw>,
     /** 该命中统计桶来源的规则版本 key（=BucketKey.ruleVersionKey），用于 UI 按政策分组 */
     val sourceRuleVersionKey: String? = null

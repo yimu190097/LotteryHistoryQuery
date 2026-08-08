@@ -396,7 +396,7 @@ class IssueSearchDialog(context: Context) : Dialog(context) {
         })
     }
 
-    private fun buildPrizeRow(label: String, count: Int?, amount: Long?, color: Int): LinearLayout {
+    private fun buildPrizeRow(label: String, count: Long?, amount: Long?, color: Int): LinearLayout {
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL

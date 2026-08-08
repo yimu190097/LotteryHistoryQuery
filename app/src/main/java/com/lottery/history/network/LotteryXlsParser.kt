@@ -218,12 +218,13 @@ object LotteryXlsParser {
                             appendTiers.add(null)
                             continue
                         }
-                        val cVal = cStr.let { parseNumberSafe(it) }?.toInt()
+                        val cVal = cStr.let { parseNumberSafe(it) }
                         val aVal = aStr.let { parseNumberSafe(it) }
                         if (cVal == null || aVal == null) {
                             appendTiers.add(null)
                             continue
                         }
+                        // count 用 Long，低等奖级中奖注数可能超 Int(21.47 亿)
                         appendTiers.add(PrizeTierEntry(count = cVal, amount = aVal))
                     }
                 }
@@ -348,7 +349,7 @@ object LotteryXlsParser {
                 all.add(null)
                 continue
             }
-            all.add(PrizeTierEntry(count = count.toInt(), amount = amount))
+            all.add(PrizeTierEntry(count = count, amount = amount))
         }
         return all
     }

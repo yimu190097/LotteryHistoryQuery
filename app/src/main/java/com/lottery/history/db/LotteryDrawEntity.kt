@@ -23,9 +23,16 @@ data class LotteryDrawEntity(
     val date: String? = null,
 
     // ===== 便捷兼容字段（旧UI不升级时仍可读一/二等奖）=====
-    val firstPrizeCount: Int? = null,
+    /**
+     * 一等奖注数 — Long（Int 上限 21.47 亿在销量巅峰期可能溢出）。
+     * 正常一等奖注数极少，但与 PrizeTierEntry.count 对齐避免转换溢出。
+     */
+    val firstPrizeCount: Long? = null,
+    /** 一等奖单注金额（元）— Long（金额必防溢出） */
     val firstPrizeAmount: Long? = null,
-    val secondPrizeCount: Int? = null,
+    /** 二等奖注数 — Long */
+    val secondPrizeCount: Long? = null,
+    /** 二等奖单注金额（元）— Long */
     val secondPrizeAmount: Long? = null,
 
     // ===== 全部奖级（一等奖～最低奖级）："count:amount,count:amount,..." 字符串 =====

@@ -19,7 +19,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MatchRuleDefEntity::class,
         PrizeTierEntity::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 abstract class LotteryDatabase : RoomDatabase() {
@@ -96,13 +96,29 @@ abstract class LotteryDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Migration(11, 12)：数据类型修复（中奖注数 count Int→Long）
+         *
+         * 注：SQLite 的 INTEGER 列是"动态类型"（列亲和力），同一列既可存 1 字节小整数，
+         *   也可存 8 字节大整数。所以 Kotlin 侧把 PrizeTierEntity.count / LotteryDrawEntity.firstPrizeCount
+         *   从 Int 改为 Long，**不需要重写表结构**（没有 ALTER COLUMN 这种语句）。
+         *   Room 生成的 Cursor.getLong / ContentValues.put(key, longValue) 在所有 Android
+         *   SQLite 版本上都能正确读/写 8 字节整数，旧版本 Int(4 字节) 的数据也会被
+         *   SQLite 自动扩展，不会出错。Migration 留空仅 bump 版本号。
+         */
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 无操作：SQLite INTEGER 动态类型自动兼容 Int→Long
+            }
+        }
+
         fun get(context: Context): LotteryDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     LotteryDatabase::class.java,
                     "lottery.db"
-                ).addMigrations(MIGRATION_10_11).build().also { instance = it }
+                ).addMigrations(MIGRATION_10_11, MIGRATION_11_12).build().also { instance = it }
             }
         }
     }

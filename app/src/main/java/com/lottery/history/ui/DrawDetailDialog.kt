@@ -483,10 +483,10 @@ class DrawDetailDialog(
     private data class MergedPrizeRow(
         val prizeName: String,
         val matchText: String,              // 多个命中规则换行拼接
-        val totalCount: Int?,               // 基本投注注数 + 追加投注注数（累加合并，只合并"总注数"这类同质信息）
+        val totalCount: Long?,              // 基本投注注数 + 追加投注注数（累加合并）— Long，防止销量巅峰期超 Int 21.47 亿
         val baseAmount: Long?,              // 基本投注金额（=null代表当期该级别未公布）
         val appendAmount: Long?,            // 追加投注金额（=null代表无追加/追加数据为空/两者金额已合并不可区分）
-        val appendCount: Int?,              // 追加投注单独注数，用于展示时提示"追加投注多少注"（如果有的话）
+        val appendCount: Long?,             // 追加投注单独注数 — Long，对齐 totalCount
         val hasAppend: Boolean,             // 是否有追加投注数据展示（用于金额分行）
         val conditionalOff: Boolean = false // v11: 条件奖级本期停发 → 整行置灰 + 专属提示文字
     )
@@ -594,7 +594,7 @@ class DrawDetailDialog(
             // —— 注数：同等奖合并（基本投注注数 + 追加投注注数，同质信息加法合并）——
             val baseCount = baseEntry?.count
             val appCount = appendEntry?.count
-            val mergedCount: Int? = when {
+            val mergedCount: Long? = when {
                 fuyunDisabled -> null // 停发状态：用专属文字展示，不显示数字
                 baseCount != null && appCount != null && appCount > 0 -> baseCount + appCount
                 else -> baseCount
@@ -781,8 +781,8 @@ class DrawDetailDialog(
     //   - 禁止任何 rand() / 伪随机 / 兜底数字；禁止伪造中奖地址/奖池
     @Suppress("unused")
     private data class PrizeInfo(
-        val firstPrizeCount: Int,
-        val secondPrizeCount: Int,
+        val firstPrizeCount: Long,
+        val secondPrizeCount: Long,
         val firstPrizeAmount: String,
         val secondPrizeAmount: String,
         val firstPrizeAddresses: List<String>,
@@ -799,8 +799,8 @@ class DrawDetailDialog(
         val firstAmt = draw.firstPrizeAmount
         val secondAmt = draw.secondPrizeAmount
         return PrizeInfo(
-            firstPrizeCount = firstCount ?: 0,
-            secondPrizeCount = secondCount ?: 0,
+            firstPrizeCount = firstCount ?: 0L,
+            secondPrizeCount = secondCount ?: 0L,
             firstPrizeAmount = firstAmt?.let { "单注奖金：${formatAmount(it)}" } ?: "本期奖级未公开",
             secondPrizeAmount = secondAmt?.let { "单注奖金：${formatAmount(it)}" } ?: "本期奖级未公开",
             firstPrizeAddresses = emptyList(),   // 永不输出假中奖地址
