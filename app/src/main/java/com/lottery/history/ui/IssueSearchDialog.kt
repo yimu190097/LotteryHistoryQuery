@@ -369,18 +369,33 @@ class IssueSearchDialog(context: Context) : Dialog(context) {
             layoutParams = lp
         })
 
-        val hasPrize = draw.firstPrizeCount != null || draw.secondPrizeCount != null
+        // 用最新政策规则 cfg.rules 的全部奖级结构展示，点「查看本期全部奖项详情」再按真实版本展示。
+        val hasPrize = draw.allPrizeTiers.isNotEmpty() || draw.firstPrizeCount != null || draw.secondPrizeCount != null
         if (hasPrize) {
-            container.addView(buildPrizeRow("一等奖", draw.firstPrizeCount, draw.firstPrizeAmount, 0xFFC62828.toInt()))
-            // 大乐透追加投注：追加1元多拿80%奖金，是核心玩法，必须展示
-            val appendFirst = draw.appendPrizeTiers.getOrNull(0)
-            if (appendFirst != null && (appendFirst.count > 0 || appendFirst.amount > 0L)) {
-                container.addView(buildAppendRow("追加一等奖", appendFirst.count, appendFirst.amount))
-            }
-            container.addView(buildPrizeRow("二等奖", draw.secondPrizeCount, draw.secondPrizeAmount, 0xFFD84315.toInt()))
-            val appendSecond = draw.appendPrizeTiers.getOrNull(1)
-            if (appendSecond != null && (appendSecond.count > 0 || appendSecond.amount > 0L)) {
-                container.addView(buildAppendRow("追加二等奖", appendSecond.count, appendSecond.amount))
+            val tierColors = listOf(
+                0xFFC62828.toInt(), 0xFFD84315.toInt(), 0xFFEF6C00.toInt(), 0xFFF57C00.toInt(),
+                0xFFF9A825.toInt(), 0xFFFBC02D.toInt(), 0xFFFFA000.toInt(), 0xFF8D6E63.toInt()
+            )
+            cfg.rules.forEachIndexed { i, rule ->
+                // 基本投注 count/amount：优先从 allPrizeTiers[i] 取，否则 fallback 老字段（前两级）
+                val tier = draw.allPrizeTiers.getOrNull(i)
+                val baseCount: Long? = tier?.count ?: when (i) {
+                    0 -> draw.firstPrizeCount
+                    1 -> draw.secondPrizeCount
+                    else -> null
+                }
+                val baseAmount: Long? = tier?.amount ?: when (i) {
+                    0 -> draw.firstPrizeAmount
+                    1 -> draw.secondPrizeAmount
+                    else -> null
+                }
+                val color = tierColors.getOrElse(i) { 0xFF757575.toInt() }
+                container.addView(buildPrizeRow(rule.prizeName, baseCount, baseAmount, color))
+                // 追加投注：按索引 i 对应 appendPrizeTiers[i]，全奖级补齐，不能只补一二等
+                val append = draw.appendPrizeTiers.getOrNull(i)
+                if (append != null && (append.count > 0 || append.amount > 0L)) {
+                    container.addView(buildAppendRow("追加${rule.prizeName}", append.count, append.amount))
+                }
             }
         } else {
             container.addView(TextView(context).apply {
