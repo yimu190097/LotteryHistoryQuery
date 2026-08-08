@@ -1,7 +1,10 @@
 package com.lottery.history.network
 
+import com.lottery.history.model.ConditionalKey
+import com.lottery.history.model.ConditionalValue
 import com.lottery.history.model.LotteryDraw
 import com.lottery.history.model.LotteryTypeConfig
+import com.lottery.history.model.ParseSource
 import com.lottery.history.model.PrizeTierEntry
 import jxl.Sheet
 import jxl.Workbook

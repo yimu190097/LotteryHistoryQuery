@@ -211,9 +211,9 @@ class DrawDetailDialog(
         // ----- 按 ruleVersion 顺序逐行渲染所有奖级（按期自动适配政策版本）-----
         val merged = mergePrizeTiersWithRules(ruleVersion, draw?.allPrizeTiers.orEmpty())
         // 顶部提示：若当期真实 allPrizeTiers 少于规则去重后的奖级数，显式提示客户"部分未公布"
-        val haveAnyRealTiers = merged.any { it.tierEntry != null }
+        val haveAnyRealTiers = merged.any { it.totalCount != null }
         val missingCount = merged.groupBy { it.prizeName }.keys.size -
-            merged.count { it.tierEntry != null }.coerceAtLeast(0)
+            merged.count { it.totalCount != null }.coerceAtLeast(0)
         if (!haveAnyRealTiers) {
             // 本期全部奖级未公布：只展示简短提示（不啰嗦）
             val warn = TextView(context).apply {
