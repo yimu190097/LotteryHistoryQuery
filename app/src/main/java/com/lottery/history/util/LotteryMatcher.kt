@@ -104,56 +104,54 @@ object LotteryMatcher {
             }
         }
 
-        // 2) 按全局 config.rules 顺序输出，合并跨版本的同名同条件 bucket
+        // 2) 按最新政策 config.rules 顺序输出，跨版本同名同条件奖项合并为一行。
+        //    查询结果列表只用最新政策奖项名简单展示；点"查看历史"时 HistoryDialog
+        //    会按每期真实 ruleVersionKey 分组展示真实情况（政策徽章+生效日+说明）。
         val inOrder = mutableListOf<QueryResultItem>()
         val visited = mutableSetOf<BucketKey>()
 
-        // 2a) 按最新规则顺序逐条匹配，合并所有版本的同(matchP, matchS, prizeName) bucket
+        // 2a) 按最新规则顺序逐条匹配，合并所有版本的同(matchP, matchS, prizeName) bucket 为一行
         for (rule in config.rules) {
-            // 找到所有版本中与当前规则(matchP, matchS, prizeName)完全一致的 bucket
             val matchingEntries = buckets.entries.filter { (k, _) ->
                 k.matchPrimary == rule.matchPrimary &&
                     k.matchSecondary == rule.matchSecondary &&
                     k.prizeName == rule.prizeName
             }
+            if (matchingEntries.isEmpty()) continue
 
-            // 标记所有已消费的 bucket 为 visited（防止重复计入尾部）
             matchingEntries.forEach { (k, _) -> visited.add(k) }
 
-            // 【按政策版本分别输出】：不再多版本合并为一个奖项行，而是各版本独立一行 + 政策版本徽章
-            // 这样用户能明确看出"命中七等奖 105 期"是 DLT 2026 七等奖（5元/7元），
-            // "命中七等奖 160 期"是 DLT 2019 七等奖（100元），两者金额和意义完全不同。
-            for ((bk, draws) in matchingEntries) {
-                val displayName = config.ruleVersions.firstOrNull { it.key == bk.ruleVersionKey }
-                    ?.let { rv -> if (config.ruleVersions.size > 1) "${rv.policyLabel}｜${rv.realTiersToUse}级｜${rule.prizeName}" else rule.prizeName }
-                    ?: rule.prizeName
-                inOrder.add(
-                    QueryResultItem(
-                        matchPrimary = rule.matchPrimary,
-                        matchSecondary = rule.matchSecondary,
-                        prizeName = displayName,
-                        count = draws.size.toLong(),  // 显式 Int→Long，保证类型链路一致
-                        matches = draws,
-                        sourceRuleVersionKey = bk.ruleVersionKey
-                    )
+            // 合并跨版本的所有 draws，count 取总和
+            val allDraws = matchingEntries.flatMap { it.value }
+            inOrder.add(
+                QueryResultItem(
+                    matchPrimary = rule.matchPrimary,
+                    matchSecondary = rule.matchSecondary,
+                    prizeName = rule.prizeName,  // 只用最新政策奖项名，不加 policyLabel 前缀
+                    count = allDraws.size.toLong(),
+                    matches = allDraws,
+                    sourceRuleVersionKey = rule.let { r ->
+                        // 标记为最新版 key，便于 UI 排序/标识
+                        config.ruleVersions.firstOrNull { rv ->
+                            rv.rules.any { it.matchPrimary == r.matchPrimary && it.matchSecondary == r.matchSecondary && it.prizeName == r.prizeName }
+                        }?.key
+                    }
                 )
-            }
+            )
         }
 
         // 2b) 旧规则版本中剩余、在最新规则里已不存在的奖级（如 DLT 2019 八等奖/九等奖），
-        //     追加到尾部，带 policyLabel 标识以保证用户可区分；这些奖级在最新版里
-        //     已不存在（官方规则变更），**必须展示**，避免老数据命中被丢弃。
+        //     追加到尾部。奖项名不加 policyLabel 前缀（保持列表简洁），点查看历史时
+        //     HistoryDialog 会展示这些期对应的真实政策版本。
         val remaining = buckets.keys - visited
         for (key in remaining) {
             val draws = buckets[key] ?: continue
-            val policyLabel = config.ruleVersions.firstOrNull { it.key == key.ruleVersionKey }?.policyLabel
-            val displayName = if (policyLabel != null) "${key.prizeName}（${policyLabel}）" else key.prizeName
             inOrder.add(
                 QueryResultItem(
                     matchPrimary = key.matchPrimary,
                     matchSecondary = key.matchSecondary,
-                    prizeName = displayName,
-                    count = draws.size.toLong(),  // 显式 Int→Long
+                    prizeName = key.prizeName,
+                    count = draws.size.toLong(),
                     matches = draws,
                     sourceRuleVersionKey = key.ruleVersionKey
                 )
