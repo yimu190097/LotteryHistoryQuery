@@ -168,9 +168,9 @@ object LotteryType {
             ),
             LotteryTypeConfig.RuleVersion(
                 key = "ssq_20030216",
-                effectiveFromDate = "1900-01-01",
-                policyLabel = "2003-2026·经典6级",
-                changeNote = "2003年上市至2026年1月的6级经典规则，中3红球（蓝球未中）不中奖。",
+                effectiveFromDate = "2003-02-16",
+                policyLabel = "2003.02-2026.01·经典6级",
+                changeNote = "2003年2月16日首期上市至2026年1月的6级经典规则，中3红球（蓝球未中）不中奖。",
                 realTiersToUse = 6, prizeTierPairCount = 6,
                 extraFieldCount = 8,
                 rules = listOf(
@@ -302,9 +302,9 @@ object LotteryType {
             ),
             LotteryTypeConfig.RuleVersion(
                 key = "dlt_20070528",
-                effectiveFromDate = "1900-01-01",
-                policyLabel = "2007·上市首版",
-                changeNote = "2007年5月28日上市首版规则，一等奖500万封顶。",
+                effectiveFromDate = "2007-05-28",
+                policyLabel = "2007.05-2009.10·上市首版",
+                changeNote = "2007年5月28日首期上市至2009年10月，一等奖500万封顶。",
                 realTiersToUse = 8, prizeTierPairCount = 8,
                 extraFieldCount = 2,
                 appendTierPairCount = 8,  // 追加投注奖级数=基本奖级数
@@ -340,10 +340,10 @@ object LotteryType {
         hasSecondary = false,
         ruleVersions = listOf(
             LotteryTypeConfig.RuleVersion(
-                key = "3d_stable",
-                effectiveFromDate = "1900-01-01",
-                policyLabel = "现行规则",
-                changeNote = "直选1040/组选3=346/组选6=173三档固定奖，规则长期稳定。返奖比例53%。" +
+                key = "3d_20041018",
+                effectiveFromDate = "2004-10-18",
+                policyLabel = "2004.10至今·三档固定奖",
+                changeNote = "2004年10月18日全国统一上市。直选1040/组选3=346/组选6=173三档固定奖，返奖比例53%。" +
                     "组选3/6为投注方式，选号匹配统一展示为直选命中。",
                 realTiersToUse = 3, prizeTierPairCount = 3,
                 extraFieldCount = 6,  // 试机号3 + 其他 + 销售额
@@ -367,10 +367,10 @@ object LotteryType {
         hasSecondary = true,
         ruleVersions = listOf(
             LotteryTypeConfig.RuleVersion(
-                key = "7lc_stable",
-                effectiveFromDate = "1900-01-01",
-                policyLabel = "现行规则",
-                changeNote = "一~三等奖浮动，四~七等奖固定（200/50/10/5元）。规则长期稳定。",
+                key = "7lc_2000",
+                effectiveFromDate = "2000-01-01",
+                policyLabel = "2000至今·7级经典",
+                changeNote = "2000年全国上市。一~三等奖浮动，四~七等奖固定（200/50/10/5元），规则长期稳定。",
                 realTiersToUse = 7, prizeTierPairCount = 7,
                 extraFieldCount = 2,  // 销售额 + 奖池
                 rules = listOf(
@@ -399,10 +399,10 @@ object LotteryType {
         hasSecondary = false,
         ruleVersions = listOf(
             LotteryTypeConfig.RuleVersion(
-                key = "p3_stable",
-                effectiveFromDate = "1900-01-01",
-                policyLabel = "现行规则",
-                changeNote = "直选1040/组选3=346/组选6=173三档固定奖，规则长期稳定。" +
+                key = "p3_20041218",
+                effectiveFromDate = "2004-12-18",
+                policyLabel = "2004.12至今·三档固定奖",
+                changeNote = "2004年12月18日全国发行。直选1040/组选3=346/组选6=173三档固定奖。" +
                     "组选3/6为投注方式，选号匹配统一展示为直选命中。",
                 realTiersToUse = 3, prizeTierPairCount = 3,
                 extraFieldCount = 1,  // 销售额
@@ -425,10 +425,10 @@ object LotteryType {
         hasSecondary = false,
         ruleVersions = listOf(
             LotteryTypeConfig.RuleVersion(
-                key = "p5_stable",
-                effectiveFromDate = "1900-01-01",
-                policyLabel = "现行规则",
-                changeNote = "5位数字和位置全对即中10万元，规则长期稳定。",
+                key = "p5_20041218",
+                effectiveFromDate = "2004-12-18",
+                policyLabel = "2004.12至今·固定10万",
+                changeNote = "2004年12月18日与排列三同步全国发行。5位数字和位置全对即中10万元。",
                 realTiersToUse = 1, prizeTierPairCount = 1,
                 extraFieldCount = 1,  // 销售额
                 rules = listOf(
@@ -475,10 +475,10 @@ object LotteryType {
                 )
             ),
             LotteryTypeConfig.RuleVersion(
-                key = "qxc_2004",
-                effectiveFromDate = "1900-01-01",
-                policyLabel = "2004-2020·经典6级",
-                changeNote = "2004年上市至2020-10-10的经典6级规则，固定奖金额较低（三等奖1800/四等奖300/五等奖20）。",
+                key = "qxc_20040518",
+                effectiveFromDate = "2004-05-18",
+                policyLabel = "2004.05-2020.10·经典6级",
+                changeNote = "2004年5月18日首期上市至2020年10月10日的经典6级规则，固定奖金额较低（三等奖1800/四等奖300/五等奖20）。",
                 realTiersToUse = 6, prizeTierPairCount = 6,
                 extraFieldCount = 2,
                 rules = listOf(
@@ -510,9 +510,9 @@ object LotteryType {
         hasSecondary = false,
         ruleVersions = listOf(
             LotteryTypeConfig.RuleVersion(
-                key = "kl8_stable",
-                effectiveFromDate = "1900-01-01",
-                policyLabel = "现行·选十玩法",
+                key = "kl8_20201028",
+                effectiveFromDate = "2020-10-28",
+                policyLabel = "2020.10至今·选十玩法",
                 changeNote = "选十玩法7档奖级：中十浮动/中九8000/中八800/中七80/中六5/中五3/全不中2。" +
                     "数据源共输出70+对子玩法奖级（20号码+销售额+奖池=2额外后），选十前7对。" +
                     "选十中八官方固定奖800元（2023053期625注×800元=50万验证正确）。",
