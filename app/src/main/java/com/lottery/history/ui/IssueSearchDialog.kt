@@ -372,7 +372,16 @@ class IssueSearchDialog(context: Context) : Dialog(context) {
         val hasPrize = draw.firstPrizeCount != null || draw.secondPrizeCount != null
         if (hasPrize) {
             container.addView(buildPrizeRow("一等奖", draw.firstPrizeCount, draw.firstPrizeAmount, 0xFFC62828.toInt()))
+            // 大乐透追加投注：追加1元多拿80%奖金，是核心玩法，必须展示
+            val appendFirst = draw.appendPrizeTiers.getOrNull(0)
+            if (appendFirst != null && (appendFirst.count > 0 || appendFirst.amount > 0L)) {
+                container.addView(buildAppendRow("追加一等奖", appendFirst.count, appendFirst.amount))
+            }
             container.addView(buildPrizeRow("二等奖", draw.secondPrizeCount, draw.secondPrizeAmount, 0xFFD84315.toInt()))
+            val appendSecond = draw.appendPrizeTiers.getOrNull(1)
+            if (appendSecond != null && (appendSecond.count > 0 || appendSecond.amount > 0L)) {
+                container.addView(buildAppendRow("追加二等奖", appendSecond.count, appendSecond.amount))
+            }
         } else {
             container.addView(TextView(context).apply {
                 text = "该期暂无中奖公布数据（请刷新获取最新数据）"
@@ -439,6 +448,44 @@ class IssueSearchDialog(context: Context) : Dialog(context) {
             text = "$countText · $amountText"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             setTextColor(Color.parseColor("#212121"))
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.END
+        })
+        return row
+    }
+
+    /** 追加投注行：浅橙色背景，缩进展示，与基本投注行视觉区分 */
+    private fun buildAppendRow(label: String, count: Long, amount: Long): LinearLayout {
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                cornerRadius = 6 * density
+                setColor(0xFFFFF3E0.toInt())
+                setStroke(1, 0xFFFFCC80.toInt())
+            }
+            val pad = (8 * density).toInt()
+            val padL = (20 * density).toInt()  // 左侧缩进，体现从属于上方基本投注行
+            setPadding(padL, pad, pad, pad)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = (3 * density).toInt() }
+        }
+        row.addView(TextView(context).apply {
+            text = label
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(0xFFE65100.toInt())
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        })
+        val countText = if (count > 0) "中奖 ${count} 注" else "本期空开"
+        val amountText = if (amount > 0) "单注 ${formatAmount(amount)}" else "—"
+        row.addView(TextView(context).apply {
+            text = "$countText · $amountText"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(0xFFE65100.toInt())
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.END
         })
