@@ -137,7 +137,7 @@ object LotteryType {
         ),
         parsePrimaryCount = 6, parseSecondaryCount = 1,
         primaryUnit = "个红球", secondaryUnit = "个蓝球",
-        issuePattern = "7位数字（例26090）", issueHint = "例如：26090"
+        issuePattern = "5-7位数字（例26090）", issueHint = "例如：26090"
     )
 
     // ==================== 大乐透（6次规则调整，5个奖级版本）====================
@@ -271,7 +271,7 @@ object LotteryType {
         ),
         parsePrimaryCount = 5, parseSecondaryCount = 2,
         primaryUnit = "个前区", secondaryUnit = "个后区",
-        issuePattern = "7位数字（例26088）", issueHint = "例如：26088"
+        issuePattern = "5-7位数字（例26088）", issueHint = "例如：26088"
     )
 
     // ==================== 福彩3D（规则长期稳定）====================
@@ -442,7 +442,7 @@ object LotteryType {
         ),
         parsePrimaryCount = 6, parseSecondaryCount = 1,
         primaryUnit = "位前区", secondaryUnit = "位后区",
-        issuePattern = "6位数字（例26089）", issueHint = "例如：26089"
+        issuePattern = "5-7位数字（例26089）", issueHint = "例如：26089"
     )
 
     // ==================== 快乐8（选十玩法·长期稳定，中八=800元数据源验证）====================

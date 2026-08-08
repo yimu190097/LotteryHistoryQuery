@@ -233,19 +233,24 @@ object LotteryXlsParser {
                 //  或"金额浮动"。把这些当期中有效的判定预计算出来，随 draw 持久化，
                 //  避免展示层靠 jackkpotAmount 再猜一次（展示层猜容易和解析逻辑不一致导致错乱）。
                 val conditionalFlags = buildMap<String, String> {
-                    // —— SSQ 2026 新规：福运奖（3+0）启用门槛：奖池≥3亿 => ON，<3亿 => OFF，奖池未公布 => HOLD
-                    if (config.code == "ssq" && ruleVersion.key == "ssq_2026") {
+                    // —— SSQ 2026 新规：福运奖（3+0）双门槛迟滞机制 ——
+                    //  官方政策：奖池≥15亿启动 / <3亿停止 / [3亿,15亿)维持上期状态。
+                    //  数据驱动优先：若官方数据已含第7对奖级（福运奖），直接判定 ON。
+                    if (config.code == "ssq" && ruleVersion.key == "ssq_20260201") {
+                        val hasFuyunData = allTiers.getOrNull(6) != null
                         put(
                             ConditionalKey.SSQ_FUYUN,
                             when {
+                                hasFuyunData -> ConditionalValue.ON
                                 jackpotAmount == null -> ConditionalValue.HOLD
-                                jackpotAmount >= 300_000_000L -> ConditionalValue.ON
-                                else -> ConditionalValue.OFF
+                                jackpotAmount >= 1_500_000_000L -> ConditionalValue.ON
+                                jackpotAmount < 300_000_000L -> ConditionalValue.OFF
+                                else -> ConditionalValue.HOLD // 3亿~15亿迟滞区间，单期无法确定
                             }
                         )
                     }
-                    // —— DLT 2026 新规：三~七等奖（原 5000/300/150/15/5）奖池≥8亿时上浮 6666/380/200/18/7
-                    if (config.code == "dlt" && ruleVersion.key == "dlt_2026") {
+                    // —— DLT 2026 新规：三~七等奖奖池≥8亿时上浮 6666/380/200/18/7
+                    if (config.code == "dlt" && ruleVersion.key == "dlt_20260131") {
                         put(
                             ConditionalKey.DLT_2026_FLOAT,
                             when {

@@ -1,5 +1,7 @@
 package com.lottery.history.util
 
+import com.lottery.history.model.ConditionalKey
+import com.lottery.history.model.ConditionalValue
 import com.lottery.history.model.LotteryDraw
 import com.lottery.history.model.LotteryTypeConfig
 import com.lottery.history.model.QueryResultItem
@@ -11,6 +13,10 @@ import com.lottery.history.model.QueryResultItem
  * 导致跨越规则版本的奖级被归类到错误的奖项名（如 DLT 2019 九级规则的"0+2=八等奖 5 元"
  * 被新版 7 级规则归类成"0+2=七等奖 5 元"）。现在每期 draw 独立使用自己的规则版本，
  * 结果按「ruleVersionKey + prizeName」合并，避免跨阶段奖级错位。
+ *
+ * v11.1 修复：
+ *  - 修复多版本彩种重复计数（visited 漏标 + latestVersionKey 取错端）
+ *  - 尊重 conditionalFlags：福运奖 OFF 时 3+0 不计为中奖
  */
 object LotteryMatcher {
 
@@ -37,7 +43,13 @@ object LotteryMatcher {
         val buckets = linkedMapOf<BucketKey, MutableList<LotteryDraw>>()
         for (draw in history) {
             val ruleVersion = draw.resolveRuleVersion(config)
+            // 读取该期条件奖级标志，用于跳过停发奖项
+            val flags = draw.conditionalFlags
             for (rule in ruleVersion.rules) {
+                // v11.1: 条件奖级 OFF 时跳过该规则（如福运奖停发 → 3+0 不计中奖）
+                val condKey = rule.conditionalKey
+                if (condKey != null && flags[condKey] == ConditionalValue.OFF) continue
+
                 val primaryCount = draw.primaryNumbers.count { it in selectedPrimary }
                 val secondaryCount = if (config.hasSecondary) {
                     draw.secondaryNumbers.count { it in selectedSecondary }
@@ -59,29 +71,23 @@ object LotteryMatcher {
             }
         }
 
-        // 2) 按全局 config.rules 顺序输出（旧版规则的奖项名如果在最新规则中不存在，
-        //    会追加到尾部避免丢失）
+        // 2) 按全局 config.rules 顺序输出，合并跨版本的同名同条件 bucket
         val inOrder = mutableListOf<QueryResultItem>()
-        val visited = linkedSetOf<BucketKey>()
+        val visited = mutableSetOf<BucketKey>()
 
-        // 2a) 先按最新规则的顺序，找对应 bucket（matchPrimary+matchSecondary+prizeName 完全对得上的）
+        // 2a) 按最新规则顺序逐条匹配，合并所有版本的同(matchP, matchS, prizeName) bucket
         for (rule in config.rules) {
-            val latestVersionKey = config.ruleVersions.lastOrNull()?.key ?: ""
-            val key = BucketKey(latestVersionKey, rule.matchPrimary, rule.matchSecondary, rule.prizeName)
-            val directMatches = buckets[key] ?: emptyList()
+            // 找到所有版本中与当前规则(matchP, matchS, prizeName)完全一致的 bucket
+            val matchingEntries = buckets.entries.filter { (k, _) ->
+                k.matchPrimary == rule.matchPrimary &&
+                    k.matchSecondary == rule.matchSecondary &&
+                    k.prizeName == rule.prizeName
+            }
 
-            // 2b) 合并旧规则版本中同"命中条件+奖项名"的其他版本的命中
-            val extraFromOlder = buckets.entries
-                .filter { (k, _) ->
-                    k.matchPrimary == rule.matchPrimary &&
-                        k.matchSecondary == rule.matchSecondary &&
-                        k.prizeName == rule.prizeName &&
-                        k.ruleVersionKey != latestVersionKey
-                }
-                .flatMap { (_, v) -> v }
+            val allDraws = matchingEntries.flatMap { it.value }
+            // 标记所有已消费的 bucket 为 visited（防止重复计入尾部）
+            matchingEntries.forEach { (k, _) -> visited.add(k) }
 
-            val allDraws = directMatches + extraFromOlder
-            visited.add(key)
             inOrder.add(
                 QueryResultItem(
                     matchPrimary = rule.matchPrimary,
@@ -93,8 +99,8 @@ object LotteryMatcher {
             )
         }
 
-        // 2c) 旧规则版本中剩余、在最新规则里已不存在的奖级（如 DLT 2019 八等奖/九等奖），
-        //     追加到尾部，带 ruleVersionKey 标识以保证用户可区分；这些奖级在最新版里
+        // 2b) 旧规则版本中剩余、在最新规则里已不存在的奖级（如 DLT 2019 八等奖/九等奖），
+        //     追加到尾部，带 policyLabel 标识以保证用户可区分；这些奖级在最新版里
         //     已不存在（官方规则变更），**必须展示**，避免老数据命中被丢弃。
         val remaining = buckets.keys - visited
         for (key in remaining) {

@@ -53,8 +53,17 @@ object LotteryDataManager {
     /**
      * 确保内置 seed 数据已导入（仅 ssq/dlt 有 seed），
      * 然后将规则目录持久化，最后修补 seed 来源但缺元数据的记录。
+     * 公共入口：自动获取锁。已持锁的内部调用方应直接调 [ensureInitializedLocked]。
      */
     suspend fun ensureInitialized(context: Context) = mutex.withLock {
+        ensureInitializedLocked(context)
+    }
+
+    /**
+     * 内部实现（调用方必须已持有 [mutex]）。
+     * 拆分自 ensureInitialized 以避免 kotlinx.coroutines.sync.Mutex 不可重入导致的死锁。
+     */
+    private suspend fun ensureInitializedLocked(context: Context) {
         ensureDaos(context)
         val d = dao!!
         val ptDao = prizeTierDao!!
@@ -164,6 +173,7 @@ object LotteryDataManager {
         rawId: Int
     ) = withContext(Dispatchers.IO) {
         val list = mutableListOf<LotteryDrawEntity>()
+        val config = LotteryType.byCode(type)
         runCatching {
             context.resources.openRawResource(rawId).bufferedReader().useLines { seq ->
                 for (line in seq) {
@@ -181,12 +191,19 @@ object LotteryDataManager {
                         primary = (1..5).map { parts[it].toInt() }.sorted()
                         secondary = listOf(parts[6].toInt(), parts[7].toInt()).sorted()
                     }
+                    // —— 从期号推导规则版本（seed 无 date，用 issue 前缀年份构造日期）——
+                    val rvKey = config?.let { cfg ->
+                        val yearStr = if (type == "ssq") issue.take(4) else "20${issue.take(2)}"
+                        val fakeDate = "${yearStr}-01-01"
+                        cfg.rulesForDate(fakeDate).key
+                    }
                     list.add(
                         LotteryDrawEntity(
                             issue = issue,
                             type = type,
                             primary = primary.joinToString(","),
                             secondary = secondary.joinToString(","),
+                            ruleVersionKey = rvKey,
                             parseSource = ParseSource.SEED,
                             parseAt = null,
                             parserVersion = 1,
@@ -208,15 +225,15 @@ object LotteryDataManager {
         getCached(config.code)
 
     /** 加载指定彩种到内存缓存 */
-    suspend fun loadCache(context: Context, config: LotteryTypeConfig) {
-        ensureInitialized(context)
+    suspend fun loadCache(context: Context, config: LotteryTypeConfig) = mutex.withLock {
+        ensureInitializedLocked(context)
         val d = dao!!
         caches[config.code] = d.getAllByType(config.code).map { it.toModel() }
     }
 
     /** 加载全部彩种到内存缓存 */
     suspend fun loadCaches(context: Context) = mutex.withLock {
-        ensureInitialized(context)
+        ensureInitializedLocked(context)
         val d = dao!!
         for (config in LotteryType.ALL) {
             caches[config.code] = d.getAllByType(config.code).map { e -> e.toModel() }
@@ -230,7 +247,7 @@ object LotteryDataManager {
      * 每个彩种独立拉取，某个失败不影响其他。
      */
     suspend fun refresh(context: Context): RefreshResult = mutex.withLock {
-        ensureInitialized(context)
+        ensureInitializedLocked(context)
         val d = dao!!
         val ptDao = prizeTierDao!!
         val successTypes = mutableListOf<String>()
@@ -392,8 +409,8 @@ object LotteryDataManager {
     /**
      * 按「期号」查找某一期开奖结果：
      *   1) 先完全匹配 issue == query
-     *   2) 再用 startsWith 模糊匹配（用户可能输"26087"而完整 issue 是"26087001"等容错）
-     *   3) 最后再用 endsWith 匹配（用户可能只输 2026087 的后几位 087）
+     *   2) 再用 endsWith 模糊匹配（用户可能只输后几位）
+     *   3) 最后再用 startsWith 匹配（用户可能输"26087"而完整 issue 是"26087001"等容错）
      */
     fun findDrawByIssue(config: LotteryTypeConfig, queryRaw: String): LotteryDraw? {
         val q = queryRaw.trim()
