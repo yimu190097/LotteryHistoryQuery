@@ -192,10 +192,13 @@ object LotteryDataManager {
                         secondary = listOf(parts[6].toInt(), parts[7].toInt()).sorted()
                     }
                     // —— 从期号推导规则版本（seed 无 date，用 issue 前缀年份构造日期）——
+                    //   严格模式：rulesForDate 返回 null 时 rvKey = null，绝不拿最新版保底。
+                    //   展示层 resolveRuleVersion() 会走到 rulesForDate(date=null, issue) 再试一次
+                    //   兜底推断；实在两者都缺就标元数据缺失。
                     val rvKey = config?.let { cfg ->
                         val yearStr = if (type == "ssq") issue.take(4) else "20${issue.take(2)}"
                         val fakeDate = "${yearStr}-01-01"
-                        cfg.rulesForDate(fakeDate).key
+                        cfg.rulesForDate(fakeDate)?.key  // 安全调用链
                     }
                     list.add(
                         LotteryDrawEntity(

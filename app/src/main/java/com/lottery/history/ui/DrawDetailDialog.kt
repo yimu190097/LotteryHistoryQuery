@@ -60,14 +60,42 @@ class DrawDetailDialog(
     private fun render(view: View) {
         val density = context.resources.displayMetrics.density
 
-        // ===== 优先用 draw 已解析确定的 ruleVersionKey，不依赖运行时日期（保证历史数据不错位）=====
-        val ruleVersion = draw?.resolveRuleVersion(config) ?: config.ruleVersions.first()
+        // ===== 严格模式：ruleVersion 为 null 时，用【最旧版】保底结构 + 【大量红色警告】 =====
+        //   设计原则：
+        //     · 绝不用【最新版】保底（否则 2003 年老期被套上 2026 新规 7 级展示，严重误导）
+        //     · 用【最旧版 ruleVersions.last()】作"结构骨架"让渲染不崩溃（奖级数最多、最保守）
+        //     · 但是在 顶部/奖级区/政策栏 三处显式标红警告，让用户一眼知道版本不明可信度低
+        //     · 在底部 footer 再追加一次说明，双重保险
+        val resolvedRv = draw?.resolveRuleVersion(config)
+        val metadataMissing = resolvedRv == null
+        val ruleVersion = resolvedRv ?: config.ruleVersions.last()
 
         // ============== 顶部：销售额 + 奖池 信息栏（新增v9） ==============
         val salesJackpotBar = buildSalesJackpotBar(density)
         val contentMain = view.findViewById<LinearLayout>(R.id.llRulesContainer)
         contentMain.removeAllViews()
         contentMain.addView(salesJackpotBar)
+
+        // ====== P0 修复：元数据缺失时，最顶部第一时间插红色警告 ======
+        if (metadataMissing) {
+            val fatalWarn = TextView(context).apply {
+                text = buildString {
+                    append("✖ 严重：本期元数据缺失，无法确定适用规则版本。\n")
+                    append("当前展示基于【最旧版规则结构】仅供参考，可能与当期真实奖级不符。\n")
+                    append("请下拉刷新重新解析网络数据以恢复正确版本。")
+                }
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setTextColor(0xFFFFFFFF.toInt())
+                setBackgroundColor(0xFFB71C1C.toInt())
+                val pad = (10 * density).toInt()
+                setPadding(pad, pad, pad, pad)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = (4 * density).toInt() }
+            }
+            contentMain.addView(fatalWarn)
+        }
 
         // 彩种名（强化醒目，用户一眼看到现在查的是哪个彩种）
         view.findViewById<TextView>(R.id.tvLotteryName).apply {
@@ -187,7 +215,8 @@ class DrawDetailDialog(
         }
 
         // ===== 政策标签：可展开查看本期政策 + 所有历史版本变更说明 =====
-        llRules.addView(buildPolicyExpandableCard(ruleVersion, density))
+        //   如果是元数据缺失状态，给政策卡片也加红色警告样式（和顶部警告呼应）
+        llRules.addView(buildPolicyExpandableCard(ruleVersion, density, metadataMissing))
 
         // 表头：奖项名称 / 命中规则 / 中奖注数 / 单注奖金
         val headerRow = buildPrizeRow(
@@ -259,7 +288,7 @@ class DrawDetailDialog(
                 val bAmt = row.baseAmount
                 val aAmt = row.appendAmount
                 val countEmpty = row.totalCount == null
-                val isEmpty = row.totalCount == 0
+                val isEmpty = row.totalCount == 0L
 
                 when {
                     row.conditionalOff -> append("—（奖池未达门槛，本奖项停发）")
@@ -304,35 +333,52 @@ class DrawDetailDialog(
         }
 
         // 末行：精炼说明（含奖池联动提示）— 使用解析时预计算的 conditionalFlags，不重算阈值
+        //   严格模式：metadataMissing 时，跳过 DLT/SSQ 联动说明（因为 ruleVersion 是最旧版骨架，
+        //   startsWith 判断必错），改追加【最高严重级别红色警告】。
         val extraHint = buildString {
-            append("空开=本期无人中；\"规则固定¥X\"为基础额度，每期实际金额以官方公布为准。")
-            if (config.code == "dlt" && ruleVersion.key.startsWith("dlt_2026")) {
-                val floatState = draw?.conditionalFlags?.get(ConditionalKey.DLT_2026_FLOAT)
-                val jp = draw?.jackpotAmount
-                append("\n★大乐透2026新规奖池联动：")
-                if (jp != null) append("当前奖池${formatAmount(jp)}，")
-                append(when (floatState) {
-                    ConditionalValue.UP -> "≥8亿已上浮（三6666/四380/五200/六18/七7）"
-                    ConditionalValue.NORMAL -> "<8亿未上浮（三5000/四300/五150/六15/七5）"
-                    else -> "奖池未知，暂按基础金额展示"
-                })
+            if (metadataMissing) {
+                append("⚠【最高警告】元数据缺失：本期无法定位真实规则版本，")
+                append("奖级数量/奖项名/金额联动展示可能全部错误！\n")
+                append("立即操作：返回主界面 → 下拉刷新 → 重新下载官方最新数据解析。\n")
+            } else {
+                append("空开=本期无人中；\"规则固定¥X\"为基础额度，每期实际金额以官方公布为准。")
             }
-            if (config.code == "ssq" && ruleVersion.key.startsWith("ssq_2026")) {
-                val fuyunState = draw?.conditionalFlags?.get(ConditionalKey.SSQ_FUYUN)
-                val jp = draw?.jackpotAmount
-                append("\n★双色球福运奖双门槛：")
-                if (jp != null) append("奖池${formatAmount(jp)}，")
-                append(when (fuyunState) {
-                    ConditionalValue.ON -> "≥15亿福运奖已开启（中3红=5元）"
-                    ConditionalValue.OFF -> "<3亿福运奖已停止（中3红不中奖）"
-                    else -> "3亿~15亿之间福运奖维持上期状态"
-                })
+            // —— 奖池联动说明仅在规则版本明确时展示（缺失时 ruleVersion 是占位骨架，startsWith 必错）——
+            if (!metadataMissing) {
+                if (config.code == "dlt" && ruleVersion.key.startsWith("dlt_2026")) {
+                    val floatState = draw?.conditionalFlags?.get(ConditionalKey.DLT_2026_FLOAT)
+                    val jp = draw?.jackpotAmount
+                    append("\n★大乐透2026新规奖池联动：")
+                    if (jp != null) append("当前奖池${formatAmount(jp)}，")
+                    append(when (floatState) {
+                        ConditionalValue.UP -> "≥8亿已上浮（三6666/四380/五200/六18/七7）"
+                        ConditionalValue.NORMAL -> "<8亿未上浮（三5000/四300/五150/六15/七5）"
+                        else -> "奖池未知，暂按基础金额展示"
+                    })
+                }
+                if (config.code == "ssq" && ruleVersion.key.startsWith("ssq_2026")) {
+                    val fuyunState = draw?.conditionalFlags?.get(ConditionalKey.SSQ_FUYUN)
+                    val jp = draw?.jackpotAmount
+                    append("\n★双色球福运奖双门槛：")
+                    if (jp != null) append("奖池${formatAmount(jp)}，")
+                    append(when (fuyunState) {
+                        ConditionalValue.ON -> "≥15亿福运奖已开启（中3红=5元）"
+                        ConditionalValue.OFF -> "<3亿福运奖已停止（中3红不中奖）"
+                        else -> "3亿~15亿之间福运奖维持上期状态"
+                    })
+                }
             }
         }
         val footer = TextView(context).apply {
             text = extraHint
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            setTextColor(0xFF9E9E9E.toInt())
+            // 元数据缺失：footer 也用红底白字警告，保证用户滑到底也一定能看到
+            if (metadataMissing) {
+                setTextColor(0xFFFFFFFF.toInt())
+                setBackgroundColor(0xFFB71C1C.toInt())
+            } else {
+                setTextColor(0xFF9E9E9E.toInt())
+            }
             val pad = (10 * density).toInt()
             setPadding(pad, pad, pad, pad)
         }
@@ -380,14 +426,19 @@ class DrawDetailDialog(
     }
 
     // ============ v9新增：政策标签 + 可展开历史变更说明卡 ============
-    private fun buildPolicyExpandableCard(currentRule: LotteryTypeConfig.RuleVersion, density: Float): View {
+    private fun buildPolicyExpandableCard(
+        currentRule: LotteryTypeConfig.RuleVersion,
+        density: Float,
+        metadataMissing: Boolean  // 严格模式：元数据缺失→红色警告样式+说明
+    ): View {
         val card = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = (4 * density).toInt() }
-            setBackgroundColor(0xFFE8F5E9.toInt())
+            // 元数据缺失：红色警告背景（替代默认绿色）
+            setBackgroundColor(if (metadataMissing) 0xFFFFEBEE.toInt() else 0xFFE8F5E9.toInt())
         }
         val pad = (10 * density).toInt()
         // 标题行：本期政策标签 + "展开历史"按钮
@@ -402,9 +453,16 @@ class DrawDetailDialog(
         }
         val issueTag = draw?.issue?.let { "  期号：$it" } ?: ""
         val tvCurrent = TextView(context).apply {
-            text = "【本期适用】${currentRule.policyLabel}${issueTag}\n生效日期：${currentRule.effectiveFromDate}起"
+            text = if (metadataMissing) {
+                "【⚠ 元数据缺失·规则版本不明】${issueTag}\n" +
+                    "当前展示结构基于【最旧版规则】仅供参考，" +
+                    "请下拉刷新重新解析获取正确版本。"
+            } else {
+                "【本期适用】${currentRule.policyLabel}${issueTag}\n生效日期：${currentRule.effectiveFromDate}起"
+            }
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            setTextColor(0xFF1B5E20.toInt())
+            // 元数据缺失：红色文字（替代默认深绿）
+            setTextColor(if (metadataMissing) 0xFFB71C1C.toInt() else 0xFF1B5E20.toInt())
             setTypeface(null, Typeface.BOLD)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }

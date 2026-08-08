@@ -39,15 +39,28 @@ class HistoryAdapter(
     private var groupCountCache: Map<String, Int> = emptyMap()
     //  只在单版本彩种隐藏徽章/分组标题（避免给 ruleVersions.size==1 的彩种视觉噪音）
     private val hasMultipleRuleVersions: Boolean = config.ruleVersions.size > 1
+    // ===== 规则版本不明（resolveRuleVersion 返回 null）时的统一占位常量 =====
+    //   用一个特殊 key+label 保证这些 draw 也能被正确分组展示，绝不 NPE 崩溃。
+    private val UNKNOWN_VERSION_KEY = "__UNKNOWN_RULE_VERSION__"
+    private val UNKNOWN_VERSION_LABEL = "元数据缺失·版本不明"
+    private val UNKNOWN_VERSION_NOTE = "本期无法确定适用规则版本，显示可能不匹配当期真实政策。"
 
     init {
         rebuildGroupCache()
     }
 
+    /** 安全获取 ruleVersionKey：null 时返回占位 key，保证分组、比较永不 NPE */
+    private fun safeRvKey(draw: LotteryDraw): String =
+        draw.resolveRuleVersion(config)?.key ?: UNKNOWN_VERSION_KEY
+
+    /** 安全获取 RuleVersion：返回 null 时由调用方自行处理占位展示 */
+    private fun safeRv(draw: LotteryDraw): LotteryTypeConfig.RuleVersion? =
+        draw.resolveRuleVersion(config)
+
     private fun rebuildGroupCache() {
         val result = mutableMapOf<String, Int>()
         for (draw in historyList) {
-            val key = draw.resolveRuleVersion(config).key
+            val key = safeRvKey(draw)  // 安全调用，永不 NPE
             result[key] = (result[key] ?: 0) + 1
         }
         groupCountCache = result
@@ -61,29 +74,48 @@ class HistoryAdapter(
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val draw = historyList[position]
-        val ruleVersion = draw.resolveRuleVersion(config)
+        val ruleVersion = safeRv(draw)
+        val rvKey = safeRvKey(draw)
         val prevDraw = historyList.getOrNull(position - 1)
-        val prevRuleVersion = prevDraw?.resolveRuleVersion(config)
+        val prevRvKey = prevDraw?.let { safeRvKey(it) }
+
+        // ======= 严格模式：ruleVersion 为 null 时，所有展示用占位常量替代 =======
+        val policyLabel = ruleVersion?.policyLabel ?: UNKNOWN_VERSION_LABEL
+        val effectiveFrom = ruleVersion?.effectiveFromDate ?: "—"
+        val changeNote = ruleVersion?.changeNote ?: UNKNOWN_VERSION_NOTE
 
         // ======= v11 优化：单版本彩种不显示分组标题 & 徽章，降低噪音 =======
-        val isFirstOfRuleGroup = hasMultipleRuleVersions &&
-            (prevRuleVersion == null || prevRuleVersion.key != ruleVersion.key)
+        //   注意：即使是单版本彩种，如果出现 UNKNOWN_VERSION_KEY（版本不明期），
+        //   也强制显示分组标题，提醒用户这些期的数据可信度不同。
+        val forceShowBecauseUnknown = rvKey == UNKNOWN_VERSION_KEY ||
+            prevRvKey == UNKNOWN_VERSION_KEY
+        val isFirstOfRuleGroup = (hasMultipleRuleVersions || forceShowBecauseUnknown) &&
+            (prevRvKey == null || prevRvKey != rvKey)
+
         if (isFirstOfRuleGroup) {
             holder.tvRuleSectionHeader.visibility = View.VISIBLE
             // 组期数统计：O(1) 读取预计算结果，不再每次 count 全表
-            val groupCount = groupCountCache[ruleVersion.key] ?: 0
+            val groupCount = groupCountCache[rvKey] ?: 0
             holder.tvRuleSectionHeader.text = buildString {
                 append("● ")
-                append(ruleVersion.policyLabel)
+                append(policyLabel)
                 append(" ｜ 生效：")
-                append(ruleVersion.effectiveFromDate)
+                append(effectiveFrom)
                 append("起 ｜ 本组")
                 append(groupCount)
                 append("期")
                 append("\n")
                 append("   说明：")
-                append(ruleVersion.changeNote.take(80))
-                if (ruleVersion.changeNote.length > 80) append("…")
+                append(changeNote.take(80))
+                if (changeNote.length > 80) append("…")
+            }
+            // 版本不明分组：红色背景高亮警告
+            if (rvKey == UNKNOWN_VERSION_KEY) {
+                holder.tvRuleSectionHeader.setTextColor(0xFFB71C1C.toInt())
+                holder.tvRuleSectionHeader.setBackgroundColor(0xFFFFEBEE.toInt())
+            } else {
+                holder.tvRuleSectionHeader.setTextColor(0xFF1B5E20.toInt())
+                holder.tvRuleSectionHeader.setBackgroundColor(0xFFE8F5E9.toInt())
             }
         } else {
             holder.tvRuleSectionHeader.visibility = View.GONE
@@ -94,9 +126,16 @@ class HistoryAdapter(
         holder.tvDate.text = draw.date.orEmpty()
 
         // ======= v11 优化：单版本彩种隐藏政策徽章（无信息增益只会增加视觉噪音）=======
-        if (hasMultipleRuleVersions) {
+        //   版本不明期：徽章永远显示（红色警告样式）
+        val showBadge = hasMultipleRuleVersions || rvKey == UNKNOWN_VERSION_KEY
+        if (showBadge) {
             holder.tvPolicyBadge.visibility = View.VISIBLE
-            holder.tvPolicyBadge.text = ruleVersion.policyLabel
+            holder.tvPolicyBadge.text = policyLabel
+            if (rvKey == UNKNOWN_VERSION_KEY) {
+                // 版本不明：红色警告徽章
+                holder.tvPolicyBadge.setTextColor(0xFFB71C1C.toInt())
+                holder.tvPolicyBadge.setBackgroundResource(R.drawable.bg_policy_badge)
+            }
         } else {
             holder.tvPolicyBadge.visibility = View.GONE
         }

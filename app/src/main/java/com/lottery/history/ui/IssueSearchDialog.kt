@@ -293,13 +293,26 @@ class IssueSearchDialog(context: Context) : Dialog(context) {
         }
 
         // ===== 政策标签：优先用 draw.resolveRuleVersion（已存DB的版本，历史数据不错位）=====
+        //   严格模式：ruleVersion 为 null 时，红色警告展示"元数据缺失"，绝不保底最新版
         val ruleVersion = draw.resolveRuleVersion(cfg)
-        // 政策标签 + 变更简述（让客户了解本期政策与其他阶段的差异原因）
+        val (policyText, textColor, bgColor) = if (ruleVersion != null) {
+            Triple(
+                "【${ruleVersion.policyLabel}】${ruleVersion.changeNote}",
+                0xFF1B5E20.toInt(),
+                0xFFE8F5E9.toInt()
+            )
+        } else {
+            Triple(
+                "【⚠ 元数据缺失】本期无法确定适用规则版本，展示可能与当期真实政策不符。请下拉刷新重新解析。",
+                0xFFB71C1C.toInt(),
+                0xFFFFEBEE.toInt()
+            )
+        }
         container.addView(TextView(context).apply {
-            text = "【${ruleVersion.policyLabel}】${ruleVersion.changeNote}"
+            text = policyText
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            setTextColor(0xFF1B5E20.toInt())
-            setBackgroundColor(0xFFE8F5E9.toInt())
+            setTextColor(textColor)
+            setBackgroundColor(bgColor)
             val pad = (8 * density).toInt()
             setPadding(pad, (5 * density).toInt(), pad, (5 * density).toInt())
             layoutParams = LinearLayout.LayoutParams(

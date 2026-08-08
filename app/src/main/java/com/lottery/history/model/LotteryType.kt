@@ -68,24 +68,46 @@ data class LotteryTypeConfig(
     )
 
     // ============ 向后兼容：默认取最新版本（供不区分日期的逻辑使用）============
+    //  【危险警告·Deprecated】：这些属性永远返回【最新版】规则，
+    //    用于 UI 排序顺序/格式化展示辅助尚可，**绝对不能用于某一期开奖数据的规则定位**，
+    //    否则 2003 年老期会被错误套用 2026 新规展示。
+    //  定位某一期规则版本的唯一正确入口：rulesForDate(date, issue) / draw.resolveRuleVersion(config)
+    @Deprecated(
+        level = DeprecationLevel.WARNING,
+        message = "永远返回最新版规则，仅可用于UI排序/展示辅助，绝不能用于某一期的规则定位！" +
+            "请用 rulesForDate(date,issue) 或 draw.resolveRuleVersion(config) 替代。"
+    )
     val rules: List<MatchRuleDef> get() = ruleVersions.first().rules
+    @Deprecated(level = DeprecationLevel.WARNING, message = "永远返回最新版，定位单期规则请用 rulesForDate()/resolveRuleVersion()")
     val realTiersToUse: Int get() = ruleVersions.first().realTiersToUse
+    @Deprecated(level = DeprecationLevel.WARNING, message = "永远返回最新版，定位单期规则请用 rulesForDate()/resolveRuleVersion()")
     val extraFieldCount: Int get() = ruleVersions.first().extraFieldCount
+    @Deprecated(level = DeprecationLevel.WARNING, message = "永远返回最新版，定位单期规则请用 rulesForDate()/resolveRuleVersion()")
     val prizeTierPairCount: Int get() = ruleVersions.first().prizeTierPairCount
 
     /**
      * 按开奖日期选择适用的规则版本（解析时用此函数确定当期版本）。
      *
+     * 【严格模式·绝不用"最新版保底"误导】：
+     *  date、issue 两者都为空意味着"没有任何能用于定位规则版本的输入数据"，
+     *  这种情况下返回 null，由调用方（解析器/展示层）显式标"元数据缺失，无法确定规则版本"，
+     *  **绝不用最新版当默认**（否则老期数据会被错误套上 2026 新规，展示 7 级而实际是 9 级）。
+     *
+     *   ① date 非空 → 用 date 匹配（最准，优先级最高）
+     *   ② date 空但 issue 非空 → inferDateFromIssue(issue) 推断年份后定位（次准）
+     *   ③ 两者都空 → 返回 null（调用方自行处理"元数据缺失"展示，绝不 fallback 最新版）
+     *
      * 期号兜底：当 [date] 为空（seed 数据 / 部分历史数据缺失日期字段）时，
      * 从 [issue] 前缀推断一个假年-月-日再做版本定位，避免所有历史期被一刀切归到最新版。
      */
-    fun rulesForDate(date: String?, issue: String? = null): RuleVersion {
+    fun rulesForDate(date: String?, issue: String? = null): RuleVersion? {
         val actualDate = when {
             !date.isNullOrEmpty() -> date
             !issue.isNullOrEmpty() -> inferDateFromIssue(issue, this.code)
             else -> null
         }
-        if (actualDate == null) return ruleVersions.first()
+        // ===== 关键：actualDate 为 null（date+issue 都缺）时，直接返回 null，绝不保底最新版 =====
+        if (actualDate == null) return null
         return ruleVersions.firstOrNull { actualDate >= it.effectiveFromDate }
             ?: ruleVersions.last()
     }

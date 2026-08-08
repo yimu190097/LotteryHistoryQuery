@@ -167,6 +167,24 @@ object LotteryXlsParser {
 
                 // 按当期开奖日期 + 期号选择适用的规则版本（不同阶段奖项结构可能不同）
                 val ruleVersion = config.rulesForDate(date, issue)
+                // ===== 严格模式：date+issue 仍无法定位规则版本时，标记 SEED_INCOMPLETE 并跳过 =====
+                //   绝不拿 ruleVersions.first() 最新版去套（否则历史期被错误归类到 2026 新规）
+                if (ruleVersion == null) {
+                    result.add(
+                        LotteryDraw(
+                            issue = issue,
+                            primaryNumbers = primary.sorted(),
+                            secondaryNumbers = secondary.sorted(),
+                            date = date,
+                            ruleVersionKey = null,
+                            parseSource = ParseSource.SEED_INCOMPLETE,
+                            parseAt = System.currentTimeMillis(),
+                            parserVersion = 1,
+                            tierMatchStatus = com.lottery.history.model.TierMatchStatus.MISMATCH
+                        )
+                    )
+                    continue
+                }
 
                 // 号码之后的剩余部分：extraFieldCount 个额外字段（销售额/奖池/出球顺序）+ 成对奖级
                 val extraStart = numStart + config.parsePrimaryCount +

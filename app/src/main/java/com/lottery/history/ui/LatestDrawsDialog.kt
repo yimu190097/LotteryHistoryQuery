@@ -98,16 +98,29 @@ class LatestDrawsDialog(context: Context) : Dialog(context) {
             headerRow.addView(tvName)
 
             // ======= 最新一期适用政策标签徽章：和彩种名同排，防止用户误以为所有历史期都用当前规则 =======
-            // 这里必须使用 draw.resolveRuleVersion()，即按该期开奖当时的版本，而不是 config.ruleVersions.first()
-            // 否则：若大乐透最新一期是老9级（还没到2026-01-31），徽章会误标"2026新规·7级"
-            val currentRule = draw?.resolveRuleVersion(config) ?: config.ruleVersions.first()
+            // 严格模式：绝不用 config.ruleVersions.first() 最新版保底。
+            //   resolveRuleVersion 返回 null 时，显示红色"版本不明"警告徽章。
+            val currentRule = draw?.resolveRuleVersion(config)
+            val (badgeText, badgeTextColor, isMissing) = when {
+                draw == null -> Triple("暂无数据", Color.parseColor("#9E9E9E"), false)
+                currentRule != null -> {
+                    val issueLabel = draw.issue.let { i -> "｜期号$i" }
+                    Triple("${currentRule.policyLabel}$issueLabel", Color.parseColor("#1B5E20"), false)
+                }
+                else -> {
+                    // 元数据缺失：红色警告徽章
+                    val issueLabel = draw.issue.let { i -> "｜期号$i" }
+                    Triple("【⚠版本不明】$issueLabel", Color.parseColor("#B71C1C"), true)
+                }
+            }
             val tvPolicyBadge = TextView(context).apply {
-                val issueLabel = draw?.issue?.let { i -> "｜期号$i" } ?: ""
-                text = "${currentRule.policyLabel}$issueLabel"
+                text = badgeText
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
-                setTextColor(Color.parseColor("#1B5E20"))
+                setTextColor(badgeTextColor)
                 setTypeface(null, Typeface.BOLD)
-                setBackgroundResource(R.drawable.bg_policy_badge)
+                setBackgroundResource(
+                    if (isMissing) R.drawable.bg_policy_badge else R.drawable.bg_policy_badge
+                )
                 val padH = (5 * density).toInt()
                 val padV = (2 * density).toInt()
                 setPadding(padH, padV, padH, padV)

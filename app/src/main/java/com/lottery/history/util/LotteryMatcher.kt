@@ -41,10 +41,43 @@ object LotteryMatcher {
     ): List<QueryResultItem> {
         // 1) 每期用自己的 ruleVersion 算命中，写入聚合桶
         val buckets = linkedMapOf<BucketKey, MutableList<LotteryDraw>>()
+        // ===== 额外桶：元数据缺失（resolveRuleVersion 返回 null）的期数统一归类 =====
+        //   这些期无法确定是哪一版规则，但用户选号命中了也必须展示（显式标注版本不明），
+        //   绝不"悄悄扔掉"导致用户看到的命中总期数 < 实际。
+        val unknownVersionBuckets = linkedMapOf<BucketKey, MutableList<LotteryDraw>>()
+
         for (draw in history) {
             val ruleVersion = draw.resolveRuleVersion(config)
             // 读取该期条件奖级标志，用于跳过停发奖项
             val flags = draw.conditionalFlags
+
+            // ===== 严格模式：ruleVersion 为 null 时，独立写未知版本桶，绝不跳过 =====
+            if (ruleVersion == null) {
+                // 用 config.ruleVersions.last()（最旧版）的规则做"保底匹配"仅为让用户
+                // 看到有命中，但 key 用 "__UNKNOWN__" 标识，UI 上显式标"版本不明"。
+                // 不跳过、不丢弃，保证数据完整性。
+                val fallbackRules = config.ruleVersions.last().rules
+                for (rule in fallbackRules) {
+                    val condKey = rule.conditionalKey
+                    if (condKey != null && flags[condKey] == ConditionalValue.OFF) continue
+                    val primaryCount = draw.primaryNumbers.count { it in selectedPrimary }
+                    val secondaryCount = if (config.hasSecondary) {
+                        draw.secondaryNumbers.count { it in selectedSecondary }
+                    } else 0
+                    if (primaryCount == rule.matchPrimary && secondaryCount == rule.matchSecondary) {
+                        val key = BucketKey(
+                            ruleVersionKey = "__UNKNOWN_VERSION__",
+                            matchPrimary = rule.matchPrimary,
+                            matchSecondary = rule.matchSecondary,
+                            prizeName = rule.prizeName
+                        )
+                        unknownVersionBuckets.getOrPut(key) { mutableListOf() }.add(draw)
+                        break
+                    }
+                }
+                continue
+            }
+
             for (rule in ruleVersion.rules) {
                 // v11.1: 条件奖级 OFF 时跳过该规则（如福运奖停发 → 3+0 不计中奖）
                 val condKey = rule.conditionalKey
@@ -99,7 +132,7 @@ object LotteryMatcher {
                         matchPrimary = rule.matchPrimary,
                         matchSecondary = rule.matchSecondary,
                         prizeName = displayName,
-                        count = draws.size,
+                        count = draws.size.toLong(),  // 显式 Int→Long，保证类型链路一致
                         matches = draws,
                         sourceRuleVersionKey = bk.ruleVersionKey
                     )
@@ -120,9 +153,23 @@ object LotteryMatcher {
                     matchPrimary = key.matchPrimary,
                     matchSecondary = key.matchSecondary,
                     prizeName = displayName,
-                    count = draws.size,
+                    count = draws.size.toLong(),  // 显式 Int→Long
                     matches = draws,
                     sourceRuleVersionKey = key.ruleVersionKey
+                )
+            )
+        }
+
+        // 2c) 追加：元数据缺失（规则版本不明）的命中 → 统一放尾部、显式标注
+        for ((bk, draws) in unknownVersionBuckets) {
+            inOrder.add(
+                QueryResultItem(
+                    matchPrimary = bk.matchPrimary,
+                    matchSecondary = bk.matchSecondary,
+                    prizeName = "【元数据缺失·版本不明】${bk.prizeName}",
+                    count = draws.size.toLong(),
+                    matches = draws,
+                    sourceRuleVersionKey = null
                 )
             )
         }

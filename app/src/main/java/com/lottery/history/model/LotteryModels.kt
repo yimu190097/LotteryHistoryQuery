@@ -146,13 +146,16 @@ data class LotteryDraw(
     val conditionalFlags: Map<String, String> = emptyMap()
 ) {
     /**
-     * 基于 ruleVersionKey + issue + date 三级兜底拿到当期应展示的 RuleVersion（展示时首选）。
-     * 优先级：① 已持久化的 ruleVersionKey（最高，来自解析时确定或 seed 按期号推导）
-     *        ② 按期号 issue 前缀推断年份定位（适用于 date 缺失的 seed 历史期）
-     *        ③ 按日期 date 定位（通用）
-     *        ④ config.ruleVersions.first()（终极保底，即最新版）
+     * 基于 ruleVersionKey + issue + date 三级定位拿到当期应展示的 RuleVersion（展示时首选）。
+     *
+     * 【严格模式：绝不 fallback 到最新版误导】：
+     *   ① 已持久化的 ruleVersionKey（最高，来自解析时确定或 seed 按期号推导）
+     *   ② 按期号 issue 前缀推断年份定位（适用于 date 缺失的 seed 历史期）
+     *   ③ 按日期 date 定位（通用）
+     *   ④ 以上全失败 → 返回 null，调用方必须显式展示「元数据缺失，无法确定当期规则版本」
+     *     ，**绝不拿 config.ruleVersions.first() 最新版顶上去**。
      */
-    fun resolveRuleVersion(config: LotteryTypeConfig): LotteryTypeConfig.RuleVersion {
+    fun resolveRuleVersion(config: LotteryTypeConfig): LotteryTypeConfig.RuleVersion? {
         if (ruleVersionKey != null) {
             val cached = config.ruleVersions.firstOrNull { it.key == ruleVersionKey }
             if (cached != null) return cached
