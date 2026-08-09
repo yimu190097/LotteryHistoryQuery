@@ -104,36 +104,52 @@ object LotteryMatcher {
             }
         }
 
-        // 2) 查询结果列表：按最新政策 config.rules 的奖项设立展示。
+        // 2) 查询结果列表：按最新政策 config.rules 的【奖项名】合并展示。
         //    【核心约束】：matches（真实 draws 列表）的所有元数据——期号、开奖日期、真实 ruleVersionKey、
-        //    真实奖项信息绝对不变。这里只把不同版本 bucket 的 draws 合并到"最新政策对应奖项行"
+        //    真实奖项信息绝对不变。这里只把不同版本、不同命中条件的 draws 合并到"最新政策对应奖项名行"
         //    用于简单展示；点"查看历史"时 HistoryDialog 依然按 matches 中每期 draw 的真实
         //    ruleVersionKey 分组展示真实政策。
+        //
+        //    同奖项名合并：如 DLT 2026 六等奖有 3+1 和 2+2 两个条件，命中任一都合并到一行"六等奖"。
+        //    matchPrimary/matchSecondary 设为 -1 表示"多条件合并"，UI 层显示 "—"。
         val inOrder = mutableListOf<QueryResultItem>()
         val consumed = mutableSetOf<BucketKey>()
         // 最新政策 key：Pair(matchPrimary, matchSecondary) → 奖项名
         val latestRuleByKey = config.rules.associate { r ->
             (r.matchPrimary to r.matchSecondary) to r.prizeName
         }
-
-        // 2a) 按最新规则顺序：每条 rule 拉取所有版本 (matchP, matchS) 相同的 bucket，
-        //     合并 draws（真实元数据不变），奖名用最新政策奖名。
+        // 按奖项名去重，保留首次出现顺序
+        val uniquePrizeNames = linkedSetOf<String>()
+        // 每个奖项名对应的全部 (matchPrimary, matchSecondary) 条件集合
+        val nameToConditions = mutableMapOf<String, MutableList<Pair<Int, Int>>>()
         for (rule in config.rules) {
+            uniquePrizeNames.add(rule.prizeName)
+            nameToConditions.getOrPut(rule.prizeName) { mutableListOf() }
+                .add(rule.matchPrimary to rule.matchSecondary)
+        }
+
+        // 2a) 按最新政策去重后的奖项名顺序：拉取所有版本中 (matchP, matchS) 属于该奖项名
+        //     任一条件的 bucket，合并 draws（真实元数据不变），奖名用最新政策奖名。
+        for (prizeName in uniquePrizeNames) {
+            val conditions = nameToConditions[prizeName]!!
             val matchingEntries = buckets.entries.filter { (k, _) ->
-                k.matchPrimary == rule.matchPrimary && k.matchSecondary == rule.matchSecondary
+                k.ruleVersionKey != "__UNKNOWN_VERSION__" &&
+                conditions.any { it.first == k.matchPrimary && it.second == k.matchSecondary }
             }
             if (matchingEntries.isEmpty()) continue
             matchingEntries.forEach { (k, _) -> consumed.add(k) }
 
             // 所有真实 LotteryDraw 对象原封不动合并（ruleVersionKey / issue / date 全保留）
             val allDraws = matchingEntries.flatMap { it.value }
+            // 多条件合并时 matchPrimary/Secondary 设为 -1（UI 显示 "—"）；单条件时保留实际值
+            val (mp, ms) = if (conditions.size == 1) conditions[0] else (-1 to -1)
             inOrder.add(
                 QueryResultItem(
-                    matchPrimary = rule.matchPrimary,
-                    matchSecondary = rule.matchSecondary,
-                    prizeName = rule.prizeName,   // 只改展示的奖名——按最新政策
+                    matchPrimary = mp,
+                    matchSecondary = ms,
+                    prizeName = prizeName,          // 只改展示的奖名——按最新政策
                     count = allDraws.size.toLong(),
-                    matches = allDraws,           // 真实draw元数据 100% 保留不改动
+                    matches = allDraws,             // 真实draw元数据 100% 保留不改动
                     sourceRuleVersionKey = config.ruleVersions.lastOrNull()?.key
                 )
             )
@@ -144,21 +160,20 @@ object LotteryMatcher {
         //     若最新规则找不到对应 key，就追加到尾部展示原奖项名；matches 元数据始终不变。
         val remaining = buckets.keys - consumed
         for (key in remaining) {
+            if (key.ruleVersionKey == "__UNKNOWN_VERSION__") continue
             val draws = buckets[key] ?: continue
             // 找最新政策同(matchP, matchS)的奖名兜底；没找到就保留原奖项名
             val latestName = latestRuleByKey[key.matchPrimary to key.matchSecondary] ?: key.prizeName
-            // 检查 inOrder 里是否已有同奖名的行可以合并（同(matchP,matchS)行2a已处理过，
-            // 这里只处理最新版同(p,s)=奖名 但旧版 key=(p,s,oldName)不一样）
-            val existing = inOrder.firstOrNull {
-                it.matchPrimary == key.matchPrimary &&
-                    it.matchSecondary == key.matchSecondary &&
-                    it.prizeName == latestName
-            }
+            // 同奖名行已存在则合并（matches 真实 draws 元数据不变）
+            val existing = inOrder.firstOrNull { it.prizeName == latestName }
             if (existing != null) {
                 // 合并：仅把真实 draws 追加到 matches 列表，existing 其他字段不动
                 //   → matches 原元数据依旧完整
+                //   → 合并后该行一定含多条件，matchPrimary/Secondary 设 -1
                 (existing.matches as MutableList<LotteryDraw>).addAll(draws)
                 existing.count += draws.size.toLong()
+                existing.matchPrimary = -1
+                existing.matchSecondary = -1
             } else {
                 inOrder.add(
                     QueryResultItem(

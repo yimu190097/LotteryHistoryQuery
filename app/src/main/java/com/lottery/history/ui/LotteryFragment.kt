@@ -464,12 +464,14 @@ class LotteryFragment : Fragment() {
         llResultBlueBalls.removeAllViews()
         resultContainer.removeAllViews()
 
-        // 空状态：用 config.rules（最新版）做占位展示，但上方提示已经说明跨版本问题
-        val emptyResults = config.rules.map { rule ->
+        // 空状态：用 config.rules（最新版）去重后的奖项做占位展示
+        val seenNames = linkedSetOf<String>()
+        config.rules.forEach { seenNames.add(it.prizeName) }
+        val emptyResults = seenNames.map { name ->
             QueryResultItem(
-                matchPrimary = rule.matchPrimary,
-                matchSecondary = rule.matchSecondary,
-                prizeName = rule.prizeName,
+                matchPrimary = -1,
+                matchSecondary = -1,
+                prizeName = name,
                 count = 0,
                 matches = emptyList()
             )
@@ -557,14 +559,14 @@ class LotteryFragment : Fragment() {
             }
             row.addView(col1)
 
-            // 列2：命中红球/前区/号码 数量
-            val hitPriTxt = "${item.matchPrimary}个"
+            // 列2：命中红球/前区/号码 数量（多条件合并时 matchPrimary=-1 显示 "—"）
+            val hitPriTxt = if (item.matchPrimary < 0) "—" else "${item.matchPrimary}个"
             val col2 = createTableCell(hitPriTxt, wPri).apply {
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
                 setTypeface(null, Typeface.BOLD)
                 setPadding(cellPadH, cellPadV, cellPadH, cellPadV)
                 gravity = Gravity.CENTER
-                // 主号命中 ≥3 用红色加粗突出；<3 灰色正常
+                // 主号命中 ≥3 用红色加粗突出；<3 灰色正常；— 用灰色
                 setTextColor(
                     if (item.matchPrimary >= 3) 0xFFC62828.toInt() else 0xFF546E7A.toInt()
                 )
@@ -573,7 +575,8 @@ class LotteryFragment : Fragment() {
 
             // 列3：命中蓝球/后区/特别号（仅双区彩种显示；单区彩种 GONE 直接排除不占位）
             if (config.hasSecondary) {
-                val col3 = createTableCell("${item.matchSecondary}个", wSec).apply {
+                val hitSecTxt = if (item.matchSecondary < 0) "—" else "${item.matchSecondary}个"
+                val col3 = createTableCell(hitSecTxt, wSec).apply {
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
                     setTypeface(null, Typeface.BOLD)
                     setPadding(cellPadH, cellPadV, cellPadH, cellPadV)

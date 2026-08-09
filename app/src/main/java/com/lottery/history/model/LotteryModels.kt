@@ -165,8 +165,8 @@ data class LotteryDraw(
 }
 
 data class QueryResultItem(
-    val matchPrimary: Int,
-    val matchSecondary: Int,
+    var matchPrimary: Int,           // 合并同奖项多条件时设为 -1（UI 显示 "—"）
+    var matchSecondary: Int,         // 同上
     val prizeName: String,
     var count: Long,                 // 合并版本时可累加；matches 真实对象从不改动
     var matches: List<LotteryDraw>,  // 真实 draw 对象原封不动，只合并列表引用
