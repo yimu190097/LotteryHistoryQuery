@@ -154,10 +154,22 @@ class MainActivity : AppCompatActivity() {
         private val LATEST_DIFF = object : DiffUtil.ItemCallback<LatestDrawItem>() {
             override fun areItemsTheSame(a: LatestDrawItem, b: LatestDrawItem) =
                 a.config.code == b.config.code
+
+            /** Lint DiffUtilEquals 修复：List 接口未声明 equals()，逐元素比较避免 lint 误报。 */
+            private fun listEquals(xs: List<Int>?, ys: List<Int>?): Boolean {
+                if (xs === ys) return true
+                if (xs == null || ys == null) return false
+                if (xs.size != ys.size) return false
+                for (i in xs.indices) {
+                    if (xs[i] != ys[i]) return false
+                }
+                return true
+            }
+
             override fun areContentsTheSame(a: LatestDrawItem, b: LatestDrawItem) =
                 a.draw?.issue == b.draw?.issue &&
-                    a.draw?.primaryNumbers == b.draw?.primaryNumbers &&
-                    a.draw?.secondaryNumbers == b.draw?.secondaryNumbers
+                    listEquals(a.draw?.primaryNumbers, b.draw?.primaryNumbers) &&
+                    listEquals(a.draw?.secondaryNumbers, b.draw?.secondaryNumbers)
         }
     }
 
