@@ -212,10 +212,15 @@ object LotteryType {
                 effectiveFromDate = "2019-02-18",
                 policyLabel = "2019-2026·9级经典",
                 changeNote = "2019年第19019期至2026年1月30日的9级经典规则，三10000/四3000/五300/" +
-                    "六200/七100/八15/九5，追加投注最高1800万。",
-                realTiersToUse = 9, prizeTierPairCount = 9,
+                    "六200/七100/八15/九5，追加投注最高1800万。" +
+                    "\n[注意：官方数据源 dlt2_desc.txt 本身是按7级合并结构化输出的，" +
+                    "解析层 prizeTierPairCount=7（14格基本投注+13格追加投注=真实字段布局）；" +
+                    "realTiersToUse=9（规则版本本身的匹配规则仍是9级）。" +
+                    "展示层 DrawDetailDialog 用 realTiersToUse=9 的 MatchRuleDef 去匹配命中，" +
+                    "不会因为数据源按7级合并存储就丢奖级。]",
+                realTiersToUse = 9, prizeTierPairCount = 7,   // 7对=14格(12-25)，真实官方源字段布局
                 extraFieldCount = 2,
-                appendTierPairCount = 9,
+                appendTierPairCount = 7,  // 7级追加短尾：前6级2字段+第7级1字段=13格(26-38)
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
@@ -240,10 +245,12 @@ object LotteryType {
                 key = "dlt_20140505",
                 effectiveFromDate = "2014-05-05",
                 policyLabel = "2014-2019·6级",
-                changeNote = "2014年第14052期至2019年的6级规则，奖级由8个缩为6个，一/二/三等奖浮动，四五级固定。",
-                realTiersToUse = 6, prizeTierPairCount = 6,
+                changeNote = "2014年第14052期至2019年的6级规则，奖级由8个缩为6个，一/二/三等奖浮动，四五级固定。" +
+                    "\n[注意：官方数据源按7级合并结构化输出（prizeTierPairCount=7，appendTierPairCount=7），" +
+                    "realTiersToUse=6 用于展示层按当期真实政策6级分组显示。]",
+                realTiersToUse = 6, prizeTierPairCount = 7,  // 官方源字段布局 7对=14格，和7级合并版一致
                 extraFieldCount = 2,
-                appendTierPairCount = 6,  // DLT 上市即有追加投注，追加奖级数=基本奖级数
+                appendTierPairCount = 7,  // 官方源字段布局 7级追加短尾=13格，和7级合并版一致
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
@@ -260,10 +267,12 @@ object LotteryType {
                 key = "dlt_20091017",
                 effectiveFromDate = "2009-10-17",
                 policyLabel = "2009-2014·8级千万头奖版",
-                changeNote = "2009年第09121期至2014年的8级规则，奖池≥1亿时一等奖可达1000万。",
-                realTiersToUse = 8, prizeTierPairCount = 8,
+                changeNote = "2009年第09121期至2014年的8级规则，奖池≥1亿时一等奖可达1000万。" +
+                    "\n[注意：官方数据源按7级合并结构化输出（prizeTierPairCount=7，appendTierPairCount=7），" +
+                    "realTiersToUse=8 用于展示层按当期真实政策8级分组显示。]",
+                realTiersToUse = 8, prizeTierPairCount = 7,  // 官方源字段布局 7对=14格
                 extraFieldCount = 2,
-                appendTierPairCount = 8,  // 追加投注奖级数=基本奖级数
+                appendTierPairCount = 7,  // 官方源字段布局 7级追加短尾=13格
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
@@ -283,10 +292,12 @@ object LotteryType {
                 key = "dlt_20070528",
                 effectiveFromDate = "2007-05-28",
                 policyLabel = "2007.05-2009.10·上市首版",
-                changeNote = "2007年5月28日首期上市至2009年10月，一等奖500万封顶。",
-                realTiersToUse = 8, prizeTierPairCount = 8,
+                changeNote = "2007年5月28日首期上市至2009年10月，一等奖500万封顶。" +
+                    "\n[注意：官方数据源按7级合并结构化输出（prizeTierPairCount=7，appendTierPairCount=7），" +
+                    "realTiersToUse=8 用于展示层按当期真实政策8级分组显示。]",
+                realTiersToUse = 8, prizeTierPairCount = 7,  // 官方源字段布局 7对=14格
                 extraFieldCount = 2,
-                appendTierPairCount = 8,  // 追加投注奖级数=基本奖级数
+                appendTierPairCount = 7,  // 官方源字段布局 7级追加短尾=13格
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),

@@ -37,9 +37,15 @@ object LotteryDataManager {
      *
      *  v1→v2：DLT 2019/2009 追加投注奖级和基本投注尾奖错位修复
      *  v2→v3：DrawDetailDialog 追加投注 0注空开显示修复，解析器版本号整体提升
-     *         （配合 keepLocal parserVersionMismatch 判断，保证所有旧版本脏数据重新解析）
+     *  v3→v4：【ROOT CAUSE 修复】DLT dlt_20190218/dlt_20140505/dlt_20091017/dlt_20070528
+     *         真实官方源是按7级合并结构化输出的（基本投注7×2=14格+追加投注13格=38总字段），
+     *         之前的 prizeTierPairCount=9/8/6 导致基本投注段多读2~4个字段，把追加投注段
+     *         前2级字段（count/amount）直接解析成「基本投注八/九等奖」，
+     *         追加一等被错位展示为「82万注/15元」的严重BUG。
+     *         所有DLT版统一 prizeTierPairCount=7, appendTierPairCount=7（真实字段布局），
+     *         realTiersToUse=9/8/6 保留用于展示层按当期政策分组显示。
      */
-    const val PARSER_VERSION_CURRENT = 3
+    const val PARSER_VERSION_CURRENT = 4
 
     private val mutex = Mutex()
     @Volatile private var dao: LotteryDao? = null
