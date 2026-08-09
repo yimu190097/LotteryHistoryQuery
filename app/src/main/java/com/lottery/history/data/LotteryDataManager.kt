@@ -291,12 +291,21 @@ object LotteryDataManager {
             try {
                 val netList = withContext(Dispatchers.IO) { LotteryRepository.fetchHistory(config) }
                 if (netList.isNotEmpty()) {
-                    // ===== v11 增量刷新保护策略（P1 修复：避免 '-' 回滚覆盖完整数据）=====
-                    //  官方数据源有时先出前几对、后面是 '-'，次日补全。如果新数据里有 '-',
-                    //  本地已有一条 tierMatchStatus=MATCH 且 nonNullTiers 更多的完整版本，
-                    //  就保留本地、不被 '-' 版本覆盖。
-                    val existingByIssue: Map<String, LotteryDrawEntity> = d.getAllByType(config.code)
-                        .associateBy { it.issue }
+                    // ===== 增量刷新策略（用户需求：每次 refresh 拉取最新数据，只把「新期号」
+                    //        或「旧解析器版本脏数据」写入DB，同版本正确解析的期号保留）=====
+                    //  1) getCached 永远返回空 → 上层永远触发 refresh 拉取官网最新全量数据
+                    //     （开发/用户每次使用都保证拿到最新期号+最新解析器）
+                    //  2) 真正落库时做增量判断——只在如下情况写入：
+                    //     a. 本地没这一期（新增最新开奖期）
+                    //     b. 本地 parserVersion < PARSER_VERSION_CURRENT（解析器升级，旧解析脏数据
+                    //        必须覆盖，典型案例：DLT v1把基本八等奖15元/82万注错位当成追加一等，
+                    //        升级 v2 后必须无条件覆盖）
+                    //     c. 网络数据更完整（官方从 '-' 不完整补全为真实数据时覆盖）
+                    //  3) 其余情况：本地已是同解析器版本且完整的数据 → 保留不动，
+                    //     避免无意义的重复全表重写（历史期上万条，没必要每次都重写）。
+                    val existingByIssue: Map<String, LotteryDrawEntity> = withContext(Dispatchers.IO) {
+                        d.getAllByType(config.code)
+                    }.associateBy { it.issue }
 
                     val entities = mutableListOf<LotteryDrawEntity>()
                     val ptInserts = mutableListOf<PrizeTierEntity>()
@@ -308,17 +317,17 @@ object LotteryDataManager {
                             local?.let { decodePrizeTiers(it.allPrizeTiers).count { e -> e != null } }
                                 ?: 0
 
-                        // 【用户需求：每次更新都拉取新数据 无条件覆盖本地脏数据】
-                        //   1) 不再判断 tierMatchStatus / nonNullTiers 等"本地更完整"保护：
-                        //      过去 MATCH 完整性保护常把解析错位的脏数据（如 DLT 基本尾奖
-                        //      被当成追加高奖级）永久保留，用户看到追加一等奖=8,285,244注/15元
-                        //      这种严重失真数据，且永远不会被新解析纠正。
-                        //   2) 现在每次 refresh 全部用网络最新解析覆盖，parserVersion 也同步
-                        //      提升到 PARSER_VERSION_CURRENT，确保任何 BUG 修复都能在下一次
-                        //      refresh 生效。
-                        //   3) 极端情况（官方先出 '-' 不完整数据）的兜底：下一次 refresh
-                        //      官方补全后自然就覆盖成完整数据了，用户也可以手动点刷新立即修正。
-                        val keepLocal = false
+                        // —— 【只增量更新】什么情况才落库 ——
+                        //   a) 本地不存在 → 新增
+                        //   b) 本地解析器版本 < 当前 → 解析修复，强制覆盖旧脏数据
+                        //   c) 网络本期 nonNullTiers 比本地多 → 官方补全了 '-' 数据，覆盖
+                        //   其他：本地已正确解析且同版本 → 保留（skip）
+                        val parserVersionMismatch = local != null &&
+                            (local.parserVersion ?: 0) < PARSER_VERSION_CURRENT
+                        val networkHasMoreTiers = netNonNullTiers > localNonNullTiers
+                        val keepLocal = local != null &&
+                            !parserVersionMismatch &&
+                            !networkHasMoreTiers
 
                         if (keepLocal) continue
 
