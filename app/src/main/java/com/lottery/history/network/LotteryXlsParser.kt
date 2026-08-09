@@ -321,7 +321,7 @@ object LotteryXlsParser {
                         conditionalFlags = conditionalFlags,
                         parseSource = ParseSource.NET,
                         parseAt = System.currentTimeMillis(),
-                        parserVersion = 1
+                        parserVersion = com.lottery.history.data.LotteryDataManager.PARSER_VERSION_CURRENT
                     )
                 )
             } catch (_: Exception) {

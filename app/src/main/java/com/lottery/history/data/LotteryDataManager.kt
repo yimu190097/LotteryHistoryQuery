@@ -33,8 +33,13 @@ import kotlinx.coroutines.withContext
 object LotteryDataManager {
 
     /** 当前解析器版本号。所有版本升级（如修复某个彩种某个时期的字段错位BUG）都应 +1，
-     *  以便 refresh 时强制覆盖旧版本入库的脏数据，避免被"更完整MATCH"保护永久保留。 */
-    const val PARSER_VERSION_CURRENT = 2
+     *  以便 refresh 时强制覆盖旧版本入库的脏数据，避免被"更完整MATCH"保护永久保留。
+     *
+     *  v1→v2：DLT 2019/2009 追加投注奖级和基本投注尾奖错位修复
+     *  v2→v3：DrawDetailDialog 追加投注 0注空开显示修复，解析器版本号整体提升
+     *         （配合 keepLocal parserVersionMismatch 判断，保证所有旧版本脏数据重新解析）
+     */
+    const val PARSER_VERSION_CURRENT = 3
 
     private val mutex = Mutex()
     @Volatile private var dao: LotteryDao? = null
