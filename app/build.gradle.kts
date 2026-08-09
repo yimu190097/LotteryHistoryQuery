@@ -9,6 +9,7 @@ plugins {
 android {
     namespace = "com.lottery.history"
     compileSdk = 34
+    buildToolsVersion = "34.0.0"
 
     defaultConfig {
         applicationId = "com.lottery.history"
