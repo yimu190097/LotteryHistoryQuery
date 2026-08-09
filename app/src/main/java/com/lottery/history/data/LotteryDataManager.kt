@@ -296,18 +296,15 @@ object LotteryDataManager {
             try {
                 val netList = withContext(Dispatchers.IO) { LotteryRepository.fetchHistory(config) }
                 if (netList.isNotEmpty()) {
-                    // ===== 增量刷新策略（用户需求：每次 refresh 拉取最新数据，只把「新期号」
-                    //        或「旧解析器版本脏数据」写入DB，同版本正确解析的期号保留）=====
-                    //  1) getCached 永远返回空 → 上层永远触发 refresh 拉取官网最新全量数据
-                    //     （开发/用户每次使用都保证拿到最新期号+最新解析器）
-                    //  2) 真正落库时做增量判断——只在如下情况写入：
-                    //     a. 本地没这一期（新增最新开奖期）
-                    //     b. 本地 parserVersion < PARSER_VERSION_CURRENT（解析器升级，旧解析脏数据
-                    //        必须覆盖，典型案例：DLT v1把基本八等奖15元/82万注错位当成追加一等，
-                    //        升级 v2 后必须无条件覆盖）
-                    //     c. 网络数据更完整（官方从 '-' 不完整补全为真实数据时覆盖）
-                    //  3) 其余情况：本地已是同解析器版本且完整的数据 → 保留不动，
-                    //     避免无意义的重复全表重写（历史期上万条，没必要每次都重写）。
+                    // ===== 开发阶段：无条件全量拉取+全量覆盖 =====
+                    //  【用户明确指令】：项目编写阶段每次都拉取新数据，绝不搞什么增量判断保留本地。
+                    //  这样做的好处：
+                    //    1) 解析器BUG修复后，下一次开发运行/用户打开立即全部重写，
+                    //       旧脏数据不会因为什么"本地更完整""本地MATCH"就永久锁死。
+                    //    2) 官方数据从 '-' 不完整→补全，下次刷新立刻重写。
+                    //    3) 项目开发调期时，拿到的永远是官网最新解析结果，不受本机历史缓存干扰。
+                    //  PARSER_VERSION_CURRENT = v3 → 入库的所有期 parserVersion 都提升到 v3，
+                    //  后续再升版本时继续保证无条件覆盖。
                     val existingByIssue: Map<String, LotteryDrawEntity> = withContext(Dispatchers.IO) {
                         d.getAllByType(config.code)
                     }.associateBy { it.issue }
@@ -317,22 +314,9 @@ object LotteryDataManager {
 
                     for (draw in netList) {
                         val local = existingByIssue[draw.issue]
-                        val netNonNullTiers = draw.allPrizeTiers.count { it != null }
-                        val localNonNullTiers =
-                            local?.let { decodePrizeTiers(it.allPrizeTiers).count { e -> e != null } }
-                                ?: 0
-
-                        // —— 【只增量更新】什么情况才落库 ——
-                        //   a) 本地不存在 → 新增
-                        //   b) 本地解析器版本 < 当前 → 解析修复，强制覆盖旧脏数据
-                        //   c) 网络本期 nonNullTiers 比本地多 → 官方补全了 '-' 数据，覆盖
-                        //   其他：本地已正确解析且同版本 → 保留（skip）
-                        val parserVersionMismatch = local != null &&
-                            (local.parserVersion ?: 0) < PARSER_VERSION_CURRENT
-                        val networkHasMoreTiers = netNonNullTiers > localNonNullTiers
-                        val keepLocal = local != null &&
-                            !parserVersionMismatch &&
-                            !networkHasMoreTiers
+                        // 忽略 local / nonNullTiers / tierMatchStatus 等所有保留判断，
+                        // 只保留一个假 keepLocal=false → 全部无条件覆盖
+                        val keepLocal = false
 
                         if (keepLocal) continue
 
