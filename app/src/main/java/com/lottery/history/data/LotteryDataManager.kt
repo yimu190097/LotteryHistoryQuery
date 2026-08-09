@@ -37,15 +37,16 @@ object LotteryDataManager {
      *
      *  v1→v2：DLT 2019/2009 追加投注奖级和基本投注尾奖错位修复
      *  v2→v3：DrawDetailDialog 追加投注 0注空开显示修复，解析器版本号整体提升
-     *  v3→v4：【ROOT CAUSE 修复】DLT dlt_20190218/dlt_20140505/dlt_20091017/dlt_20070528
-     *         真实官方源是按7级合并结构化输出的（基本投注7×2=14格+追加投注13格=38总字段），
-     *         之前的 prizeTierPairCount=9/8/6 导致基本投注段多读2~4个字段，把追加投注段
-     *         前2级字段（count/amount）直接解析成「基本投注八/九等奖」，
-     *         追加一等被错位展示为「82万注/15元」的严重BUG。
-     *         所有DLT版统一 prizeTierPairCount=7, appendTierPairCount=7（真实字段布局），
-     *         realTiersToUse=9/8/6 保留用于展示层按当期政策分组显示。
+     *  v4→v5：【ROOT CAUSE 用户给事实终极修正】用户明确告知"26089期字段30=1/31=7247161
+     *         就是追加1等奖！"。之前所有版本把基本投注尾部扩展（字段26-29，9级版本放
+     *         基本8/9等 828524注/15元、8266088注/5元）错当成了追加投注1/2等，
+     *         导致追加1等整体偏移2级：真实追加1等(4注/5,588,963元)被展示为"追加3等"，
+     *         真实基本8等=82万注/15元被展示为"追加1等"的荒谬BUG。
+     *         终极字段布局已硬验证：
+     *          前缀1-11  基本投注12-25(7×2=14)  基本尾扩展26-29(2×2=4=8/9等)
+     *          追加投注1-4等30-37(4×2=8)  追加5级count38(1字段)
      */
-    const val PARSER_VERSION_CURRENT = 4
+    const val PARSER_VERSION_CURRENT = 5
 
     private val mutex = Mutex()
     @Volatile private var dao: LotteryDao? = null

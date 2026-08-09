@@ -218,9 +218,9 @@ object LotteryType {
                     "realTiersToUse=9（规则版本本身的匹配规则仍是9级）。" +
                     "展示层 DrawDetailDialog 用 realTiersToUse=9 的 MatchRuleDef 去匹配命中，" +
                     "不会因为数据源按7级合并存储就丢奖级。]",
-                realTiersToUse = 9, prizeTierPairCount = 7,   // 7对=14格(12-25)，真实官方源字段布局
+                realTiersToUse = 9, prizeTierPairCount = 9,   // 解析层DLT专属：9对=12-25(7对)+26-29(2对=8/9等)
                 extraFieldCount = 2,
-                appendTierPairCount = 7,  // 7级追加短尾：前6级2字段+第7级1字段=13格(26-38)
+                appendTierPairCount = 7,  // 追加投注7级：追加1-4(字段30-37)+追加5(count38)+6(补)+7(补)=7级完整
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
@@ -248,9 +248,9 @@ object LotteryType {
                 changeNote = "2014年第14052期至2019年的6级规则，奖级由8个缩为6个，一/二/三等奖浮动，四五级固定。" +
                     "\n[注意：官方数据源按7级合并结构化输出（prizeTierPairCount=7，appendTierPairCount=7），" +
                     "realTiersToUse=6 用于展示层按当期真实政策6级分组显示。]",
-                realTiersToUse = 6, prizeTierPairCount = 7,  // 官方源字段布局 7对=14格，和7级合并版一致
+                realTiersToUse = 6, prizeTierPairCount = 6,  // 6级版本：真实解析仅显示前6级（基本投注7+尾扩展取前6截断即可）
                 extraFieldCount = 2,
-                appendTierPairCount = 7,  // 官方源字段布局 7级追加短尾=13格，和7级合并版一致
+                appendTierPairCount = 6,  // 6级追加投注=6级（第7级政策不存在）
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
@@ -268,11 +268,10 @@ object LotteryType {
                 effectiveFromDate = "2009-10-17",
                 policyLabel = "2009-2014·8级千万头奖版",
                 changeNote = "2009年第09121期至2014年的8级规则，奖池≥1亿时一等奖可达1000万。" +
-                    "\n[注意：官方数据源按7级合并结构化输出（prizeTierPairCount=7，appendTierPairCount=7），" +
-                    "realTiersToUse=8 用于展示层按当期真实政策8级分组显示。]",
-                realTiersToUse = 8, prizeTierPairCount = 7,  // 官方源字段布局 7对=14格
+                    "\n[DLT官方源字段布局：基本投注12-25(7×2)+26-29(尾部扩展4字段=8/9等候选)。8级版本取基本1-7+尾部扩展第1对=基本8等]。",
+                realTiersToUse = 8, prizeTierPairCount = 8,  // DLT专属：12-25(7对)+26-27(1对)=8对
                 extraFieldCount = 2,
-                appendTierPairCount = 7,  // 官方源字段布局 7级追加短尾=13格
+                appendTierPairCount = 7,  // 追加投注7级=7级（和7级合并版统一布局）
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
@@ -293,11 +292,10 @@ object LotteryType {
                 effectiveFromDate = "2007-05-28",
                 policyLabel = "2007.05-2009.10·上市首版",
                 changeNote = "2007年5月28日首期上市至2009年10月，一等奖500万封顶。" +
-                    "\n[注意：官方数据源按7级合并结构化输出（prizeTierPairCount=7，appendTierPairCount=7），" +
-                    "realTiersToUse=8 用于展示层按当期真实政策8级分组显示。]",
-                realTiersToUse = 8, prizeTierPairCount = 7,  // 官方源字段布局 7对=14格
+                    "\n[DLT官方源字段布局：基本投注12-25(7×2)+26-29(尾部扩展4字段=8/9等候选)。8级版本取基本1-7+尾部扩展第1对=基本8等]。",
+                realTiersToUse = 8, prizeTierPairCount = 8,  // DLT专属：12-25(7对)+26-27(1对)=8对
                 extraFieldCount = 2,
-                appendTierPairCount = 7,  // 官方源字段布局 7级追加短尾=13格
+                appendTierPairCount = 7,  // 追加投注7级=7级（和7级合并版统一布局）
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),

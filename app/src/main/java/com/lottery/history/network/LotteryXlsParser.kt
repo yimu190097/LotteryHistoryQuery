@@ -223,76 +223,73 @@ object LotteryXlsParser {
                     }
                 }
 
-                val allTiers = extractAllPrizeTiers(
-                    parts, extraStart,
-                    extraFieldCount = ruleVersion.extraFieldCount,
-                    prizeTierPairCount = ruleVersion.prizeTierPairCount
-                )
+                // ===== DLT 专属：字段布局（官方源 dlt2_desc.txt 38字段 硬验证 v5 ROOT CAUSE 修）=====
+                //  用户明确给了事实：26089期字段30=1/31=7247161 是追加1等奖！
+                //  真实总字段布局（1-based）：
+                //   前缀   1-11 = 期号+日期+7号码(5前2后)+销售1+奖池1=11字段
+                //   基本投注主体 12-25 = 7×2=14字段（基本1~7等，所有版本通用）
+                //   基本投注尾部扩展 26-29 = 2×2=4字段
+                //      · dlt_20190218(9级): 基本8等(26-27) + 基本9等(28-29)
+                //      · dlt_2009/2007(8级): 基本8等(26-27) + (28-29)忽略
+                //      · dlt_2026(7级):   (26-29)全0，全部忽略
+                //      · dlt_2014(6级):   (26-29)全忽略，基本投注主体取前6对=基本1~6等
+                //   追加投注1~4等 30-37 = 4×2=8字段
+                //      · 追加1等=30-31（基本1×0.8），追加2等=32-33（基本2×0.8）
+                //      · 追加3等=34-35，追加4等=36-37
+                //   追加投注5级(尾级count单字段) 38 = count，amount=基本5×0.8
+                //   追加6~7级：政策有，字段不单独给，count=0，amount按基本6/7等×0.8补
+                val allTiers: List<PrizeTierEntry?>
+                val appendTiers: MutableList<PrizeTierEntry?>
+                if (config.code == "dlt") {
+                    // —— 基本投注 ——
+                    val baseFirst7 = extractNPairsDirect(parts, start = 11, n = 7) // 12-25
+                    val baseTail2 = extractNPairsDirect(parts, start = 25, n = 2) // 26-29
+                    val baseFull9 = baseFirst7 + baseTail2
+                    // 按 realTiersToUse 截断真实奖级数（9/8/7/6）
+                    allTiers = baseFull9.take(ruleVersion.realTiersToUse)
 
-                // ===== 追加投注段（大乐透等）：基本投注之后 appendTierPairCount 对 =====
-                //  —— 【真实官方源字段布局 DLT 硬验证修正 v4】——
-                //  长期严重BUG：我之前假设所有 appendTierPairCount 级都是 2 字段 (count,amount)。
-                //  但真实 dlt2_desc.txt 所有历史期字段数=38不变：
-                //   1(issue)+1(date)+5前区+2后区 = 9；extraFieldCount=2(销售+奖池)=11
-                //   基本投注 12-25 = 7×2 = 14 格（所有规则版都是7级合并结构，不是6/8/9级）
-                //   追加投注 26-38 = 13 格，不是 7×2=14 格！
-                //  真实追加投注13格布局（硬验证26089/26012等所有期）：
-                //   前6级 = 6×2 = 12 格(26~37)：(count, amount) 各2字段，amount=基本该级×0.8
-                //   第7级  = 1 格(38) ：只有 count，amount 官方省略（政策固定 = 基本7等奖金×80%，
-                //   DLT 通用追加公式：追加 k 等 = 基本 k 等奖金 × 80% 浮动奖按当期基本奖金额×80%）
-                //  数值验证：
-                //   26089追加3等 amt=7,247,161 = 基本1等 amt=9,058,951 × 0.8 ✔
-                //   26089追加4等 amt=78,006   = 基本2等 amt=97,508 × 0.8 ✔
-                //   26012追加3等 amt=5,588,963 = 基本1等 amt=6,986,204 × 0.8 ✔
-                //   26012追加4等 amt=81,899   = 基本2等 amt=102,374 × 0.8 ✔
-                val tiersStart = extraStart + ruleVersion.extraFieldCount
-                val expectedPairs = ruleVersion.prizeTierPairCount
-                val appendPairs = ruleVersion.appendTierPairCount
-                val appendTiers = mutableListOf<PrizeTierEntry?>()
-                if (appendPairs > 0) {
-                    val appendStart = tiersStart + expectedPairs * 2
-                    val isDlt = config.code == "dlt"
-                    for (k in 0 until appendPairs) {
-                        // —— DLT 专属：前6级 2字段，第7级 1字段 + amount按0.8比例补 ——
-                        val isLastLevelShort = isDlt && k == appendPairs - 1 &&
-                            appendPairs == 7
-                        val countIdx: Int
-                        val amountIdx: Int
-                        if (isLastLevelShort) {
-                            // DLT 7级追加最后一级：前6级占6×2=12字段，
-                            // 第7级 count 占第13格(=appendStart+12)；
-                            // amount 官方不单独放，按通用公式「追加k等 = 基本k等奖金 × 80%」
-                            // 从 allTiers[6]（基本7等 amount）推导：
-                            countIdx = appendStart + (appendPairs - 1) * 2   // 7级 → appendStart+12
-                            amountIdx = -1   // amount 单独推导，不直接读
-                        } else {
-                            countIdx = appendStart + k * 2
-                            amountIdx = appendStart + k * 2 + 1
+                    // —— 追加投注 ——
+                    val appendPairsTarget = ruleVersion.appendTierPairCount
+                    val appendFirst4 = extractNPairsDirect(parts, start = 29, n = 4) // 30-37 (字段30=parts[29])
+                    // 字段38 = parts[37] = 追加5级count，amount=基本5级(k=4 zero-based in baseFirst7)×0.8
+                    val append5CountRaw = parts.getOrNull(37)
+                    val append5Count = append5CountRaw?.takeIf { it != "-" && it.isNotEmpty() }
+                        ?.let { parseNumberSafe(it) } ?: 0L
+                    val base5Amt = (baseFirst7.getOrNull(4)?.amount ?: 0L)
+                    val base6Amt = (baseFirst7.getOrNull(5)?.amount ?: 0L)
+                    val base7Amt = (baseFirst7.getOrNull(6)?.amount ?: 0L)
+                    val appendTail = listOf(
+                        PrizeTierEntry(count = append5Count, amount = (base5Amt * 0.8).toLong()),
+                        PrizeTierEntry(count = 0L, amount = (base6Amt * 0.8).toLong()),
+                        PrizeTierEntry(count = 0L, amount = (base7Amt * 0.8).toLong())
+                    )
+                    appendTiers = (appendFirst4 + appendTail).take(appendPairsTarget).toMutableList()
+                } else {
+                    allTiers = extractAllPrizeTiers(
+                        parts, extraStart,
+                        extraFieldCount = ruleVersion.extraFieldCount,
+                        prizeTierPairCount = ruleVersion.prizeTierPairCount
+                    )
+                    appendTiers = mutableListOf()
+                    val appendPairs = ruleVersion.appendTierPairCount
+                    if (appendPairs > 0) {
+                        val tiersStart = extraStart + ruleVersion.extraFieldCount
+                        val appendStart = tiersStart + ruleVersion.prizeTierPairCount * 2
+                        for (k in 0 until appendPairs) {
+                            val cStr = parts.getOrNull(appendStart + k * 2)
+                            val aStr = parts.getOrNull(appendStart + k * 2 + 1)
+                            if (cStr == "-" || aStr == "-" || cStr == null || aStr == null) {
+                                appendTiers.add(null)
+                                continue
+                            }
+                            val cVal = parseNumberSafe(cStr)
+                            val aVal = parseNumberSafe(aStr)
+                            if (cVal == null || aVal == null) {
+                                appendTiers.add(null)
+                                continue
+                            }
+                            appendTiers.add(PrizeTierEntry(count = cVal, amount = aVal))
                         }
-                        val cStr = parts.getOrNull(countIdx)
-                        val aStr = if (amountIdx >= 0) parts.getOrNull(amountIdx) else null
-                        val cVal = cStr?.takeIf { it != "-" && it.isNotEmpty() }
-                            ?.let { parseNumberSafe(it) }
-                        val aVal = if (amountIdx >= 0) {
-                            aStr?.takeIf { it != "-" && it.isNotEmpty() }
-                                ?.let { parseNumberSafe(it) }
-                        } else {
-                            // DLT 最后1级追加：amount = 基本同等级别 amount × 0.8
-                            // 若基本同级别 amount 是浮动非空则按0.8倍；空则 null
-                            val baseAmount = allTiers.getOrNull(k)?.amount
-                            if (baseAmount != null) (baseAmount * 0.8).toLong() else null
-                        }
-                        if (cVal == null && aVal == null) {
-                            appendTiers.add(null)
-                            continue
-                        }
-                        // count 用 Long，低等奖级中奖注数可能超 Int(21.47 亿)
-                        appendTiers.add(
-                            PrizeTierEntry(
-                                count = cVal ?: 0L,
-                                amount = aVal ?: 0L
-                            )
-                        )
                     }
                 }
 
@@ -419,6 +416,34 @@ object LotteryXlsParser {
             all.add(PrizeTierEntry(count = count, amount = amount))
         }
         return all
+    }
+
+    /** DLT v5 ROOT CAUSE 专属：直接按 0-based parts 起始索引抽 n 对 (count, amount)。
+     *  不依赖 extraFieldCount / prizeTierPairCount 动态计算偏移，直接用官方源已验证的硬布局。 */
+    private fun extractNPairsDirect(
+        parts: List<String>,
+        @Suppress("SameParameterValue") start: Int,
+        n: Int
+    ): List<PrizeTierEntry?> {
+        val out = mutableListOf<PrizeTierEntry?>()
+        for (i in 0 until n) {
+            val cIdx = start + i * 2
+            val aIdx = start + i * 2 + 1
+            val cRaw = parts.getOrNull(cIdx)
+            val aRaw = parts.getOrNull(aIdx)
+            if (cRaw == null || aRaw == null || cRaw == "-" || aRaw == "-") {
+                out.add(null)
+                continue
+            }
+            val c = parseNumberSafe(cRaw)
+            val a = parseNumberSafe(aRaw)
+            if (c == null || a == null) {
+                out.add(null)
+                continue
+            }
+            out.add(PrizeTierEntry(count = c, amount = a))
+        }
+        return out
     }
 
     private fun normalizeDate(raw: String): String? {

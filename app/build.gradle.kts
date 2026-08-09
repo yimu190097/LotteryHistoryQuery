@@ -15,8 +15,8 @@ android {
         applicationId = "com.lottery.history"
         minSdk = 24
         targetSdk = 34
-        versionCode = 22
-        versionName = "22.0"
+        versionCode = 41
+        versionName = "23.5"
     }
 
     signingConfigs {
