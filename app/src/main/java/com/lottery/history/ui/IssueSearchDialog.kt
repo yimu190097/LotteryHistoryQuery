@@ -211,7 +211,7 @@ class IssueSearchDialog(context: Context) : Dialog(context) {
 
     /** 期号匹配：支持完整期号或简写（如 24128 匹配 2024128） */
     private fun findDraw(cfg: LotteryTypeConfig, input: String): LotteryDraw? {
-        val list = LotteryDataManager.getCached(cfg.code)
+        val list = LotteryDataManager.getAllFromDb(context, cfg.code)
         if (list.isEmpty()) return null
         // 精确匹配
         list.firstOrNull { it.issue == input }?.let { return it }

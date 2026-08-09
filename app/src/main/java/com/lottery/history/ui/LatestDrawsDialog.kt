@@ -55,7 +55,7 @@ class LatestDrawsDialog(context: Context) : Dialog(context) {
         val rowVerticalPadding = (8 * density).toInt()
 
         LotteryType.ALL.forEachIndexed { index, config ->
-            val draw: LotteryDraw? = LotteryDataManager.getCached(config.code).firstOrNull()
+            val draw: LotteryDraw? = LotteryDataManager.getAllFromDb(context, config.code).firstOrNull()
 
             // 球大小：快乐8（20个号码）单独缩小，一屏内多行显示不挤
             val ballSize = if (config.parsePrimaryCount >= 15) (18 * density).toInt() else (22 * density).toInt()
@@ -324,7 +324,7 @@ class LatestDrawsDialog(context: Context) : Dialog(context) {
 
     /** 点击某彩种行：弹出最近10期开奖详情 */
     private fun showDetail(config: com.lottery.history.model.LotteryTypeConfig) {
-        val draws = LotteryDataManager.getCached(config.code).take(10)
+        val draws = LotteryDataManager.getAllFromDb(context, config.code).take(10)
         if (draws.isEmpty()) return
         dismiss()
         HistoryDialog(context, draws, config).show()

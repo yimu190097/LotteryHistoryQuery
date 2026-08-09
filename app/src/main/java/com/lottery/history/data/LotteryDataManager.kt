@@ -231,17 +231,24 @@ object LotteryDataManager {
     fun getCached(config: LotteryTypeConfig): List<LotteryDraw> = emptyList()
 
     /** 直接从 DB 读取当前已落库的数据（不受 getCached 空缓存屏蔽影响）。
-     *  场景：IssueSearchDialog / LatestDrawsDialog / LotterFragment 在 refresh 完成后需要立即读取。 */
+     *  场景：IssueSearchDialog / LatestDrawsDialog / LotterFragment 在 refresh 完成后需要立即读取。
+     *
+     *  说明：Room DAO getAllByType 是 suspend 函数（强制在后台线程），UI 调用方都在主线程，
+     *  这里用 runBlocking(Dispatchers.IO) 桥接——查询量仅数百~数千条，耗时几毫秒内，
+     *  不会阻塞 UI；比把所有 UI 调用方全改成 suspend 更干净。
+     */
     fun getAllFromDb(context: Context, code: String): List<LotteryDraw> {
         val d = ensureDao(context) ?: return emptyList()
-        return d.getAllByType(code).map { e -> e.toModel() }
+        return kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+            d.getAllByType(code).map { e -> e.toModel() }
+        }
     }
     fun getAllFromDb(context: Context, config: LotteryTypeConfig): List<LotteryDraw> =
         getAllFromDb(context, config.code)
 
     private fun ensureDao(context: Context): LotteryDao? = synchronized(this) {
         if (dao == null) {
-            val db = LotteryDatabase.getInstance(context.applicationContext)
+            val db = LotteryDatabase.get(context.applicationContext)
             dao = db.lotteryDao()
             ruleVersionCatalogDao = db.ruleVersionCatalogDao()
             matchRuleDefDao = db.matchRuleDefDao()
@@ -301,19 +308,19 @@ object LotteryDataManager {
                             local?.let { decodePrizeTiers(it.allPrizeTiers).count { e -> e != null } }
                                 ?: 0
 
-                        // 【parserVersion < PARSER_VERSION_CURRENT → 旧解析脏数据 强制覆盖】
-                        //   v1→v2 修复：DLT 2019/2009 等规则版本在 v1 中常被"看似 MATCH 实则错位"地
-                        //   解析（基本八等奖被当成追加一等），被 MATCH 完整性保护永远保留，用户看到
-                        //   追加一等奖=8,285,244注/15元这种严重失真数据。提升到v2后，所有旧版本缓存
-                        //   无条件被新的正确解析覆盖。
-                        val forceOverride = local != null && (local.parserVersion ?: 0) < PARSER_VERSION_CURRENT
-                        val keepLocal = !forceOverride &&
-                            local != null &&
-                                local.tierMatchStatus == com.lottery.history.model.TierMatchStatus.MATCH &&
-                                draw.tierMatchStatus != com.lottery.history.model.TierMatchStatus.MATCH &&
-                                localNonNullTiers >= netNonNullTiers
+                        // 【用户需求：每次更新都拉取新数据 无条件覆盖本地脏数据】
+                        //   1) 不再判断 tierMatchStatus / nonNullTiers 等"本地更完整"保护：
+                        //      过去 MATCH 完整性保护常把解析错位的脏数据（如 DLT 基本尾奖
+                        //      被当成追加高奖级）永久保留，用户看到追加一等奖=8,285,244注/15元
+                        //      这种严重失真数据，且永远不会被新解析纠正。
+                        //   2) 现在每次 refresh 全部用网络最新解析覆盖，parserVersion 也同步
+                        //      提升到 PARSER_VERSION_CURRENT，确保任何 BUG 修复都能在下一次
+                        //      refresh 生效。
+                        //   3) 极端情况（官方先出 '-' 不完整数据）的兜底：下一次 refresh
+                        //      官方补全后自然就覆盖成完整数据了，用户也可以手动点刷新立即修正。
+                        val keepLocal = false
 
-                        if (keepLocal) continue // 保留本地"更完整且同版本"的残缺期，其他一律覆写
+                        if (keepLocal) continue
 
                         // —— 新写入/覆盖 ——
                         entities.add(
@@ -443,11 +450,14 @@ object LotteryDataManager {
      *   1) 先完全匹配 issue == query
      *   2) 再用 endsWith 模糊匹配（用户可能只输后几位）
      *   3) 最后再用 startsWith 匹配（用户可能输"26087"而完整 issue 是"26087001"等容错）
+     *
+     * 【强制刷新机制】getCached 已永远返回空 → 这里直接从 DB 读取，保证 findDrawByIssue
+     * 在 refresh 前后都能查到数据。
      */
-    fun findDrawByIssue(config: LotteryTypeConfig, queryRaw: String): LotteryDraw? {
+    fun findDrawByIssue(context: Context, config: LotteryTypeConfig, queryRaw: String): LotteryDraw? {
         val q = queryRaw.trim()
         if (q.isEmpty()) return null
-        val list = getCached(config)
+        val list = getAllFromDb(context, config)
         list.firstOrNull { it.issue == q }?.let { return it }
         list.firstOrNull { it.issue.endsWith(q) }?.let { return it }
         list.firstOrNull { it.issue.startsWith(q) }?.let { return it }

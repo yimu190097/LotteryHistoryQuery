@@ -144,7 +144,7 @@ class LotteryFragment : Fragment() {
         }
 
         // ===== 按期号查询：按彩种动态设置 hint / 最近一期期号示例 =====
-        val sampleLatest = LotteryDataManager.getCached(config).firstOrNull()?.issue
+        val sampleLatest = LotteryDataManager.getAllFromDb(requireContext(), config).firstOrNull()?.issue
         tvIssueHint.text = buildString {
             append("格式示例：")
             append(config.issueHint)
@@ -355,13 +355,14 @@ class LotteryFragment : Fragment() {
                 ).show()
                 return@setOnClickListener
             }
-            val draw = LotteryDataManager.findDrawByIssue(config, raw)
+            val c = requireContext()
+            val draw = LotteryDataManager.findDrawByIssue(c, config, raw)
             if (draw == null) {
                 android.widget.Toast.makeText(
-                    requireContext(),
+                    c,
                     buildString {
                         append("未找到【${config.displayName}】期号「$raw」")
-                        val sample = LotteryDataManager.getCached(config).firstOrNull()?.issue
+                        val sample = LotteryDataManager.getAllFromDb(c, config).firstOrNull()?.issue
                         if (sample != null) append("，最新期号示例：$sample")
                     },
                     android.widget.Toast.LENGTH_LONG
@@ -420,7 +421,7 @@ class LotteryFragment : Fragment() {
         }
     }
 
-    private fun getHistory(): List<LotteryDraw> = LotteryDataManager.getCached(config)
+    private fun getHistory(): List<LotteryDraw> = LotteryDataManager.getAllFromDb(requireContext(), config)
 
     private fun refreshGridBallsVisualState() {
         for (i in 0 until gridPrimary.childCount) {
@@ -715,7 +716,9 @@ class LotteryFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             requireContext().let { c ->
                 LotteryDataManager.ensureInitialized(c)
-                if (LotteryDataManager.getCached(config).isEmpty()) {
+                // getCached 永远返回空 → 直接从 DB 读取（loadCache 把 DB 加载到内存 caches map，
+                // 对无副作用；核心 UI 展示都走 getAllFromDb 了）
+                if (LotteryDataManager.getAllFromDb(c, config).isNotEmpty()) {
                     LotteryDataManager.loadCache(c, config)
                 }
             }
