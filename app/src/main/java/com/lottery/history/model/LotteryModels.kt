@@ -168,8 +168,8 @@ data class QueryResultItem(
     val matchPrimary: Int,
     val matchSecondary: Int,
     val prizeName: String,
-    val count: Long,
-    val matches: List<LotteryDraw>,
+    var count: Long,                 // 合并版本时可累加；matches 真实对象从不改动
+    var matches: List<LotteryDraw>,  // 真实 draw 对象原封不动，只合并列表引用
     /** 该命中统计桶来源的规则版本 key（=BucketKey.ruleVersionKey），用于 UI 按政策分组 */
     val sourceRuleVersionKey: String? = null
 )

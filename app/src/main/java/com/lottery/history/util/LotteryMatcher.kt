@@ -104,58 +104,73 @@ object LotteryMatcher {
             }
         }
 
-        // 2) 按最新政策 config.rules 顺序输出，跨版本同名同条件奖项合并为一行。
-        //    查询结果列表只用最新政策奖项名简单展示；点"查看历史"时 HistoryDialog
-        //    会按每期真实 ruleVersionKey 分组展示真实情况（政策徽章+生效日+说明）。
+        // 2) 查询结果列表：按最新政策 config.rules 的奖项设立展示。
+        //    【核心约束】：matches（真实 draws 列表）的所有元数据——期号、开奖日期、真实 ruleVersionKey、
+        //    真实奖项信息绝对不变。这里只把不同版本 bucket 的 draws 合并到"最新政策对应奖项行"
+        //    用于简单展示；点"查看历史"时 HistoryDialog 依然按 matches 中每期 draw 的真实
+        //    ruleVersionKey 分组展示真实政策。
         val inOrder = mutableListOf<QueryResultItem>()
-        val visited = mutableSetOf<BucketKey>()
+        val consumed = mutableSetOf<BucketKey>()
+        // 最新政策 key：Pair(matchPrimary, matchSecondary) → 奖项名
+        val latestRuleByKey = config.rules.associate { r ->
+            (r.matchPrimary to r.matchSecondary) to r.prizeName
+        }
 
-        // 2a) 按最新规则顺序逐条匹配，合并所有版本的同(matchP, matchS, prizeName) bucket 为一行
+        // 2a) 按最新规则顺序：每条 rule 拉取所有版本 (matchP, matchS) 相同的 bucket，
+        //     合并 draws（真实元数据不变），奖名用最新政策奖名。
         for (rule in config.rules) {
             val matchingEntries = buckets.entries.filter { (k, _) ->
-                k.matchPrimary == rule.matchPrimary &&
-                    k.matchSecondary == rule.matchSecondary &&
-                    k.prizeName == rule.prizeName
+                k.matchPrimary == rule.matchPrimary && k.matchSecondary == rule.matchSecondary
             }
             if (matchingEntries.isEmpty()) continue
+            matchingEntries.forEach { (k, _) -> consumed.add(k) }
 
-            matchingEntries.forEach { (k, _) -> visited.add(k) }
-
-            // 合并跨版本的所有 draws，count 取总和
+            // 所有真实 LotteryDraw 对象原封不动合并（ruleVersionKey / issue / date 全保留）
             val allDraws = matchingEntries.flatMap { it.value }
             inOrder.add(
                 QueryResultItem(
                     matchPrimary = rule.matchPrimary,
                     matchSecondary = rule.matchSecondary,
-                    prizeName = rule.prizeName,  // 只用最新政策奖项名，不加 policyLabel 前缀
+                    prizeName = rule.prizeName,   // 只改展示的奖名——按最新政策
                     count = allDraws.size.toLong(),
-                    matches = allDraws,
-                    sourceRuleVersionKey = rule.let { r ->
-                        // 标记为最新版 key，便于 UI 排序/标识
-                        config.ruleVersions.firstOrNull { rv ->
-                            rv.rules.any { it.matchPrimary == r.matchPrimary && it.matchSecondary == r.matchSecondary && it.prizeName == r.prizeName }
-                        }?.key
-                    }
+                    matches = allDraws,           // 真实draw元数据 100% 保留不改动
+                    sourceRuleVersionKey = config.ruleVersions.lastOrNull()?.key
                 )
             )
         }
 
-        // 2b) 旧规则版本中剩余、在最新规则里已不存在的奖级（如 DLT 2019 八等奖/九等奖），
-        //     追加到尾部。奖项名不加 policyLabel 前缀（保持列表简洁），点查看历史时
-        //     HistoryDialog 会展示这些期对应的真实政策版本。
-        val remaining = buckets.keys - visited
+        // 2b) 旧版本里 (matchP, matchS) 在最新政策中不存在的 bucket：
+        //     尝试按最新政策奖级条件就近归属（如 2019 九等奖 2+0 命中 2 球未中后区/1+1），
+        //     若最新规则找不到对应 key，就追加到尾部展示原奖项名；matches 元数据始终不变。
+        val remaining = buckets.keys - consumed
         for (key in remaining) {
             val draws = buckets[key] ?: continue
-            inOrder.add(
-                QueryResultItem(
-                    matchPrimary = key.matchPrimary,
-                    matchSecondary = key.matchSecondary,
-                    prizeName = key.prizeName,
-                    count = draws.size.toLong(),
-                    matches = draws,
-                    sourceRuleVersionKey = key.ruleVersionKey
+            // 找最新政策同(matchP, matchS)的奖名兜底；没找到就保留原奖项名
+            val latestName = latestRuleByKey[key.matchPrimary to key.matchSecondary] ?: key.prizeName
+            // 检查 inOrder 里是否已有同奖名的行可以合并（同(matchP,matchS)行2a已处理过，
+            // 这里只处理最新版同(p,s)=奖名 但旧版 key=(p,s,oldName)不一样）
+            val existing = inOrder.firstOrNull {
+                it.matchPrimary == key.matchPrimary &&
+                    it.matchSecondary == key.matchSecondary &&
+                    it.prizeName == latestName
+            }
+            if (existing != null) {
+                // 合并：仅把真实 draws 追加到 matches 列表，existing 其他字段不动
+                //   → matches 原元数据依旧完整
+                (existing.matches as MutableList<LotteryDraw>).addAll(draws)
+                existing.count += draws.size.toLong()
+            } else {
+                inOrder.add(
+                    QueryResultItem(
+                        matchPrimary = key.matchPrimary,
+                        matchSecondary = key.matchSecondary,
+                        prizeName = latestName,
+                        count = draws.size.toLong(),
+                        matches = draws.toMutableList(),
+                        sourceRuleVersionKey = key.ruleVersionKey
+                    )
                 )
-            )
+            }
         }
 
         // 2c) 追加：元数据缺失（规则版本不明）的命中 → 统一放尾部、显式标注
