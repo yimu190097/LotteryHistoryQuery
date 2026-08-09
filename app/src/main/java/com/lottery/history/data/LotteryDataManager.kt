@@ -32,6 +32,10 @@ import kotlinx.coroutines.withContext
  */
 object LotteryDataManager {
 
+    /** 当前解析器版本号。所有版本升级（如修复某个彩种某个时期的字段错位BUG）都应 +1，
+     *  以便 refresh 时强制覆盖旧版本入库的脏数据，避免被"更完整MATCH"保护永久保留。 */
+    const val PARSER_VERSION_CURRENT = 2
+
     private val mutex = Mutex()
     @Volatile private var dao: LotteryDao? = null
     @Volatile private var ruleVersionCatalogDao: RuleVersionCatalogDao? = null
@@ -216,9 +220,14 @@ object LotteryDataManager {
         if (list.isNotEmpty()) d.insertAll(list)
     }
 
-    /** 获取指定彩种的缓存数据（同步，可能为空） */
-    fun getCached(code: String): List<LotteryDraw> =
-        caches[code] ?: emptyList()
+    /** 获取指定彩种的缓存数据（同步，可能为空）。
+     *  如果缓存中存在任何解析器版本 < PARSER_VERSION_CURRENT 的记录（包括旧版本脏数据），
+     *  返回空列表以触发上层 refresh 强制重拉，保证用户不再看到字段错位的失真数据。 */
+    fun getCached(code: String): List<LotteryDraw> {
+        val list = caches[code] ?: return emptyList()
+        val dirty = list.any { (it.parserVersion ?: 0) < PARSER_VERSION_CURRENT }
+        return if (dirty) emptyList() else list
+    }
 
     /** 获取指定彩种配置的缓存数据 */
     fun getCached(config: LotteryTypeConfig): List<LotteryDraw> =
@@ -275,13 +284,19 @@ object LotteryDataManager {
                             local?.let { decodePrizeTiers(it.allPrizeTiers).count { e -> e != null } }
                                 ?: 0
 
-                        val keepLocal =
+                        // 【parserVersion < PARSER_VERSION_CURRENT → 旧解析脏数据 强制覆盖】
+                        //   v1→v2 修复：DLT 2019/2009 等规则版本在 v1 中常被"看似 MATCH 实则错位"地
+                        //   解析（基本八等奖被当成追加一等），被 MATCH 完整性保护永远保留，用户看到
+                        //   追加一等奖=8,285,244注/15元这种严重失真数据。提升到v2后，所有旧版本缓存
+                        //   无条件被新的正确解析覆盖。
+                        val forceOverride = local != null && (local.parserVersion ?: 0) < PARSER_VERSION_CURRENT
+                        val keepLocal = !forceOverride &&
                             local != null &&
                                 local.tierMatchStatus == com.lottery.history.model.TierMatchStatus.MATCH &&
                                 draw.tierMatchStatus != com.lottery.history.model.TierMatchStatus.MATCH &&
                                 localNonNullTiers >= netNonNullTiers
 
-                        if (keepLocal) continue // 保留本地"更完整"的版本，跳过本期新解析的残缺版本
+                        if (keepLocal) continue // 保留本地"更完整且同版本"的残缺期，其他一律覆写
 
                         // —— 新写入/覆盖 ——
                         entities.add(
@@ -303,7 +318,7 @@ object LotteryDataManager {
                                 appendPrizeTiers = draw.appendPrizeTiers.encodeTiers(),
                                 parseSource = ParseSource.NET,
                                 parseAt = now,
-                                parserVersion = 1,
+                                parserVersion = PARSER_VERSION_CURRENT,
                                 conditionalFlagsJson = encodeFlags(draw.conditionalFlags)
                             )
                         )
