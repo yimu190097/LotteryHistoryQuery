@@ -404,10 +404,14 @@ class IssueSearchDialog(context: Context) : Dialog(context) {
                 }
                 val color = tierColors.getOrElse(displayIdx) { 0xFF757575.toInt() }
                 container.addView(buildPrizeRow(name, baseCount, baseAmount, color))
-                // 追加投注：按去重后的 tierIndex 对应 appendPrizeTiers[i]，全奖级补齐
-                val append = draw.appendPrizeTiers.getOrNull(i)
-                if (append != null && (append.count > 0 || append.amount > 0L)) {
-                    container.addView(buildAppendRow("追加$name", append.count, append.amount))
+                // 追加投注：仅追加玩法彩种（DLT等）展示；全奖级，0注也显示"本期空开"
+                val appendSupported = (ruleVersion?.appendTierPairCount ?: 0) > 0 ||
+                    draw.appendPrizeTiers.isNotEmpty()
+                if (appendSupported) {
+                    val append = draw.appendPrizeTiers.getOrNull(i)
+                    val appCount = append?.count ?: 0L
+                    val appAmount = append?.amount ?: 0L
+                    container.addView(buildAppendRow("追加$name", appCount, appAmount))
                 }
             }
         } else {
