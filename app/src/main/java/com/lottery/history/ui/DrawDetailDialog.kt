@@ -270,20 +270,32 @@ class DrawDetailDialog(
         merged.forEachIndexed { idx, row ->
             // ---- v11：条件奖级「停发」状态专属文案（福运奖 OFF 等）----
             //    关键：绝不出现"空开"字样；OFF 语义是"本期规则不开放"≠"本期没人中（空开）"
+            //    P0 修复：追加投注 hasAppend=true 时，0注也要显式写「追加空开」，
+            //    绝不能把追加投注整行吞掉（用户以为 DLT 根本没有追加玩法）。
             val countText = when {
                 row.conditionalOff -> "—（奖池未达门槛，本奖项停发）"
                 row.totalCount == null -> "—"
-                row.totalCount > 0 -> {
-                    if (row.hasAppend && row.appendCount != null && row.appendCount > 0) {
-                        "${row.totalCount}注\n（追加${row.appendCount}注）"
-                    } else {
-                        "${row.totalCount}注"
+                row.hasAppend -> {
+                    val appCnt = row.appendCount ?: 0L
+                    val baseCnt = row.totalCount - if (appCnt > 0) appCnt else 0L
+                    when {
+                        row.totalCount > 0 && appCnt > 0 ->
+                            "${row.totalCount}注\n（追加${appCnt}注）"
+                        row.totalCount > 0 /* appCnt == 0 */ ->
+                            "${row.totalCount}注\n（追加空开）"
+                        baseCnt == 0L && appCnt == 0L ->
+                            "空开\n（追加空开）"
+                        else ->
+                            "${row.totalCount}注\n（追加空开）"
                     }
                 }
+                row.totalCount > 0 -> "${row.totalCount}注"
                 else -> "空开"   // totalCount == 0：真实空开
             }
 
             // ---- 单注奖金：金额不同分两行展示（绝不合并基本/追加金额） ----
+            //    P0 修复：追加投注 hasAppend=true 时，0 金额也要写「追加投注 —」，
+            //    让用户一眼看到：这个彩种是有追加玩法的，本期追加没人中。
             val amountText = buildString {
                 val bAmt = row.baseAmount
                 val aAmt = row.appendAmount
@@ -293,19 +305,29 @@ class DrawDetailDialog(
                 when {
                     row.conditionalOff -> append("—（奖池未达门槛，本奖项停发）")
                     countEmpty -> append("—")
-                    isEmpty -> append("空开无奖金")
+                    isEmpty && !row.hasAppend -> append("空开无奖金")
                     else -> {
                         var shown = false
+                        // 基本投注：有金额 >0 显示金额；空开但基本投注本身存在时
                         if (bAmt != null && bAmt > 0L) {
                             append("基本投注 ").append(formatAmount(bAmt))
                             shown = true
-                        }
-                        if (row.hasAppend && aAmt != null && aAmt > 0L) {
-                            if (shown) append("\n")
-                            append("追加投注 ").append(formatAmount(aAmt))
+                        } else if (!row.hasAppend && isEmpty) {
+                            append("空开无奖金")
+                            shown = true
+                        } else if (!row.hasAppend) {
+                            append("基本投注 —")
                             shown = true
                         }
-                        if (!shown) append("—")
+                        // 追加投注：只要 hasAppend 就一定显示，0金额显示"追加投注 —"
+                        if (row.hasAppend) {
+                            if (shown) append("\n")
+                            if (aAmt != null && aAmt > 0L) {
+                                append("追加投注 ").append(formatAmount(aAmt))
+                            } else {
+                                append("追加投注 —")
+                            }
+                        }
                     }
                 }
             }
@@ -663,8 +685,12 @@ class DrawDetailDialog(
             val aAmount = appendEntry?.amount?.takeIf {
                 appendEntry.count?.let { c -> c > 0 || it == 0L } ?: true
             }
-            val hasAppendData = appendEntry != null && !fuyunDisabled &&
-                (appendEntry.count?.let { it > 0 } == true || appendEntry.amount?.let { it > 0L } == true)
+            // 【用户要求：追加投注全奖级都显示，0注也要显示「追加空开」，0金额显示「追加投注 —」】
+            //  旧版 hasAppendData 必须 count>0 才为 true，导致整期空开的追加投注全部被过滤掉，
+            //  用户打开详情以为 DLT 根本没有追加投注这个玩法，骂死。
+            //  新版：只要规则版本含追加投注 (appendTierPairCount>0) 且 appendEntry 非 null
+            //  → hasAppend = true，哪怕 0注0金额，也在UI上显式告诉用户「追加空开」。
+            val hasAppendData = ruleVersion.appendTierPairCount > 0 && appendEntry != null && !fuyunDisabled
 
             result.add(
                 MergedPrizeRow(
@@ -673,7 +699,7 @@ class DrawDetailDialog(
                     totalCount = mergedCount,
                     baseAmount = if (fuyunDisabled) null else bAmount,
                     appendAmount = if (hasAppendData) aAmount else null,
-                    appendCount = if (hasAppendData) appCount else null,
+                    appendCount = if (hasAppendData) (appCount ?: 0L) else null,
                     hasAppend = hasAppendData,
                     // v11: 条件性奖级外观标志（在 buildPrizeRow 中被用于浅灰底 + 文字）
                     conditionalOff = fuyunDisabled
