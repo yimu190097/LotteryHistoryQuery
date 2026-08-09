@@ -220,18 +220,35 @@ object LotteryDataManager {
         if (list.isNotEmpty()) d.insertAll(list)
     }
 
-    /** 获取指定彩种的缓存数据（同步，可能为空）。
-     *  如果缓存中存在任何解析器版本 < PARSER_VERSION_CURRENT 的记录（包括旧版本脏数据），
-     *  返回空列表以触发上层 refresh 强制重拉，保证用户不再看到字段错位的失真数据。 */
-    fun getCached(code: String): List<LotteryDraw> {
-        val list = caches[code] ?: return emptyList()
-        val dirty = list.any { (it.parserVersion ?: 0) < PARSER_VERSION_CURRENT }
-        return if (dirty) emptyList() else list
-    }
+    /**
+     *  用户需求：每次更新都强制拉取新数据，避免缓存/DB脏数据导致解析或展示失真。
+     *  故 getCached 永远返回空 → 上层 UI 感知到"本地无有效缓存"，永远触发 refresh 拉取最新；
+     *  DB 中实际数据仍可通过 getAllFromDb(context, code) 直接读取（给需立即访问最新落库数据的场景）。
+     */
+    fun getCached(code: String): List<LotteryDraw> = emptyList()
 
-    /** 获取指定彩种配置的缓存数据 */
-    fun getCached(config: LotteryTypeConfig): List<LotteryDraw> =
-        getCached(config.code)
+    /** 获取指定彩种配置的缓存数据 → 永远返回空（见 getCached(code) 说明） */
+    fun getCached(config: LotteryTypeConfig): List<LotteryDraw> = emptyList()
+
+    /** 直接从 DB 读取当前已落库的数据（不受 getCached 空缓存屏蔽影响）。
+     *  场景：IssueSearchDialog / LatestDrawsDialog / LotterFragment 在 refresh 完成后需要立即读取。 */
+    fun getAllFromDb(context: Context, code: String): List<LotteryDraw> {
+        val d = ensureDao(context) ?: return emptyList()
+        return d.getAllByType(code).map { e -> e.toModel() }
+    }
+    fun getAllFromDb(context: Context, config: LotteryTypeConfig): List<LotteryDraw> =
+        getAllFromDb(context, config.code)
+
+    private fun ensureDao(context: Context): LotteryDao? = synchronized(this) {
+        if (dao == null) {
+            val db = LotteryDatabase.getInstance(context.applicationContext)
+            dao = db.lotteryDao()
+            ruleVersionCatalogDao = db.ruleVersionCatalogDao()
+            matchRuleDefDao = db.matchRuleDefDao()
+            prizeTierDao = db.prizeTierDao()
+        }
+        dao
+    }
 
     /** 加载指定彩种到内存缓存 */
     suspend fun loadCache(context: Context, config: LotteryTypeConfig) = mutex.withLock {
