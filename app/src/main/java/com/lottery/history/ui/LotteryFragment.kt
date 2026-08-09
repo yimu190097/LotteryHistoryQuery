@@ -486,10 +486,16 @@ class LotteryFragment : Fragment() {
 
         // 顶部总命中统计：把 N 个奖项的命中次数相加，给出总数，40+ 用户一眼看出有没有中奖
         val totalHit = results.sumOf { r -> r.count }
-        val summaryText = if (totalHit > 0) {
-            "您选的号码，在历史上共命中 ${totalHit} 期："
-        } else {
-            "您选的号码，在历史上暂未命中任何奖项："
+        val summaryText = buildString {
+            if (totalHit > 0) append("您选的号码，在历史上共命中 ${totalHit} 期：")
+            else append("您选的号码，在历史上暂未命中任何奖项：")
+            // 按用户明确指令：查询结果用最新政策的所有奖项结构展示，含空奖项
+            if (config.ruleVersions.size > 1) {
+                append("\n【展示说明】：当前列表按最新政策（")
+                append(config.ruleVersions.lastOrNull()?.policyLabel ?: "")
+                append("）奖级名称展示；未命中的奖项也会列出，显式标注「未中」。")
+                append("\n点「查看历史」后，历史明细按每期真实规则版本分组展示真实元数据。")
+            }
         }
         tvSelectedNumbers.text = summaryText
         tvSelectedNumbers.setTextColor(
@@ -510,7 +516,28 @@ class LotteryFragment : Fragment() {
             }
         }
 
-        renderResultRows(results)
+        // ===== 【用户明确指令：查询结果所有奖项都要显示，按最新政策】=====
+        //   1) 最新政策 config.rules 按 prizeName 去重 → 完整奖级全集
+        //   2) 对每个奖级：若 LotteryMatcher 返回的命中结果已存在 → 直接用（matches 真实 draws
+        //      对象绝对不变！）；若不存在（没命中） → 生成 count=0 / matches=emptyList 的占位项
+        //      【严格约束】：matches 中真实 draws 的元数据（期号、开奖日期、真实ruleVersionKey、
+        //      真实奖项信息）永远不变；详情页 DrawDetailDialog 按 matches 里每期 draw 的真实
+        //      ruleVersionKey 去展示真实数据。
+        val prizeNameToHit: Map<String, QueryResultItem> = results.associateBy { it.prizeName }
+        val seenNames = linkedSetOf<String>()
+        config.rules.forEach { seenNames.add(it.prizeName) }
+        val fullList = seenNames.map { name ->
+            prizeNameToHit[name] ?: QueryResultItem(
+                matchPrimary = -1,
+                matchSecondary = -1,
+                prizeName = name,
+                count = 0,
+                matches = emptyList(),
+                sourceRuleVersionKey = config.ruleVersions.lastOrNull()?.key
+            )
+        }
+
+        renderResultRows(fullList)
     }
 
     private fun renderResultRows(results: List<QueryResultItem>) {
