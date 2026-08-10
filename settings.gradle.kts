@@ -23,3 +23,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "LotteryHistoryQuery"
 include(":app")
+include(":admin-app")

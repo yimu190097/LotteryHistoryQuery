@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>彩票历史查询 - 后台管理系统</title>
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+
+<!-- ==================== 登录页 ==================== -->
+<div id="loginPage" class="login-container">
+  <div class="login-card">
+    <h1>彩票后台管理</h1>
+    <p class="subtitle">Lottery Admin Panel v1.0</p>
+    <form onsubmit="handleLogin(event)">
+      <input type="text" id="loginUsername" placeholder="管理员账号" required autocomplete="username">
+      <input type="password" id="loginPassword" placeholder="管理员密码" required autocomplete="current-password">
+      <button type="submit">登 录</button>
+      <div id="loginError" class="error"></div>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== 主界面 ==================== -->
+<div id="appPage" class="app-layout" style="display:none">
+
+  <!-- 侧边栏 -->
+  <aside class="sidebar">
+    <div class="logo">
+      <h2>彩票管理系统</h2>
+      <span class="ver">v1.0</span>
+    </div>
+    <nav>
+      <a href="#" data-page="dashboard" class="active" onclick="navigate('dashboard')">
+        <span class="icon">📊</span><span>仪表盘</span>
+      </a>
+      <a href="#" data-page="users" onclick="navigate('users')">
+        <span class="icon">👥</span><span>用户管理</span>
+      </a>
+      <a href="#" data-page="audit" onclick="navigate('audit')">
+        <span class="icon">📋</span><span>操作日志</span>
+      </a>
+      <a href="#" data-page="settings" onclick="navigate('settings')">
+        <span class="icon">⚙️</span><span>系统设置</span>
+      </a>
+    </nav>
+    <div class="user-info">
+      <div id="currentUser">admin</div>
+      <a class="logout" onclick="handleLogout()">退出登录</a>
+    </div>
+  </aside>
+
+  <!-- 主内容区 -->
+  <main class="main-content" id="mainContent">
+    <!-- 动态渲染 -->
+  </main>
+</div>
+
+<!-- ==================== 弹窗容器 ==================== -->
+<div id="modalOverlay" class="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<!-- ==================== Toast容器 ==================== -->
+<div id="toastContainer"></div>
+
+<script src="/js/admin.js"></script>
+</body>
+</html>
