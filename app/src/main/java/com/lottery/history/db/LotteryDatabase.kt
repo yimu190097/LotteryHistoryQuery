@@ -14,10 +14,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         UserEntity::class,
         QuotaEntity::class,
         PendingSyncEntity::class,
-        ChatMessageEntity::class,
-        RuleVersionCatalogEntity::class,
-        MatchRuleDefEntity::class,
-        PrizeTierEntity::class
+        ChatMessageEntity::class
     ],
     version = 13,
     exportSchema = true
@@ -29,9 +26,6 @@ abstract class LotteryDatabase : RoomDatabase() {
     abstract fun quotaDao(): QuotaDao
     abstract fun pendingSyncDao(): PendingSyncDao
     abstract fun chatMessageDao(): ChatMessageDao
-    abstract fun ruleVersionCatalogDao(): RuleVersionCatalogDao
-    abstract fun matchRuleDefDao(): MatchRuleDefDao
-    abstract fun prizeTierDao(): PrizeTierDao
 
     companion object {
         @Volatile

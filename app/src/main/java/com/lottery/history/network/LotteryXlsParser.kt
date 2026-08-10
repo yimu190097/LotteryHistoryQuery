@@ -174,19 +174,22 @@ object LotteryXlsParser {
                 // 【零兜底·严格模式】只用真实开奖 date 定位规则版本，绝不用 issue 参与（那是猜）。
                 // 解析层必须保证 date 已经从官方数据源真实解析出来；没 date 就是 SEED_INCOMPLETE。
                 val ruleVersion = config.rulesForDate(date)
+                // FC3D/P3 不排序号码：保留位置信息（直选需逐位比较）
+                val needsPos = config.code == "3d" || config.code == "p3"
                 // ===== 严格模式：date+issue 仍无法定位规则版本时，标记 SEED_INCOMPLETE 并跳过 =====
                 //   绝不拿 ruleVersions.first() 最新版去套（否则历史期被错误归类到 2026 新规）
                 if (ruleVersion == null) {
+                    val needsPos = config.code == "3d" || config.code == "p3"
                     result.add(
                         LotteryDraw(
                             issue = issue,
-                            primaryNumbers = primary.sorted(),
+                            primaryNumbers = if (needsPos) primary else primary.sorted(),
                             secondaryNumbers = secondary.sorted(),
                             date = date,
                             ruleVersionKey = null,
                             parseSource = ParseSource.SEED_INCOMPLETE,
                             parseAt = System.currentTimeMillis(),
-                            parserVersion = 1,
+                            parserVersion = PARSER_VERSION_CURRENT,
                             tierMatchStatus = com.lottery.history.model.TierMatchStatus.MISMATCH
                         )
                     )
@@ -348,7 +351,7 @@ object LotteryXlsParser {
                 result.add(
                     LotteryDraw(
                         issue = issue,
-                        primaryNumbers = primary.sorted(),
+                        primaryNumbers = if (needsPos) primary else primary.sorted(),
                         secondaryNumbers = secondary.sorted(),
                         date = date,
                         firstPrizeCount = allTiers.getOrNull(0)?.count,

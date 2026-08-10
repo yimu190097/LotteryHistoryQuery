@@ -9,6 +9,13 @@ package com.lottery.history.model
  *   （如双色球六等奖=中蓝球，理论最多 16 亿注）中奖注数可能超过 Int 上限。
  *   金额 amount 始终用 Long。
  */
+/** 匹配模式：直选（位置匹配）vs 组选（多重集匹配） */
+enum class MatchMode(val label: String) {
+    DIRECT("直选"),      // 位置全对
+    GROUP_3("组选3"),    // 2同1不同，不限位置
+    GROUP_6("组选6")     // 3个不同，不限位置
+}
+
 data class PrizeTierEntry(
     val count: Long,   // 当期该奖级中奖注数（0 表示空开）— Long，防止销量极大时超 Int(21.47 亿)
     val amount: Long   // 单注奖金（元），0 表示空开无奖金
