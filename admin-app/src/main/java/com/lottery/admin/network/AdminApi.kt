@@ -152,6 +152,19 @@ object AdminApi {
         post("/api/config/admins", gson.toJson(mapOf("username" to username, "password" to password, "role" to role)))
     }
 
+    suspend fun registerUser(phone: String, password: String, nickname: String?, planType: String, remainingQueries: Int, monthlyExpireAt: Long?): Map<String, Any> = withContext(Dispatchers.IO) {
+        val params = mutableMapOf<String, Any>(
+            "phone" to phone,
+            "password" to password,
+            "planType" to planType,
+            "remainingQueries" to remainingQueries
+        )
+        if (!nickname.isNullOrBlank()) params["nickname"] = nickname
+        if (monthlyExpireAt != null) params["monthlyExpireAt"] = monthlyExpireAt
+        val resp = post("/api/users/register", gson.toJson(params))
+        gson.fromJson(resp, object : TypeToken<Map<String, Any>>() {}.type)
+    }
+
     // ========== HTTP 底层 ==========
     private fun get(path: String): String {
         val req = Request.Builder().url(baseUrl + path).get()

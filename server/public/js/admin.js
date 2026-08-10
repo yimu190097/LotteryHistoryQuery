@@ -182,8 +182,9 @@ function renderLogTable(container, logs) {
 let userPage = 1, userSearch = '';
 async function renderUsers() {
   $('#mainContent').innerHTML = `
-    <div class="page-header">
+    <div class="page-header" style="display:flex;justify-content:space-between;align-items:center">
       <h1>用户管理</h1>
+      <button class="btn btn-success" onclick="showRegisterUserModal()">+ 注册用户</button>
     </div>
     <div class="card">
       <div class="search-bar">
@@ -323,6 +324,78 @@ async function handleSetQuota(e, phone) {
       body: JSON.stringify({ planType, remainingQueries, monthlyExpireAt })
     });
     showToast('配额设置成功', 'success');
+    closeModal();
+    renderUsers();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+// ==================== 注册用户 ====================
+function showRegisterUserModal() {
+  $('#modalContent').innerHTML = `
+    <h3>注册新用户</h3>
+    <form onsubmit="handleRegisterUser(event)">
+      <div class="form-group">
+        <label>手机号 <span style="color:red">*</span></label>
+        <input type="text" id="regPhone" placeholder="请输入手机号" required>
+      </div>
+      <div class="form-group">
+        <label>密码 <span style="color:red">*</span></label>
+        <input type="password" id="regPassword" placeholder="至少6位" required minlength="6">
+      </div>
+      <div class="form-group">
+        <label>昵称</label>
+        <input type="text" id="regNickname" placeholder="选填">
+      </div>
+      <div class="form-group">
+        <label>套餐类型</label>
+        <select id="regPlanType" onchange="onRegPlanChange()">
+          <option value="PAY_PER_USE">按次付费</option>
+          <option value="MONTHLY">月租用户</option>
+        </select>
+      </div>
+      <div class="form-group" id="regQuotaGroup">
+        <label>初始查询次数</label>
+        <input type="number" id="regQuota" value="10" min="0" required>
+      </div>
+      <div class="form-group" id="regExpireGroup" style="display:none">
+        <label>月租到期时间</label>
+        <input type="date" id="regExpireDate" value="${new Date(Date.now() + 365*24*60*60*1000).toISOString().split('T')[0]}">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeModal()">取消</button>
+        <button type="submit" class="btn btn-primary">注册</button>
+      </div>
+    </form>
+  `;
+  openModal();
+}
+
+function onRegPlanChange() {
+  const planType = $('#regPlanType').value;
+  $('#regQuotaGroup').style.display = planType === 'MONTHLY' ? 'none' : 'block';
+  $('#regExpireGroup').style.display = planType === 'MONTHLY' ? 'block' : 'none';
+}
+
+async function handleRegisterUser(e) {
+  e.preventDefault();
+  const phone = $('#regPhone').value.trim();
+  const password = $('#regPassword').value;
+  const nickname = $('#regNickname').value.trim();
+  const planType = $('#regPlanType').value;
+  const remainingQueries = planType === 'MONTHLY' ? 99999 : parseInt($('#regQuota').value) || 10;
+  let monthlyExpireAt = null;
+  if (planType === 'MONTHLY') {
+    monthlyExpireAt = new Date($('#regExpireDate').value).getTime();
+  }
+
+  try {
+    await api('/api/users/register', {
+      method: 'POST',
+      body: JSON.stringify({ phone, password, nickname: nickname || undefined, planType, remainingQueries, monthlyExpireAt })
+    });
+    showToast(`用户 ${phone} 注册成功（${planType === 'MONTHLY' ? '月租' : '按次'}）`, 'success');
     closeModal();
     renderUsers();
   } catch (err) {

@@ -135,6 +135,7 @@ class MainActivity : AppCompatActivity() {
         btnSearch.setOnClickListener { load(1) }
         view.findViewById<Button>(R.id.btnPrev).setOnClickListener { if (userPage > 1) load(userPage - 1) }
         view.findViewById<Button>(R.id.btnNext).setOnClickListener { load(userPage + 1) }
+        view.findViewById<Button>(R.id.btnRegister).setOnClickListener { showRegisterDialog() }
         load(1)
     }
 
@@ -167,6 +168,90 @@ class MainActivity : AppCompatActivity() {
                         Toast.makeText(this@MainActivity, "配额设置成功", Toast.LENGTH_SHORT).show()
                     } catch (e: Exception) {
                         Toast.makeText(this@MainActivity, "失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun showRegisterDialog() {
+        val planTypes = arrayOf("按次付费", "月租用户")
+        val editPhone = EditText(this).apply {
+            hint = "手机号"
+            inputType = android.text.InputType.TYPE_CLASS_PHONE
+        }
+        val editPassword = EditText(this).apply {
+            hint = "密码（至少6位）"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        val editNickname = EditText(this).apply { hint = "昵称（选填）" }
+        val editQuota = EditText(this).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setText("10")
+        }
+        val editExpireDate = EditText(this).apply {
+            hint = "到期日期 yyyy-MM-dd"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+        }
+        val spinner = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_item, planTypes)
+        }
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(40, 20, 40, 0)
+        }
+        layout.addView(TextView(this).apply { text = "手机号 *"; textSize = 14f; setPadding(0, 8, 0, 4) })
+        layout.addView(editPhone)
+        layout.addView(TextView(this).apply { text = "密码 *"; textSize = 14f; setPadding(0, 16, 0, 4) })
+        layout.addView(editPassword)
+        layout.addView(TextView(this).apply { text = "昵称"; textSize = 14f; setPadding(0, 16, 0, 4) })
+        layout.addView(editNickname)
+        layout.addView(TextView(this).apply { text = "套餐类型"; textSize = 14f; setPadding(0, 16, 0, 4) })
+        layout.addView(spinner)
+        layout.addView(TextView(this).apply { text = "初始查询次数"; textSize = 14f; setPadding(0, 16, 0, 4) })
+        layout.addView(editQuota)
+        layout.addView(TextView(this).apply { text = "月租到期时间（仅月租用户）"; textSize = 14f; setPadding(0, 16, 0, 4) })
+        layout.addView(editExpireDate)
+
+        AlertDialog.Builder(this)
+            .setTitle("注册新用户")
+            .setView(layout)
+            .setPositiveButton("注册") { _, _ ->
+                val phone = editPhone.text.toString().trim()
+                val password = editPassword.text.toString()
+                if (phone.isEmpty() || password.length < 6) {
+                    Toast.makeText(this, "手机号不能为空，密码至少6位", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                val planType = if (spinner.selectedItemPosition == 0) "PAY_PER_USE" else "MONTHLY"
+                val remaining = editQuota.text.toString().toIntOrNull() ?: 10
+                val nickname = editNickname.text.toString().trim().ifBlank { null }
+                var expireAt: Long? = null
+                if (planType == "MONTHLY") {
+                    val dateStr = editExpireDate.text.toString().trim()
+                    if (dateStr.isNotEmpty()) {
+                        try {
+                            expireAt = SimpleDateFormat("yyyy-MM-dd", Locale.CHINA).parse(dateStr)?.time
+                        } catch (_: Exception) {}
+                    }
+                    if (expireAt == null) {
+                        expireAt = System.currentTimeMillis() + 365L * 24 * 60 * 60 * 1000
+                    }
+                }
+                lifecycleScope.launch {
+                    try {
+                        withContext(Dispatchers.IO) {
+                            AdminApi.registerUser(phone, password, nickname, planType, remaining, expireAt)
+                        }
+                        Toast.makeText(this@MainActivity, "注册成功: $phone", Toast.LENGTH_SHORT).show()
+                        // 刷新用户列表
+                        switchTab(1)
+                    } catch (e: ApiException) {
+                        Toast.makeText(this@MainActivity, e.message, Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(this@MainActivity, "网络错误: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
