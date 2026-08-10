@@ -4,6 +4,7 @@ import com.lottery.history.model.ConditionalKey
 import com.lottery.history.model.ConditionalValue
 import com.lottery.history.model.LotteryDraw
 import com.lottery.history.model.LotteryTypeConfig
+import com.lottery.history.model.MatchMode
 import com.lottery.history.model.QueryResultItem
 
 /**
@@ -17,6 +18,11 @@ import com.lottery.history.model.QueryResultItem
  * v11.1 修复：
  *  - 修复多版本彩种重复计数（visited 漏标 + latestVersionKey 取错端）
  *  - 尊重 conditionalFlags：福运奖 OFF 时 3+0 不计为中奖
+ *
+ * v13 FC3D/P3 组选：selectedPrimary 改 List<Int> 保留位置；matchMode 区分直选/组3/组6。
+ *   - 直选：逐位比较 selected[i] == drawNumbers[i]（3 位全同位置才中）
+ *   - 组选3：多重集相等（号码全中不限位置）且用户号码为 2 同 1 异结构
+ *   - 组选6：多重集相等且用户号码 3 个数字全不同
  */
 object LotteryMatcher {
 
@@ -33,42 +39,48 @@ object LotteryMatcher {
         val prizeName: String
     )
 
+    /**
+     * 通用匹配入口。
+     *
+     * @param selectedPrimary 用户选号（前区）。普通彩种用 set.toList() 即可；FC3D/P3
+     *   必须按位置传入 List（index 0=百位, 1=十位, 2=个位）。
+     * @param selectedSecondary 后区选号
+     * @param matchMode 匹配模式，FC3D/P3 需指定，其他彩种忽略
+     */
     fun match(
         config: LotteryTypeConfig,
-        selectedPrimary: Set<Int>,
+        selectedPrimary: List<Int>,
         selectedSecondary: Set<Int>,
-        history: List<LotteryDraw>
+        history: List<LotteryDraw>,
+        matchMode: MatchMode = MatchMode.DIRECT
     ): List<QueryResultItem> {
+        val isPositional = config.code == "3d" || config.code == "p3"
+        val selectedPrimarySet = selectedPrimary.toSet()
+
         // 1) 每期用自己的 ruleVersion 算命中，写入聚合桶
         val buckets = linkedMapOf<BucketKey, MutableList<LotteryDraw>>()
         // ===== 额外桶：元数据缺失（resolveRuleVersion 返回 null）的期数统一归类 =====
-        //   这些期无法确定是哪一版规则，但用户选号命中了也必须展示（显式标注版本不明），
-        //   绝不"悄悄扔掉"导致用户看到的命中总期数 < 实际。
         val unknownVersionBuckets = linkedMapOf<BucketKey, MutableList<LotteryDraw>>()
 
         for (draw in history) {
             val ruleVersion = draw.resolveRuleVersion(config)
-            // 读取该期条件奖级标志，用于跳过停发奖项
             val flags = draw.conditionalFlags
 
-            // ===== 严格模式：ruleVersion 为 null 时，独立写未知版本桶，绝不跳过 =====
+            // ===== 严格模式：ruleVersion 为 null 时，独立写未知版本桶 =====
             if (ruleVersion == null) {
-                // 用 config.ruleVersions.last()（最旧版）的规则做"保底匹配"仅为让用户
-                // 看到有命中，但 key 用 "__UNKNOWN__" 标识，UI 上显式标"版本不明"。
-                // 不跳过、不丢弃，保证数据完整性。
                 val fallbackRules = config.ruleVersions.last().rules
                 for (rule in fallbackRules) {
                     val condKey = rule.conditionalKey
                     if (condKey != null && flags[condKey] == ConditionalValue.OFF) continue
-                    val primaryCount = draw.primaryNumbers.count { it in selectedPrimary }
-                    val secondaryCount = if (config.hasSecondary) {
-                        draw.secondaryNumbers.count { it in selectedSecondary }
-                    } else 0
-                    if (primaryCount == rule.matchPrimary && secondaryCount == rule.matchSecondary) {
+                    val (primaryCount, secondaryCount, matched) = countHitAndCheck(
+                        config, isPositional, matchMode, rule.matchPrimary, rule.matchSecondary,
+                        selectedPrimary, selectedPrimarySet, selectedSecondary, draw
+                    )
+                    if (matched) {
                         val key = BucketKey(
                             ruleVersionKey = "__UNKNOWN_VERSION__",
-                            matchPrimary = rule.matchPrimary,
-                            matchSecondary = rule.matchSecondary,
+                            matchPrimary = primaryCount,
+                            matchSecondary = secondaryCount,
                             prizeName = rule.prizeName
                         )
                         unknownVersionBuckets.getOrPut(key) { mutableListOf() }.add(draw)
@@ -79,58 +91,34 @@ object LotteryMatcher {
             }
 
             for (rule in ruleVersion.rules) {
-                // v11.1: 条件奖级 OFF 时跳过该规则（如福运奖停发 → 3+0 不计中奖）
                 val condKey = rule.conditionalKey
                 if (condKey != null && flags[condKey] == ConditionalValue.OFF) continue
 
-                val primaryCount = draw.primaryNumbers.count { it in selectedPrimary }
-                val secondaryCount = if (config.hasSecondary) {
-                    draw.secondaryNumbers.count { it in selectedSecondary }
-                } else {
-                    0
-                }
-                if (primaryCount == rule.matchPrimary && secondaryCount == rule.matchSecondary) {
-                    // ===== v13 TODO: FC3D/P3 组选3/组选6 需区分直选/组选匹配模式 =====
-                    //   当前对 FC3D/P3 仅匹配第一个条件（直选奖），组选3/6 的规则定义已存在
-                    //   但匹配引擎尚不支持区分"位置匹配"与"多重集匹配"。
-                    //   实现路径：
-                    //     1. 解析器不再对 FC3D/P3 号码排序（保留位置信息）
-                    //     2. UI 增加组选模式选择（直选/组选3/组选6）
-                    //     3. 匹配引擎按模式选择不同匹配逻辑：
-                    //        - 直选：逐位比较 selectedPrimary[i] == draw.primaryNumbers[i]
-                    //        - 组选3：检查 multiset 相等 且 2同1不同
-                    //        - 组选6：检查 multiset 相等 且 3个不同
+                val (primaryCount, secondaryCount, matched) = countHitAndCheck(
+                    config, isPositional, matchMode, rule.matchPrimary, rule.matchSecondary,
+                    selectedPrimary, selectedPrimarySet, selectedSecondary, draw
+                )
+                if (matched) {
                     val key = BucketKey(
                         ruleVersionKey = ruleVersion.key,
-                        matchPrimary = rule.matchPrimary,
-                        matchSecondary = rule.matchSecondary,
+                        matchPrimary = primaryCount,
+                        matchSecondary = secondaryCount,
                         prizeName = rule.prizeName
                     )
                     buckets.getOrPut(key) { mutableListOf() }.add(draw)
-                    // 每期最多命中一条规则；为兼容历史行为（一等奖只算一等奖，不再下探到二等奖）
-                    // 命中后直接 break 本 draw 的 rules 循环
+                    // 每期最多命中一条规则；命中后直接 break
                     break
                 }
             }
         }
 
         // 2) 查询结果列表：按最新政策 config.rules 的【奖项名】合并展示。
-        //    【核心约束】：matches（真实 draws 列表）的所有元数据——期号、开奖日期、真实 ruleVersionKey、
-        //    真实奖项信息绝对不变。这里只把不同版本、不同命中条件的 draws 合并到"最新政策对应奖项名行"
-        //    用于简单展示；点"查看历史"时 HistoryDialog 依然按 matches 中每期 draw 的真实
-        //    ruleVersionKey 分组展示真实政策。
-        //
-        //    同奖项名合并：如 DLT 2026 六等奖有 3+1 和 2+2 两个条件，命中任一都合并到一行"六等奖"。
-        //    matchPrimary/matchSecondary 设为 -1 表示"多条件合并"，UI 层显示 "—"。
         val inOrder = mutableListOf<QueryResultItem>()
         val consumed = mutableSetOf<BucketKey>()
-        // 最新政策 key：Pair(matchPrimary, matchSecondary) → 奖项名
         val latestRuleByKey = config.rules.associate { r ->
             (r.matchPrimary to r.matchSecondary) to r.prizeName
         }
-        // 按奖项名去重，保留首次出现顺序
         val uniquePrizeNames = linkedSetOf<String>()
-        // 每个奖项名对应的全部 (matchPrimary, matchSecondary) 条件集合
         val nameToConditions = mutableMapOf<String, MutableList<Pair<Int, Int>>>()
         for (rule in config.rules) {
             uniquePrizeNames.add(rule.prizeName)
@@ -138,8 +126,6 @@ object LotteryMatcher {
                 .add(rule.matchPrimary to rule.matchSecondary)
         }
 
-        // 2a) 按最新政策去重后的奖项名顺序：拉取所有版本中 (matchP, matchS) 属于该奖项名
-        //     任一条件的 bucket，合并 draws（真实元数据不变），奖名用最新政策奖名。
         for (prizeName in uniquePrizeNames) {
             val conditions = nameToConditions[prizeName]!!
             val matchingEntries = buckets.entries.filter { (k, _) ->
@@ -149,37 +135,28 @@ object LotteryMatcher {
             if (matchingEntries.isEmpty()) continue
             matchingEntries.forEach { (k, _) -> consumed.add(k) }
 
-            // 所有真实 LotteryDraw 对象原封不动合并（ruleVersionKey / issue / date 全保留）
             val allDraws = matchingEntries.flatMap { it.value }
-            // 多条件合并时 matchPrimary/Secondary 设为 -1（UI 显示 "—"）；单条件时保留实际值
             val (mp, ms) = if (conditions.size == 1) conditions[0] else (-1 to -1)
             inOrder.add(
                 QueryResultItem(
                     matchPrimary = mp,
                     matchSecondary = ms,
-                    prizeName = prizeName,          // 只改展示的奖名——按最新政策
+                    prizeName = prizeName,
                     count = allDraws.size.toLong(),
-                    matches = allDraws,             // 真实draw元数据 100% 保留不改动
+                    matches = allDraws,
                     sourceRuleVersionKey = config.ruleVersions.lastOrNull()?.key
                 )
             )
         }
 
-        // 2b) 旧版本里 (matchP, matchS) 在最新政策中不存在的 bucket：
-        //     尝试按最新政策奖级条件就近归属（如 2019 九等奖 2+0 命中 2 球未中后区/1+1），
-        //     若最新规则找不到对应 key，就追加到尾部展示原奖项名；matches 元数据始终不变。
+        // 2b) 剩余 bucket 按最新政策奖级条件就近归属
         val remaining = buckets.keys - consumed
         for (key in remaining) {
             if (key.ruleVersionKey == "__UNKNOWN_VERSION__") continue
             val draws = buckets[key] ?: continue
-            // 找最新政策同(matchP, matchS)的奖名兜底；没找到就保留原奖项名
             val latestName = latestRuleByKey[key.matchPrimary to key.matchSecondary] ?: key.prizeName
-            // 同奖名行已存在则合并（matches 真实 draws 元数据不变）
             val existing = inOrder.firstOrNull { it.prizeName == latestName }
             if (existing != null) {
-                // 合并：仅把真实 draws 追加到 matches 列表，existing 其他字段不动
-                //   → matches 原元数据依旧完整
-                //   → 合并后该行一定含多条件，matchPrimary/Secondary 设 -1
                 (existing.matches as MutableList<LotteryDraw>).addAll(draws)
                 existing.count += draws.size.toLong()
                 existing.matchPrimary = -1
@@ -198,7 +175,7 @@ object LotteryMatcher {
             }
         }
 
-        // 2c) 追加：元数据缺失（规则版本不明）的命中 → 统一放尾部、显式标注
+        // 2c) 追加：元数据缺失（规则版本不明）的命中
         for ((bk, draws) in unknownVersionBuckets) {
             inOrder.add(
                 QueryResultItem(
@@ -213,6 +190,74 @@ object LotteryMatcher {
         }
 
         return inOrder
+    }
+
+    /**
+     * 单次命中检测：返回 Triple(命中前区数, 命中后区数, 是否满足该规则)。
+     * - 非 FC3D/P3：规则 matchPrimary=X 要求集合命中 X 个数。
+     * - FC3D/P3：
+     *     DIRECT → 要求逐位相等，命中前区数=3，后区=0。
+     *     GROUP_3 → 要求 multiset 相等 且 用户号码结构为 2同1异，命中前区=3。
+     *     GROUP_6 → 要求 multiset 相等 且 用户号码 3 个不同，命中前区=3。
+     *   规则中 group3/group6 的 matchPrimary 也是 3，所以最终 matchPrimary=3。
+     */
+    private fun countHitAndCheck(
+        config: LotteryTypeConfig,
+        isPositional: Boolean,
+        matchMode: MatchMode,
+        ruleMatchPrimary: Int,
+        ruleMatchSecondary: Int,
+        selectedPrimary: List<Int>,
+        selectedPrimarySet: Set<Int>,
+        selectedSecondary: Set<Int>,
+        draw: LotteryDraw
+    ): Triple<Int, Int, Boolean> {
+        // ===== FC3D/P3 模式：按位置 / 组选匹配 =====
+        if (isPositional && selectedPrimary.size == 3 && draw.primaryNumbers.size == 3) {
+            // 后区恒为 0
+            val secondaryCount = 0
+            val primaryCount = when (matchMode) {
+                MatchMode.DIRECT -> {
+                    // 直选：逐位比较
+                    var equal = 0
+                    for (i in 0..2) {
+                        if (draw.primaryNumbers[i] == selectedPrimary[i]) equal++
+                    }
+                    equal
+                }
+                MatchMode.GROUP_3, MatchMode.GROUP_6 -> {
+                    // 组选：先判断多重集相等（号码全中、不限位置），再校验结构
+                    val drawSorted = draw.primaryNumbers.sorted()
+                    val selSorted = selectedPrimary.sorted()
+                    val multisetMatch = drawSorted == selSorted
+                    if (!multisetMatch) {
+                        // 号码不全中，组选也不成立
+                        draw.primaryNumbers.count { it in selectedPrimarySet }
+                    } else {
+                        // 号码全中：3 个球
+                        val a = selSorted[0]; val b = selSorted[1]; val c = selSorted[2]
+                        val hasTwoSame = (a == b && b != c) || (b == c && a != b)
+                        val allDiff = a != b && b != c
+                        val ok = when (matchMode) {
+                            MatchMode.GROUP_3 -> hasTwoSame
+                            MatchMode.GROUP_6 -> allDiff
+                            else -> true
+                        }
+                        if (ok) 3 else 2   // 号码全中但结构不匹配 → 仍显示为命中2
+                    }
+                }
+            }
+            val ok = (primaryCount == ruleMatchPrimary) && (secondaryCount == ruleMatchSecondary)
+            return Triple(primaryCount, secondaryCount, ok)
+        }
+
+        // ===== 普通彩种：集合交集计数 =====
+        val primaryCount = draw.primaryNumbers.count { it in selectedPrimarySet }
+        val secondaryCount = if (config.hasSecondary) {
+            draw.secondaryNumbers.count { it in selectedSecondary }
+        } else 0
+        val ok = (primaryCount == ruleMatchPrimary) && (secondaryCount == ruleMatchSecondary)
+        return Triple(primaryCount, secondaryCount, ok)
     }
 
     fun formatNumbers(list: List<Int>, pad: Boolean = true): String {

@@ -22,6 +22,7 @@ import com.lottery.history.model.ConditionalValue
 import com.lottery.history.model.LotteryDraw
 import com.lottery.history.model.LotteryType
 import com.lottery.history.model.LotteryTypeConfig
+import com.lottery.history.model.MatchMode
 import com.lottery.history.model.QueryResultItem
 import com.lottery.history.util.BallTextHelper
 import com.lottery.history.util.LotteryMatcher
@@ -37,8 +38,16 @@ class LotteryFragment : Fragment() {
 
     private lateinit var config: LotteryTypeConfig
 
+    /** 非 FC3D/P3 通用选号集合（保持原代码不变） */
     private val selectedPrimary = LinkedHashSet<Int>()
     private val selectedSecondary = LinkedHashSet<Int>()
+
+    /** FC3D/P3 专用：按位置保存百位/十位/个位；未填位置用 -1 占位。大小恒为 3。 */
+    private val positionalPrimary: MutableList<Int> = mutableListOf(-1, -1, -1)
+    /** FC3D/P3 匹配模式：直选/组选3/组选6；其他彩种忽略 */
+    private var currentMatchMode: MatchMode = MatchMode.DIRECT
+    private var chipModeContainer: LinearLayout? = null
+    private var positionalBallsContainer: LinearLayout? = null
 
     private lateinit var gridPrimary: GridLayout
     private lateinit var gridSecondary: GridLayout
@@ -116,6 +125,9 @@ class LotteryFragment : Fragment() {
         // 结果区前区标签
         view?.findViewById<TextView>(R.id.tvResultPrimaryLabel)?.text = config.primaryLabel
 
+        // ========== FC3D/P3 模式 Chip 条 + 位置球 ==========
+        injectPositionalUi()
+
         // ============ 查询结果 5 列表头：文字描述动态匹配彩种术语 ============
         // 列：奖项 / 命中primary / 命中secondary / 次数 / 操作
         view?.findViewById<TextView>(R.id.tvHeaderPrizeName)?.text = "奖项"
@@ -154,6 +166,180 @@ class LotteryFragment : Fragment() {
             append(" ｜ 支持输后几位模糊匹配")
         }
         etIssueQuery.hint = "如 ${config.issuePattern}"
+    }
+
+    /** FC3D/P3：注入"模式 Chip 条（直选/组选3/组选6）"和"位置球容器（百/十/个）" */
+    private fun injectPositionalUi() {
+        val isPositional = config.code == "3d" || config.code == "p3"
+        if (!isPositional) return
+        val ctx = requireContext()
+        val v = view ?: return
+
+        // ===== 1) 在前区标题父容器下追加：Chip 条 =====
+        val primaryTitle = v.findViewById<TextView>(R.id.tvPrimaryTitle)
+        val titleParent = primaryTitle.parent as? ViewGroup ?: return
+        val titleIndex = titleParent.indexOfChild(primaryTitle)
+        val density = resources.displayMetrics.density
+
+        val chipsRow = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = (6 * density).toInt()
+                bottomMargin = (4 * density).toInt()
+            }
+            gravity = android.view.Gravity.START
+        }
+        MatchMode.values().forEach { mode ->
+            val chip = TextView(ctx).apply {
+                text = mode.label
+                gravity = android.view.Gravity.CENTER
+                val lp = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    marginEnd = (8 * density).toInt()
+                }
+                layoutParams = lp
+                val padVH = (8 * density).toInt()
+                val padHH = (14 * density).toInt()
+                setPadding(padHH, padVH, padHH, padVH)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                setTypeface(null, Typeface.BOLD)
+                isClickable = true
+                isFocusable = true
+                tag = mode
+                setOnClickListener { onModeChipClicked(it as TextView) }
+            }
+            chipsRow.addView(chip)
+        }
+        chipModeContainer = chipsRow
+        titleParent.addView(chipsRow, titleIndex + 1)
+
+        // ===== 2) 在前区 Label 卡片下追加：位置球（百/十/个三格） =====
+        val tvPrimaryLabel = v.findViewById<TextView>(R.id.tvPrimaryLabel)
+        val labelParent = tvPrimaryLabel.parent as? ViewGroup ?: return
+        val labelIndex = labelParent.indexOfChild(tvPrimaryLabel)
+        val posRow = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = (8 * density).toInt()
+            }
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+        }
+        listOf("百位", "十位", "个位").forEachIndexed { idx, name ->
+            val col = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+                ).apply {
+                    marginStart = if (idx == 0) 0 else (10 * density).toInt()
+                }
+                gravity = android.view.Gravity.CENTER_HORIZONTAL
+            }
+            val titleTv = TextView(ctx).apply {
+                text = name
+                setTextColor(Color.parseColor("#546E7A"))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                gravity = android.view.Gravity.CENTER
+                setPadding(0, 0, 0, (4 * density).toInt())
+            }
+            val ballSize = computeCompactBallSize() + (4 * density).toInt()
+            val ball = TextView(ctx).apply {
+                layoutParams = ViewGroup.MarginLayoutParams(ballSize, ballSize)
+                gravity = android.view.Gravity.CENTER
+                text = "-"
+                typeface = Typeface.MONOSPACE
+                BallTextHelper.apply(this, ballSize)
+                setBackgroundResource(R.drawable.bg_ball_normal_red)
+                setTextColor(Color.parseColor("#BDBDBD"))
+                tag = "pos_ball_$idx"
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { clearPositionalPosition(idx) }
+            }
+            val tip = TextView(ctx).apply {
+                text = "点击清空"
+                setTextColor(Color.parseColor("#9E9E9E"))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+                gravity = android.view.Gravity.CENTER
+                setPadding(0, (3 * density).toInt(), 0, 0)
+            }
+            col.addView(titleTv)
+            col.addView(ball)
+            col.addView(tip)
+            posRow.addView(col)
+        }
+        positionalBallsContainer = posRow
+        labelParent.addView(positionalBallsContainer, labelIndex + 1)
+
+        refreshModeChips()
+        refreshPositionalBalls()
+    }
+
+    private fun onModeChipClicked(chip: TextView) {
+        val mode = chip.tag as? MatchMode ?: return
+        currentMatchMode = mode
+        refreshModeChips()
+    }
+
+    private fun refreshModeChips() {
+        val container = chipModeContainer ?: return
+        val density = resources.displayMetrics.density
+        for (i in 0 until container.childCount) {
+            val chip = container.getChildAt(i) as? TextView ?: continue
+            val mode = chip.tag as? MatchMode ?: continue
+            val selected = mode == currentMatchMode
+            val padVH = (8 * density).toInt()
+            val padHH = (14 * density).toInt()
+            chip.setPadding(padHH, padVH, padHH, padVH)
+            if (selected) {
+                chip.setBackgroundResource(R.drawable.bg_ball_red)
+                chip.setTextColor(Color.WHITE)
+            } else {
+                chip.setBackgroundResource(R.drawable.bg_chat_input)
+                chip.setTextColor(Color.parseColor("#546E7A"))
+            }
+        }
+    }
+
+    /** FC3D/P3 位置球 UI 重绘：从 positionalPrimary 取值 */
+    private fun refreshPositionalBalls() {
+        val container = positionalBallsContainer ?: return
+        for (i in 0..2) {
+            val ball = container.findViewWithTag<TextView>("pos_ball_$i") ?: continue
+            val v = positionalPrimary[i]
+            if (v < 0) {
+                ball.text = "-"
+                ball.setTextColor(Color.parseColor("#BDBDBD"))
+                ball.setBackgroundResource(R.drawable.bg_ball_normal_red)
+            } else {
+                ball.text = String.format("%02d", v)
+                ball.setTextColor(Color.WHITE)
+                ball.setBackgroundResource(R.drawable.bg_ball_red)
+            }
+        }
+    }
+
+    /** 单独清空某位置（点位置球）；grid 对应球的高亮也要同步取消 */
+    private fun clearPositionalPosition(idx: Int) {
+        if (idx !in 0..2) return
+        val oldValue = positionalPrimary[idx]
+        positionalPrimary[idx] = -1
+        if (oldValue >= 0) {
+            selectedPrimary.remove(oldValue)
+            val ballIdx = oldValue - config.primaryMin
+            if (ballIdx in 0 until gridPrimary.childCount) {
+                setBallNormalStyle(gridPrimary.getChildAt(ballIdx) as TextView, true)
+            }
+        }
+        refreshPositionalBalls()
+        updateSelectedTexts()
     }
 
     private fun setupBallGrids() {
@@ -226,6 +412,44 @@ class LotteryFragment : Fragment() {
 
     private fun onBallClicked(number: Int, isPrimary: Boolean, ball: TextView) {
         if (isPrimary) {
+            // ===== FC3D/P3：按位置填充（百位→十位→个位依次）；再点"已占号码"则把该号码对应位置清空 =====
+            val isPositional = config.code == "3d" || config.code == "p3"
+            if (isPositional) {
+                if (number in positionalPrimary) {
+                    // 再点击相同号码：清除其所在槽位
+                    val slot = positionalPrimary.indexOf(number)
+                    if (slot in 0..2) {
+                        positionalPrimary[slot] = -1
+                        selectedPrimary.remove(number)
+                        setBallNormalStyle(ball, true)
+                    }
+                } else {
+                    // 找第一个空槽位填入（-1）
+                    val slot = positionalPrimary.indexOf(-1)
+                    if (slot < 0) {
+                        // 3 个位置已满：替换最后一个位置
+                        val old = positionalPrimary[2]
+                        positionalPrimary[2] = number
+                        // grid 里旧号码球样式同步取消高亮
+                        val oldBallIdx = old - config.primaryMin
+                        if (oldBallIdx in 0 until gridPrimary.childCount) {
+                            setBallNormalStyle(gridPrimary.getChildAt(oldBallIdx) as TextView, true)
+                        }
+                        selectedPrimary.remove(old)
+                        selectedPrimary.add(number)
+                        setBallSelectedStyle(ball, true)
+                    } else {
+                        positionalPrimary[slot] = number
+                        selectedPrimary.add(number)
+                        setBallSelectedStyle(ball, true)
+                    }
+                }
+                refreshPositionalBalls()
+                updateSelectedTexts()
+                return
+            }
+
+            // ===== 通用彩种：普通集合切换 =====
             if (selectedPrimary.contains(number)) {
                 selectedPrimary.remove(number)
                 setBallNormalStyle(ball, true)
@@ -305,6 +529,10 @@ class LotteryFragment : Fragment() {
     private fun setupButtons() {
         btnReset.setOnClickListener {
             selectedPrimary.clear()
+            positionalPrimary[0] = -1
+            positionalPrimary[1] = -1
+            positionalPrimary[2] = -1
+            refreshPositionalBalls()
             selectedSecondary.clear()
             for (i in 0 until gridPrimary.childCount) {
                 setBallNormalStyle(gridPrimary.getChildAt(i) as TextView, true)
@@ -325,21 +553,19 @@ class LotteryFragment : Fragment() {
                 isPrimaryRed = true,
                 scope = viewLifecycleOwner.lifecycleScope,
                 onPick = { record ->
-                    // 仅导入选号到选号区，不自动查询
-                    selectedPrimary.clear()
-                    selectedPrimary.addAll(record.primaryNumbers)
+                    importPrimaryNumbersFromRecord(record.primaryNumbers)
                     selectedSecondary.clear()
                     selectedSecondary.addAll(record.secondaryNumbers)
                     refreshGridBallsVisualState()
+                    refreshPositionalBalls()
                     updateSelectedTexts()
                 },
                 onPickAndQuery = { record ->
-                    // 导入选号并自动查询
-                    selectedPrimary.clear()
-                    selectedPrimary.addAll(record.primaryNumbers)
+                    importPrimaryNumbersFromRecord(record.primaryNumbers)
                     selectedSecondary.clear()
                     selectedSecondary.addAll(record.secondaryNumbers)
                     refreshGridBallsVisualState()
+                    refreshPositionalBalls()
                     updateSelectedTexts()
                     performQuery()
                 }
@@ -379,8 +605,39 @@ class LotteryFragment : Fragment() {
         }
     }
 
+    /**
+     * 导入历史记录的 primary 选号。
+     * - 非 FC3D/P3：直接装入 selectedPrimary（集合无序，与原行为一致）
+     * - FC3D/P3：按 record.primaryNumbers 顺序填充 positionalPrimary 前三位；多余值放入 selectedPrimary 作为补充
+     */
+    private fun importPrimaryNumbersFromRecord(numbers: List<Int>) {
+        selectedPrimary.clear()
+        positionalPrimary[0] = -1
+        positionalPrimary[1] = -1
+        positionalPrimary[2] = -1
+        val isPositional = config.code == "3d" || config.code == "p3"
+        if (isPositional) {
+            for (i in 0..2) {
+                val v = numbers.getOrNull(i)
+                if (v != null) positionalPrimary[i] = v
+            }
+        }
+        selectedPrimary.addAll(numbers)
+    }
+
     private fun performQuery() {
-        if (selectedPrimary.isEmpty() || (config.hasSecondary && selectedSecondary.isEmpty())) {
+        val isPositional = config.code == "3d" || config.code == "p3"
+        if (isPositional) {
+            if (positionalPrimary.any { it < 0 }) {
+                showEmptyResultState()
+                android.widget.Toast.makeText(
+                    requireContext(),
+                    "请先选满百位+十位+个位（3个号码）",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+                return
+            }
+        } else if (selectedPrimary.isEmpty() || (config.hasSecondary && selectedSecondary.isEmpty())) {
             showEmptyResultState()
             return
         }
@@ -410,14 +667,21 @@ class LotteryFragment : Fragment() {
                 return@launch
             }
             // 扣减成功，执行查询
-            val results = LotteryMatcher.match(config, selectedPrimary, selectedSecondary, getHistory())
+            val primaryForMatch: List<Int> = if (isPositional) {
+                positionalPrimary.toList()
+            } else {
+                selectedPrimary.toList()
+            }
+            val results = LotteryMatcher.match(
+                config, primaryForMatch, selectedSecondary, getHistory(), currentMatchMode
+            )
             showResults(results)
             withContext(Dispatchers.IO) {
                 QueryRecordManager.saveQuery(
                     context = requireContext(),
                     type = config.code,
-                    primary = selectedPrimary,
-                    secondary = selectedSecondary
+                    primary = primaryForMatch,
+                    secondary = selectedSecondary.toList()
                 )
             }
         }

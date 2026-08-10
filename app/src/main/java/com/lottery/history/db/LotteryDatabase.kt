@@ -12,9 +12,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         LotteryDrawEntity::class,
         QueryRecordEntity::class,
         UserEntity::class,
-        QuotaEntity::class
+        QuotaEntity::class,
+        ChatMessageEntity::class,
+        PendingSyncEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = true
 )
 abstract class LotteryDatabase : RoomDatabase() {
@@ -22,6 +24,8 @@ abstract class LotteryDatabase : RoomDatabase() {
     abstract fun queryRecordDao(): QueryRecordDao
     abstract fun userDao(): UserDao
     abstract fun quotaDao(): QuotaDao
+    abstract fun chatMessageDao(): ChatMessageDao
+    abstract fun pendingSyncDao(): PendingSyncDao
 
     companion object {
         @Volatile
@@ -62,15 +66,50 @@ abstract class LotteryDatabase : RoomDatabase() {
         }
 
         /**
-         * Migration(13, 14)：删除未实现的 chat_messages 和 pending_sync 两个空表。
-         * 聊天模块（无后端，纯本地模拟）和离线同步模块（无服务器，WorkManager只标记SYNCED）
-         * 均为占位功能，长期不会接入，直接清理节省空间与DAO维护成本。
-         * 同时清理对应的权限请求也从 Manifest 移除。
+         * Migration(13, 14) 曾试图删除 chat_messages / pending_sync，
+         * 但这两张表对应功能（客服聊天 + 离线同步队列）为后期接后端预留骨架，属上线必填模块，不应删除。
+         * 因此 v14 作为过渡版本，v15 迁移直接 CREATE 还原（IF NOT EXISTS 幂等）。
+         * 若老用户停留在 v14 且表被 drop → v15 重建；若新用户从未有这两张表 → 首次创建。
          */
         private val MIGRATION_13_14 = object : Migration(13, 14) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                runCatching { database.execSQL("DROP TABLE IF EXISTS `chat_messages`") }
-                runCatching { database.execSQL("DROP TABLE IF EXISTS `pending_sync`") }
+                // 保持空迁移：实际 CREATE 放在 14→15，保证跨版本连续
+            }
+        }
+
+        private val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // --- 恢复 chat_messages 表 ---
+                runCatching {
+                    database.execSQL(
+                        """CREATE TABLE IF NOT EXISTS `chat_messages` (
+                            `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            `role` TEXT NOT NULL,
+                            `type` TEXT NOT NULL,
+                            `text` TEXT,
+                            `mediaPath` TEXT,
+                            `duration` INTEGER NOT NULL,
+                            `createdAt` INTEGER NOT NULL
+                        )"""
+                    )
+                }
+                // --- 恢复 pending_sync 表 ---
+                runCatching {
+                    database.execSQL(
+                        """CREATE TABLE IF NOT EXISTS `pending_sync` (
+                            `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            `userPhone` TEXT NOT NULL,
+                            `actionType` TEXT NOT NULL,
+                            `payload` TEXT NOT NULL,
+                            `clientOpId` TEXT NOT NULL,
+                            `status` TEXT NOT NULL,
+                            `retryCount` INTEGER NOT NULL,
+                            `lastError` TEXT,
+                            `createdAt` INTEGER NOT NULL,
+                            `syncedAt` INTEGER
+                        )"""
+                    )
+                }
             }
         }
 
@@ -84,7 +123,8 @@ abstract class LotteryDatabase : RoomDatabase() {
                     MIGRATION_10_11,
                     MIGRATION_11_12,
                     MIGRATION_12_13,
-                    MIGRATION_13_14
+                    MIGRATION_13_14,
+                    MIGRATION_14_15
                 ).fallbackToDestructiveMigration().build().also { instance = it }
             }
         }
