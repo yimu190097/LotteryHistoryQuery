@@ -45,8 +45,11 @@ object LotteryDataManager {
      *         终极字段布局已硬验证：
      *          前缀1-11  基本投注12-25(7×2=14)  基本尾扩展26-29(2×2=4=8/9等)
      *          追加投注1-4等30-37(4×2=8)  追加5级count38(1字段)
+     *  v5→v6：【P0 追加比例+尾标修复】RuleVersion 新增 appendRatio 字段，
+     *         DLT 2007-2019 年追加比例 60%(0.6)不再被硬编码 0.8 覆盖错误；
+     *         2009 版 F38=60 官方源行尾标记不再被误当成追加五等 count。
      */
-    const val PARSER_VERSION_CURRENT = 5
+    const val PARSER_VERSION_CURRENT = 6
 
     private val mutex = Mutex()
     @Volatile private var dao: LotteryDao? = null

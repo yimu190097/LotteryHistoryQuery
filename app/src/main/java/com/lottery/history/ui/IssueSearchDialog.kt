@@ -369,20 +369,23 @@ class IssueSearchDialog(context: Context) : Dialog(context) {
             layoutParams = lp
         })
 
-        // 用最新政策规则 cfg.rules 的全部奖级结构展示，点「查看本期全部奖项详情」再按真实版本展示。
-        // cfg.rules 可能含同名奖级多个条件（如 DLT 2026 六等奖=3+1 和 2+2），但 allPrizeTiers/
-        // appendPrizeTiers 按官方去重奖级数存储（7个）。需按 prizeName 去重，首次出现分配 tierIndex。
+        // 用该期真实规则版本的全部奖级结构展示，点「查看本期全部奖项详情」再按真实版本展示。
+        // 【P0修复】之前用 cfg.rules（最新版）限制展示行数，导致历史期多出的奖级被丢弃。
+        // 现在用 draw.resolveRuleVersion(cfg) 取真实版本，2009版8级/2019版9级全部展示。
         val hasPrize = draw.allPrizeTiers.isNotEmpty() || draw.firstPrizeCount != null || draw.secondPrizeCount != null
         if (hasPrize) {
             val tierColors = listOf(
                 0xFFC62828.toInt(), 0xFFD84315.toInt(), 0xFFEF6C00.toInt(), 0xFFF57C00.toInt(),
-                0xFFF9A825.toInt(), 0xFFFBC02D.toInt(), 0xFFFFA000.toInt(), 0xFF8D6E63.toInt()
+                0xFFF9A825.toInt(), 0xFFFBC02D.toInt(), 0xFFFFA000.toInt(), 0xFF8D6E63.toInt(),
+                0xFF78909C.toInt()  // 第9级颜色（2019版九等奖）
             )
+            // 使用该期真实 ruleVersion 的规则（而非最新版 cfg.rules），确保历史期多余奖级不丢失
+            val displayRules = ruleVersion?.rules ?: cfg.rules
             // 按奖项名去重，保留首次出现顺序，分配 allPrizeTiers/appendPrizeTiers 的正确索引
             val uniqueNames = linkedSetOf<String>()
             val nameToTierIndex = mutableMapOf<String, Int>()
             var tierIdx = 0
-            cfg.rules.forEach { rule ->
+            displayRules.forEach { rule ->
                 if (rule.prizeName !in uniqueNames) {
                     uniqueNames.add(rule.prizeName)
                     nameToTierIndex[rule.prizeName] = tierIdx++

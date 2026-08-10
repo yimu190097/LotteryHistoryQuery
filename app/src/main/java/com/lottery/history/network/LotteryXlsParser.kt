@@ -251,17 +251,24 @@ object LotteryXlsParser {
                     // —— 追加投注 ——
                     val appendPairsTarget = ruleVersion.appendTierPairCount
                     val appendFirst4 = extractNPairsDirect(parts, start = 29, n = 4) // 30-37 (字段30=parts[29])
-                    // 字段38 = parts[37] = 追加5级count，amount=基本5级(k=4 zero-based in baseFirst7)×0.8
+                    val ratio = ruleVersion.appendRatio
+                    // 2007-2019年大乐透追加比例60%(0.6)，2019年起80%(0.8)
+                    val isPre2019Dlt = ruleVersion.key in listOf("dlt_20070528", "dlt_20091017", "dlt_20140505")
+                    // 字段38 = parts[37]：2019版起为追加五等count；2009版F38=60是官方源行尾标记，非真实count
                     val append5CountRaw = parts.getOrNull(37)
-                    val append5Count = append5CountRaw?.takeIf { it != "-" && it.isNotEmpty() }
-                        ?.let { parseNumberSafe(it) } ?: 0L
+                    val append5Count = if (isPre2019Dlt) {
+                        0L  // 2009版尾标忽略，追加五等count=0
+                    } else {
+                        append5CountRaw?.takeIf { it != "-" && it.isNotEmpty() }
+                            ?.let { parseNumberSafe(it) } ?: 0L
+                    }
                     val base5Amt = (baseFirst7.getOrNull(4)?.amount ?: 0L)
                     val base6Amt = (baseFirst7.getOrNull(5)?.amount ?: 0L)
                     val base7Amt = (baseFirst7.getOrNull(6)?.amount ?: 0L)
                     val appendTail = listOf(
-                        PrizeTierEntry(count = append5Count, amount = (base5Amt * 0.8).toLong()),
-                        PrizeTierEntry(count = 0L, amount = (base6Amt * 0.8).toLong()),
-                        PrizeTierEntry(count = 0L, amount = (base7Amt * 0.8).toLong())
+                        PrizeTierEntry(count = append5Count, amount = (base5Amt * ratio).toLong()),
+                        PrizeTierEntry(count = 0L, amount = (base6Amt * ratio).toLong()),
+                        PrizeTierEntry(count = 0L, amount = (base7Amt * ratio).toLong())
                     )
                     appendTiers = (appendFirst4 + appendTail).take(appendPairsTarget).toMutableList()
                 } else {

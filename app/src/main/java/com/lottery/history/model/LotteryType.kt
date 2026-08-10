@@ -55,7 +55,11 @@ data class LotteryTypeConfig(
         val realTiersToUse: Int = rules.size,
         val prizeTierPairCount: Int = realTiersToUse,
         val extraFieldCount: Int = 0,
-        val appendTierPairCount: Int = 0
+        val appendTierPairCount: Int = 0,
+        /** 追加投注比例（仅大乐透等有追加玩法的彩种使用）。
+         *  2007-2019: 60%（0.6）；2019至今: 80%（0.8）。
+         *  解析器用此字段计算追加各等级金额 = 基本对应等级金额 × appendRatio。 */
+        val appendRatio: Double = 0.8
     )
 
     data class MatchRuleDef(
@@ -251,6 +255,7 @@ object LotteryType {
                 realTiersToUse = 6, prizeTierPairCount = 6,  // 6级版本：真实解析仅显示前6级（基本投注7+尾扩展取前6截断即可）
                 extraFieldCount = 2,
                 appendTierPairCount = 6,  // 6级追加投注=6级（第7级政策不存在）
+                appendRatio = 0.6,  // 2007-2019年追加比例为60%
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
@@ -272,6 +277,7 @@ object LotteryType {
                 realTiersToUse = 8, prizeTierPairCount = 8,  // DLT专属：12-25(7对)+26-27(1对)=8对
                 extraFieldCount = 2,
                 appendTierPairCount = 7,  // 追加投注7级=7级（和7级合并版统一布局）
+                appendRatio = 0.6,  // 2007-2019年追加比例为60%
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
@@ -296,6 +302,7 @@ object LotteryType {
                 realTiersToUse = 8, prizeTierPairCount = 8,  // DLT专属：12-25(7对)+26-27(1对)=8对
                 extraFieldCount = 2,
                 appendTierPairCount = 7,  // 追加投注7级=7级（和7级合并版统一布局）
+                appendRatio = 0.6,  // 2007-2019年追加比例为60%
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
