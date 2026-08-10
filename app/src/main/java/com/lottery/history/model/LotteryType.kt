@@ -343,7 +343,9 @@ object LotteryType {
                 realTiersToUse = 3, prizeTierPairCount = 3,
                 extraFieldCount = 6,  // 试机号3 + 其他 + 销售额
                 rules = listOf(
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字全中", "直选奖", 1040)
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字全中（位置全对）", "直选奖", 1040),
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字全中（2同1不同，不限位置）", "组选3", 346),
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字全中（3个不同，不限位置）", "组选6", 173)
                 )
             )
         ),
@@ -402,7 +404,9 @@ object LotteryType {
                 realTiersToUse = 3, prizeTierPairCount = 3,
                 extraFieldCount = 1,  // 销售额
                 rules = listOf(
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字全中", "直选奖", 1040)
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字全中（位置全对）", "直选奖", 1040),
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字全中（2同1不同，不限位置）", "组选3", 346),
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "3位数字全中（3个不同，不限位置）", "组选6", 173)
                 )
             )
         ),

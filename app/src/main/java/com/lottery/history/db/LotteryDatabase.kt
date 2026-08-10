@@ -19,7 +19,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MatchRuleDefEntity::class,
         PrizeTierEntity::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = true
 )
 abstract class LotteryDatabase : RoomDatabase() {
@@ -112,13 +112,26 @@ abstract class LotteryDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Migration(12, 13)：RuleVersionCatalogEntity 新增 appendRatio 字段（Double）。
+         *   默认值 0.8（80%），2007-2019年大乐透为 0.6（60%）。
+         *   SQLite 用 REAL 存储，后续 upsert 时由 RuleVersion 的 appendRatio 覆盖正确值。
+         */
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE `rule_version_catalog` ADD COLUMN `appendRatio` REAL NOT NULL DEFAULT 0.8"
+                )
+            }
+        }
+
         fun get(context: Context): LotteryDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     LotteryDatabase::class.java,
                     "lottery.db"
-                ).addMigrations(MIGRATION_10_11, MIGRATION_11_12).build().also { instance = it }
+                ).addMigrations(MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13).build().also { instance = it }
             }
         }
     }

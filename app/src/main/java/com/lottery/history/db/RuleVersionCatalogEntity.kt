@@ -14,5 +14,8 @@ data class RuleVersionCatalogEntity(
     val prizeTierPairCount: Int,
     val extraFieldCount: Int,
     val appendTierPairCount: Int,
+    /** 追加投注比例（仅大乐透等有追加玩法的彩种使用），默认 0.8（80%）。
+     *  2007-2019: 0.6（60%）；2019至今: 0.8（80%）。 */
+    val appendRatio: Double = 0.8,
     val snapshotAt: Long
 )

@@ -17,6 +17,8 @@ import androidx.lifecycle.lifecycleScope
 import com.lottery.history.R
 import com.lottery.history.data.LotteryDataManager
 import com.lottery.history.data.QueryRecordManager
+import com.lottery.history.model.ConditionalKey
+import com.lottery.history.model.ConditionalValue
 import com.lottery.history.model.LotteryDraw
 import com.lottery.history.model.LotteryType
 import com.lottery.history.model.LotteryTypeConfig
@@ -495,6 +497,25 @@ class LotteryFragment : Fragment() {
                 append(config.ruleVersions.lastOrNull()?.policyLabel ?: "")
                 append("）奖级名称展示；未命中的奖项也会列出，显式标注「未中」。")
                 append("\n点「查看历史」后，历史明细按每期真实规则版本分组展示真实元数据。")
+            }
+            // ===== v13 新增：最新一期条件性奖级状态提示 =====
+            val latest = getHistory().firstOrNull()
+            val flags = latest?.conditionalFlags.orEmpty()
+            flags[ConditionalKey.SSQ_FUYUN]?.let { state ->
+                append("\n★ 福运奖：")
+                append(when (state) {
+                    ConditionalValue.ON -> "≥15亿已开启（中3红=5元）"
+                    ConditionalValue.OFF -> "<3亿已停止（中3红不中奖）"
+                    else -> "3~15亿维持上期状态"
+                })
+            }
+            flags[ConditionalKey.DLT_2026_FLOAT]?.let { state ->
+                append("\n★ 大乐透奖池上浮：")
+                append(when (state) {
+                    ConditionalValue.UP -> "≥8亿已上浮（三6666/四380/五200/六18/七7）"
+                    ConditionalValue.NORMAL -> "<8亿未上浮（三5000/四300/五150/六15/七5）"
+                    else -> "状态未知，暂按基础金额"
+                })
             }
         }
         tvSelectedNumbers.text = summaryText

@@ -31,6 +31,7 @@ class HistoryAdapter(
         val llHitSummary: View = view.findViewById(R.id.llHitSummary)
         val tvHitPrimary: TextView = view.findViewById(R.id.tvHitPrimary)
         val tvHitSecondary: TextView = view.findViewById(R.id.tvHitSecondary)
+        val tvAppendInfo: TextView = view.findViewById(R.id.tvAppendInfo)
         val btnViewDrawDetail: TextView = view.findViewById(R.id.btnViewDrawDetail)
     }
 
@@ -161,6 +162,40 @@ class HistoryAdapter(
             holder.llHitSummary.visibility = View.GONE
         }
 
+        // ===== v13 新增：追加投注信息（仅大乐透等有追加玩法且 appendPrizeTiers 非空时显示） =====
+        val appendTiers = draw.appendPrizeTiers
+        if (appendTiers.isNotEmpty() && hasSelection) {
+            // 查找命中的追加奖级（按 matchedTierIndex 对应）
+            val matchedTierIdx = draw.resolveRuleVersion(config)?.rules?.indexOfFirst { rule ->
+                val pCount = draw.primaryNumbers.count { it in selectedPrimary }
+                val sCount = if (config.hasSecondary) draw.secondaryNumbers.count { it in selectedSecondary } else 0
+                pCount == rule.matchPrimary && sCount == rule.matchSecondary
+            } ?: -1
+            if (matchedTierIdx >= 0) {
+                val append = appendTiers.getOrNull(matchedTierIdx)
+                if (append != null) {
+                    val appendCount = append.count
+                    val appendAmount = append.amount
+                    holder.tvAppendInfo.visibility = View.VISIBLE
+                    holder.tvAppendInfo.text = buildString {
+                        append("追加投注：")
+                        if (appendCount > 0) {
+                            append("中${appendCount}注")
+                            if (appendAmount > 0) append(" / 单注${formatAmount(appendAmount)}")
+                        } else {
+                            append("本期空开")
+                        }
+                    }
+                } else {
+                    holder.tvAppendInfo.visibility = View.GONE
+                }
+            } else {
+                holder.tvAppendInfo.visibility = View.GONE
+            }
+        } else {
+            holder.tvAppendInfo.visibility = View.GONE
+        }
+
         // 查看当期所有奖项按钮：点击回调
         if (onDrawDetailClick != null) {
             holder.btnViewDrawDetail.visibility = View.VISIBLE
@@ -257,4 +292,12 @@ class HistoryAdapter(
         rebuildGroupCache()
         notifyDataSetChanged()
     }
+
+    private fun formatAmount(amount: Long): String =
+        if (amount >= 10000) {
+            val wan = amount / 10000.0
+            if (wan % 1.0 == 0.0) "${wan.toInt()}万元" else String.format("%.1f万元", wan)
+        } else {
+            "${amount}元"
+        }
 }

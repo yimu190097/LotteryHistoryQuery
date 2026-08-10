@@ -123,6 +123,19 @@
             android:textColor="@android:color/white" />
     </LinearLayout>
 
+    <!-- 追加投注命中情况（仅大乐透等有追加玩法的彩种显示） -->
+    <TextView
+        android:id="@+id/tvAppendInfo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="2dp"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:textSize="@dimen/micro_text_size"
+        android:textColor="#E65100"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
     <!-- 号码球：自适应换行，红球/蓝球全部可见不重叠 -->
     <com.lottery.history.widget.FlowLayout
         android:id="@+id/llNumbers"

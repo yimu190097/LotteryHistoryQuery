@@ -153,6 +153,7 @@ object LotteryDataManager {
                         prizeTierPairCount = rv.prizeTierPairCount,
                         extraFieldCount = rv.extraFieldCount,
                         appendTierPairCount = rv.appendTierPairCount,
+                        appendRatio = rv.appendRatio,
                         snapshotAt = now
                     )
                 )

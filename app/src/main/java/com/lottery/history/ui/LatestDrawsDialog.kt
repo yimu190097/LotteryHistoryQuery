@@ -283,10 +283,16 @@ class LatestDrawsDialog(context: Context) : Dialog(context) {
                         sb.append("二奖 ").append(t.count).append("注/").append(formatAmountShort(t.amount))
                     }
                 }
+                draw.salesAmount?.let { sales ->
+                    if (sales > 0L) {
+                        if (sb.isNotEmpty()) sb.append("\n")
+                        sb.append("销售额：").append(formatAmountShort(sales)).append("元")
+                    }
+                }
                 draw.jackpotAmount?.let { jp ->
                     if (jp > 0L) {
-                        if (sb.isNotEmpty()) sb.append("\n")
-                        sb.append("奖池滚存：").append(formatAmountShort(jp)).append("元")
+                        if (sb.isNotEmpty()) sb.append("  ")
+                        sb.append("奖池：").append(formatAmountShort(jp)).append("元")
                     }
                 }
                 if (sb.isNotEmpty()) {

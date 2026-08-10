@@ -90,6 +90,16 @@ object LotteryMatcher {
                     0
                 }
                 if (primaryCount == rule.matchPrimary && secondaryCount == rule.matchSecondary) {
+                    // ===== v13 TODO: FC3D/P3 组选3/组选6 需区分直选/组选匹配模式 =====
+                    //   当前对 FC3D/P3 仅匹配第一个条件（直选奖），组选3/6 的规则定义已存在
+                    //   但匹配引擎尚不支持区分"位置匹配"与"多重集匹配"。
+                    //   实现路径：
+                    //     1. 解析器不再对 FC3D/P3 号码排序（保留位置信息）
+                    //     2. UI 增加组选模式选择（直选/组选3/组选6）
+                    //     3. 匹配引擎按模式选择不同匹配逻辑：
+                    //        - 直选：逐位比较 selectedPrimary[i] == draw.primaryNumbers[i]
+                    //        - 组选3：检查 multiset 相等 且 2同1不同
+                    //        - 组选6：检查 multiset 相等 且 3个不同
                     val key = BucketKey(
                         ruleVersionKey = ruleVersion.key,
                         matchPrimary = rule.matchPrimary,
