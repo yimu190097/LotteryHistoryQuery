@@ -95,14 +95,30 @@ object LotteryDataManager {
                     val issue = parts[0]
                     val primary: List<Int>
                     val secondary: List<Int>
-                    if (type == "ssq") {
-                        if (parts.size < 8) continue
-                        primary = (1..6).map { parts[it].toInt() }.sorted()
-                        secondary = listOf(parts[7].toInt())
-                    } else {
-                        if (parts.size < 8) continue
-                        primary = (1..5).map { parts[it].toInt() }.sorted()
-                        secondary = listOf(parts[6].toInt(), parts[7].toInt()).sorted()
+                    // FC3D/P3 不排序号码：保留位置信息（直选需逐位比较）
+                    //  当前 seed 资源仅含 ssq / dlt，但逻辑写全，避免未来加 3d/p3 seed
+                    //  时忘了改这里，导致位置信息被 sorted() 丢掉，直选匹配失效。
+                    val needsPos = type == "3d" || type == "p3"
+                    when (type) {
+                        "ssq" -> {
+                            if (parts.size < 8) continue
+                            primary = (1..6).map { parts[it].toInt() }.sorted()
+                            secondary = listOf(parts[7].toInt())
+                        }
+                        "dlt" -> {
+                            if (parts.size < 8) continue
+                            primary = (1..5).map { parts[it].toInt() }.sorted()
+                            secondary = listOf(parts[6].toInt(), parts[7].toInt()).sorted()
+                        }
+                        "3d", "p3" -> {
+                            val pickCount = if (type == "3d") 3 else 3
+                            if (parts.size < 1 + pickCount) continue
+                            // 保留原始位置（parts[1] = 百位, parts[2] = 十位, parts[3] = 个位）
+                            primary = (1..pickCount).mapNotNull { parts.getOrNull(it)?.toIntOrNull() }
+                            if (primary.size != pickCount) continue
+                            secondary = emptyList()
+                        }
+                        else -> continue
                     }
                     // ——【零兜底·严格模式】seed 没有真实 date → rvKey 直接存 null——
                     //   绝对禁止用 issue 前缀拼 fakeDate 去推断规则版本（那是猜的，会错！）：
@@ -221,6 +237,12 @@ object LotteryDataManager {
                         if (keepLocal) continue
 
                         // —— 新写入/覆盖 ——
+                        //  【P0修复】：parseSource/parseAt/parserVersion 必须用 draw 本身携带的值，
+                        //  绝不能强制写 ParseSource.NET！否则：
+                        //    · SEED_INCOMPLETE（规则版本无法定位的期）会被伪装成 NET，
+                        //      详情页的 resolveRuleVersion 报"元数据缺失"但 parseSource 又写着 NET，
+                        //      自相矛盾，排查问题会被误导。
+                        //    · parserVersion 也必须以解析器当时产出的版本为准，入库不重写。
                         entities.add(
                             LotteryDrawEntity(
                                 issue = draw.issue, type = config.code,
@@ -238,9 +260,9 @@ object LotteryDataManager {
                                 jackpotAmount = draw.jackpotAmount,
                                 salesAmount = draw.salesAmount,
                                 appendPrizeTiers = draw.appendPrizeTiers.encodeTiers(),
-                                parseSource = ParseSource.NET,
-                                parseAt = now,
-                                parserVersion = PARSER_VERSION_CURRENT,
+                                parseSource = draw.parseSource ?: ParseSource.NET,
+                                parseAt = draw.parseAt ?: now,
+                                parserVersion = draw.parserVersion ?: PARSER_VERSION_CURRENT,
                                 conditionalFlagsJson = encodeFlags(draw.conditionalFlags)
                             )
                         )

@@ -12,11 +12,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         LotteryDrawEntity::class,
         QueryRecordEntity::class,
         UserEntity::class,
-        QuotaEntity::class,
-        PendingSyncEntity::class,
-        ChatMessageEntity::class
+        QuotaEntity::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = true
 )
 abstract class LotteryDatabase : RoomDatabase() {
@@ -24,8 +22,6 @@ abstract class LotteryDatabase : RoomDatabase() {
     abstract fun queryRecordDao(): QueryRecordDao
     abstract fun userDao(): UserDao
     abstract fun quotaDao(): QuotaDao
-    abstract fun pendingSyncDao(): PendingSyncDao
-    abstract fun chatMessageDao(): ChatMessageDao
 
     companion object {
         @Volatile
@@ -33,56 +29,9 @@ abstract class LotteryDatabase : RoomDatabase() {
 
         private val MIGRATION_10_11 = object : Migration(10, 11) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL(
-                    """
-                    CREATE TABLE IF NOT EXISTS `rule_version_catalog` (
-                        `ruleVersionKey` TEXT NOT NULL,
-                        `code` TEXT NOT NULL,
-                        `effectiveFromDate` TEXT NOT NULL,
-                        `policyLabel` TEXT NOT NULL,
-                        `changeNote` TEXT NOT NULL,
-                        `realTiersToUse` INTEGER NOT NULL,
-                        `prizeTierPairCount` INTEGER NOT NULL,
-                        `extraFieldCount` INTEGER NOT NULL,
-                        `appendTierPairCount` INTEGER NOT NULL,
-                        `snapshotAt` INTEGER NOT NULL,
-                        PRIMARY KEY(`ruleVersionKey`)
-                    )
-                    """.trimIndent()
-                )
-
-                database.execSQL(
-                    """
-                    CREATE TABLE IF NOT EXISTS `match_rule_def` (
-                        `ruleVersionKey` TEXT NOT NULL,
-                        `dedupIndex` INTEGER NOT NULL,
-                        `ruleIndex` INTEGER NOT NULL,
-                        `matchPrimary` INTEGER NOT NULL,
-                        `matchSecondary` INTEGER NOT NULL,
-                        `description` TEXT NOT NULL,
-                        `prizeName` TEXT NOT NULL,
-                        `fixedAmountYuan` INTEGER,
-                        `conditionalKey` TEXT,
-                        PRIMARY KEY(`ruleVersionKey`, `dedupIndex`, `ruleIndex`)
-                    )
-                    """.trimIndent()
-                )
-
-                database.execSQL(
-                    """
-                    CREATE TABLE IF NOT EXISTS `lottery_prize_tier` (
-                        `issue` TEXT NOT NULL,
-                        `type` TEXT NOT NULL,
-                        `tierGroup` TEXT NOT NULL,
-                        `tierIndex` INTEGER NOT NULL,
-                        `count` INTEGER NOT NULL,
-                        `amount` INTEGER NOT NULL,
-                        `updatedAt` INTEGER NOT NULL,
-                        PRIMARY KEY(`issue`, `type`, `tierGroup`, `tierIndex`)
-                    )
-                    """.trimIndent()
-                )
-
+                // 仅保留 lottery_draws 表真实需要的 4 个解析来源审计字段
+                // rule_version_catalog / match_rule_def / lottery_prize_tier 三个死表已废弃，
+                // 不再 CREATE，避免升级后保留空表占用空间。
                 database.execSQL("ALTER TABLE `lottery_draws` ADD COLUMN `parseSource` TEXT")
                 database.execSQL("ALTER TABLE `lottery_draws` ADD COLUMN `parseAt` INTEGER")
                 database.execSQL("ALTER TABLE `lottery_draws` ADD COLUMN `parserVersion` INTEGER")
@@ -92,13 +41,7 @@ abstract class LotteryDatabase : RoomDatabase() {
 
         /**
          * Migration(11, 12)：数据类型修复（中奖注数 count Int→Long）
-         *
-         * 注：SQLite 的 INTEGER 列是"动态类型"（列亲和力），同一列既可存 1 字节小整数，
-         *   也可存 8 字节大整数。所以 Kotlin 侧把 PrizeTierEntity.count / LotteryDrawEntity.firstPrizeCount
-         *   从 Int 改为 Long，**不需要重写表结构**（没有 ALTER COLUMN 这种语句）。
-         *   Room 生成的 Cursor.getLong / ContentValues.put(key, longValue) 在所有 Android
-         *   SQLite 版本上都能正确读/写 8 字节整数，旧版本 Int(4 字节) 的数据也会被
-         *   SQLite 自动扩展，不会出错。Migration 留空仅 bump 版本号。
+         * SQLite INTEGER 动态类型自动兼容，无需表结构变更。
          */
         private val MIGRATION_11_12 = object : Migration(11, 12) {
             override fun migrate(database: SupportSQLiteDatabase) {
@@ -107,15 +50,27 @@ abstract class LotteryDatabase : RoomDatabase() {
         }
 
         /**
-         * Migration(12, 13)：RuleVersionCatalogEntity 新增 appendRatio 字段（Double）。
-         *   默认值 0.8（80%），2007-2019年大乐透为 0.6（60%）。
-         *   SQLite 用 REAL 存储，后续 upsert 时由 RuleVersion 的 appendRatio 覆盖正确值。
+         * Migration(12, 13)：清理死表（rule_version_catalog / match_rule_def / lottery_prize_tier）。
+         * 旧版本升级到 v13 时，若之前的 MIGRATION_10_11 创建了这三个死表，直接 DROP。
          */
         private val MIGRATION_12_13 = object : Migration(12, 13) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL(
-                    "ALTER TABLE `rule_version_catalog` ADD COLUMN `appendRatio` REAL NOT NULL DEFAULT 0.8"
-                )
+                runCatching { database.execSQL("DROP TABLE IF EXISTS `rule_version_catalog`") }
+                runCatching { database.execSQL("DROP TABLE IF EXISTS `match_rule_def`") }
+                runCatching { database.execSQL("DROP TABLE IF EXISTS `lottery_prize_tier`") }
+            }
+        }
+
+        /**
+         * Migration(13, 14)：删除未实现的 chat_messages 和 pending_sync 两个空表。
+         * 聊天模块（无后端，纯本地模拟）和离线同步模块（无服务器，WorkManager只标记SYNCED）
+         * 均为占位功能，长期不会接入，直接清理节省空间与DAO维护成本。
+         * 同时清理对应的权限请求也从 Manifest 移除。
+         */
+        private val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                runCatching { database.execSQL("DROP TABLE IF EXISTS `chat_messages`") }
+                runCatching { database.execSQL("DROP TABLE IF EXISTS `pending_sync`") }
             }
         }
 
@@ -125,7 +80,12 @@ abstract class LotteryDatabase : RoomDatabase() {
                     context.applicationContext,
                     LotteryDatabase::class.java,
                     "lottery.db"
-                ).addMigrations(MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13).build().also { instance = it }
+                ).addMigrations(
+                    MIGRATION_10_11,
+                    MIGRATION_11_12,
+                    MIGRATION_12_13,
+                    MIGRATION_13_14
+                ).fallbackToDestructiveMigration().build().also { instance = it }
             }
         }
     }

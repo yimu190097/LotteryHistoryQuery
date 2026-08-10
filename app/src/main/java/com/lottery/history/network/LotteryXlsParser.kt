@@ -179,7 +179,6 @@ object LotteryXlsParser {
                 // ===== 严格模式：date+issue 仍无法定位规则版本时，标记 SEED_INCOMPLETE 并跳过 =====
                 //   绝不拿 ruleVersions.first() 最新版去套（否则历史期被错误归类到 2026 新规）
                 if (ruleVersion == null) {
-                    val needsPos = config.code == "3d" || config.code == "p3"
                     result.add(
                         LotteryDraw(
                             issue = issue,
@@ -189,7 +188,7 @@ object LotteryXlsParser {
                             ruleVersionKey = null,
                             parseSource = ParseSource.SEED_INCOMPLETE,
                             parseAt = System.currentTimeMillis(),
-                            parserVersion = PARSER_VERSION_CURRENT,
+                            parserVersion = com.lottery.history.data.LotteryDataManager.PARSER_VERSION_CURRENT,
                             tierMatchStatus = com.lottery.history.model.TierMatchStatus.MISMATCH
                         )
                     )

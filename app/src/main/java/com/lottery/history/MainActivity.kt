@@ -30,7 +30,6 @@ import com.lottery.history.model.LotteryDraw
 import com.lottery.history.model.LotteryType
 import com.lottery.history.model.LotteryTypeConfig
 import com.lottery.history.ui.AuthDialog
-import com.lottery.history.ui.CustomerServiceActivity
 import com.lottery.history.ui.DrawDetailDialog
 import com.lottery.history.ui.IssueSearchDialog
 import com.lottery.history.ui.LatestDrawsDialog
@@ -364,12 +363,8 @@ class MainActivity : AppCompatActivity() {
             IssueSearchDialog(this).show()
             return true
         }
-        if (item.itemId == R.id.action_customer_service) {
-            startActivity(
-                android.content.Intent(this, CustomerServiceActivity::class.java)
-            )
-            return true
-        }
+        // 客服聊天模块（原 CustomerServiceActivity）因无后端、长期为未实现占位，
+        // 已在 v14 数据库清理时整体删除，对应菜单项不再触发跳转。
         return super.onOptionsItemSelected(item)
     }
 

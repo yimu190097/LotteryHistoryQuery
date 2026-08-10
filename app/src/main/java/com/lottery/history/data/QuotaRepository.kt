@@ -1,41 +1,27 @@
 package com.lottery.history.data
 
 import android.content.Context
-import androidx.work.BackoffPolicy
-import androidx.work.Constraints
-import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
 import com.lottery.history.db.LotteryDatabase
 import com.lottery.history.db.PlanType
-import com.lottery.history.db.PendingSyncEntity
-import com.lottery.history.db.PendingSyncDao
 import com.lottery.history.db.QuotaDao
 import com.lottery.history.db.QuotaEntity
-import com.lottery.history.db.SyncAction
-import com.lottery.history.db.SyncStatus
-import com.lottery.history.work.SyncWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
-import java.util.UUID
-import java.util.concurrent.TimeUnit
 
 /**
- * 配额 Repository：本地优先（离线可查可扣），操作入队待同步。
+ * 配额 Repository：本地实现（无后端）。
  *
  * - 读：直接观察本地 quotas 表 Flow，UI 秒开
- * - 写（扣减）：本地扣减 + 入队 pending_sync（同一事务），离线也能完成
- * - 同步：联网后 SyncWorker 推送，服务器权威快照覆盖本地
+ * - 写（扣减）：本地扣减（当前无后端，纯本地生效）
  *
- * 服务器接入后：仅需替换 consumeOneQuery 中的"入队"为"调服务器 + 入队兜底"，
- * UI 层（观察 Flow）零改动。
+ * 原设计中的「离线同步队列 pending_sync + SyncWorker」因项目当前阶段
+ * 不接入任何后端服务器，属于长期闲置的未实现占位，已删除。
+ * 后期接入服务器时可在 consumeOneQuery 内追加网络调用，当前保留本地扣减即可。
  */
 class QuotaRepository(private val context: Context) {
 
     private val quotaDao: QuotaDao by lazy { LotteryDatabase.get(context).quotaDao() }
-    private val pendingDao: PendingSyncDao by lazy { LotteryDatabase.get(context).pendingSyncDao() }
 
     /** 观察当前用户配额，UI 订阅 */
     fun observe(phone: String): Flow<QuotaEntity?> = quotaDao.observeByUser(phone)
@@ -78,8 +64,7 @@ class QuotaRepository(private val context: Context) {
     }
 
     /**
-     * 消耗一次查询：本地扣减 + 入队待同步。
-     * 离线时只要有次数即可扣减并记录，联网后同步。
+     * 消耗一次查询：本地扣减（无后端，纯本地生效）。
      * @return true 扣减成功（有配额），false 无配额
      */
     suspend fun consumeOneQuery(phone: String): Boolean = withContext(Dispatchers.IO) {
@@ -100,73 +85,12 @@ class QuotaRepository(private val context: Context) {
                 updatedAt = now
             )
         )
-        // 入队待同步（幂等键防止重试重复扣减）
-        pendingDao.insert(
-            PendingSyncEntity(
-                userPhone = phone,
-                actionType = SyncAction.QUERY_CONSUME,
-                payload = """{"consumedAt":$now}""",
-                clientOpId = UUID.randomUUID().toString(),
-                status = SyncStatus.PENDING,
-                createdAt = now
-            )
-        )
-        // 触发后台同步（联网则立即跑，离线则排队）
-        triggerSync()
         true
     }
 
-    /** 改密入队 */
-    suspend fun enqueuePasswordChange(phone: String) = withContext(Dispatchers.IO) {
-        val now = System.currentTimeMillis()
-        pendingDao.insert(
-            PendingSyncEntity(
-                userPhone = phone,
-                actionType = SyncAction.PASSWORD_CHANGE,
-                payload = """{"changedAt":$now}""",
-                clientOpId = UUID.randomUUID().toString(),
-                status = SyncStatus.PENDING,
-                createdAt = now
-            )
-        )
-        triggerSync()
-    }
-
-    /** 服务器权威快照覆盖本地（SyncWorker 调用） */
-    suspend fun applyServerSnapshot(
-        phone: String,
-        remainingQueries: Int,
-        monthlyExpireAt: Long?,
-        planType: PlanType,
-        serverVersion: Long
-    ) = withContext(Dispatchers.IO) {
-        val now = System.currentTimeMillis()
-        quotaDao.upsert(
-            QuotaEntity(
-                userPhone = phone,
-                planType = planType,
-                remainingQueries = remainingQueries,
-                monthlyExpireAt = monthlyExpireAt,
-                serverVersion = serverVersion,
-                localVersion = serverVersion,
-                updatedAt = now
-            )
-        )
-    }
-
-    private fun triggerSync() {
-        val request = OneTimeWorkRequestBuilder<SyncWorker>()
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build()
-            )
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
-            .build()
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            "sync_quota",
-            ExistingWorkPolicy.APPEND_OR_REPLACE,
-            request
-        )
+    /** 改密（本地，无服务器）：保留函数签名以便 AuthRepository 调用，
+     *  原 pending_sync 入队逻辑因服务器未接入已删除。 */
+    suspend fun enqueuePasswordChange(@Suppress("UNUSED_PARAMETER") phone: String) {
+        // 当前阶段：本地改密立即生效，无需入队同步
     }
 }

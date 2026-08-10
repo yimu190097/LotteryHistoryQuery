@@ -3,12 +3,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- 客服语音消息：录音 -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <!-- 客服发送付款截图：读取图片（13+用READ_MEDIA_IMAGES，兼容旧版READ_EXTERNAL_STORAGE） -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
+    <!-- 录音 / 读存储权限：原客服聊天模块未实现，v14 清理时已删除对应 Activity，不再需要。 -->
 
     <application
         android:name=".LotteryApp"
@@ -27,15 +22,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <!-- 联系客服（聊天） -->
-        <activity
-            android:name=".ui.CustomerServiceActivity"
-            android:exported="false"
-            android:windowSoftInputMode="adjustResize|stateHidden" />
-        <!-- 语音通话客服（模拟呼叫/通话中，后期接 VoIP 后端） -->
-        <activity
-            android:name=".ui.VoiceCallActivity"
-            android:exported="false" />
     </application>
 
 </manifest>
