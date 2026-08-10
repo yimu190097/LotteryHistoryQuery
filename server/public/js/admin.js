@@ -121,31 +121,40 @@ async function renderDashboard() {
   try {
     const data = await api('/api/stats/dashboard');
     const s = data.stats;
+    const qs = s.quotaStats || {};
 
     $('#statsGrid').innerHTML = `
-      <div class="stat-card">
+      <div class="stat-card" style="border-left:4px solid var(--primary)">
         <div class="stat-value">${s.totalUsers}</div>
         <div class="stat-label">总用户数</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" style="border-left:4px solid var(--info)">
         <div class="stat-value">${s.todayNewUsers}</div>
         <div class="stat-label">今日新增</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" style="border-left:4px solid var(--warning)">
         <div class="stat-value">${s.totalQueries}</div>
         <div class="stat-label">总查询次数</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" style="border-left:4px solid var(--info)">
         <div class="stat-value">${s.todayQueries}</div>
         <div class="stat-label">今日查询</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-value">${s.quotaStats?.total || 0}</div>
-        <div class="stat-label">付费用户</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">${s.quotaStats?.monthly_count || 0}</div>
+      <div class="stat-card" style="border-left:4px solid var(--success)">
+        <div class="stat-value">${qs.monthly || 0}</div>
         <div class="stat-label">月租用户</div>
+      </div>
+      <div class="stat-card" style="border-left:4px solid var(--info)">
+        <div class="stat-value">${qs.pay_per_use || 0}</div>
+        <div class="stat-label">按次用户</div>
+      </div>
+      <div class="stat-card" style="border-left:4px solid var(--danger)">
+        <div class="stat-value">${qs.expired_monthly || 0}</div>
+        <div class="stat-label">已过期月租</div>
+      </div>
+      <div class="stat-card" style="border-left:4px solid var(--success)">
+        <div class="stat-value">${qs.total_remaining || 0}</div>
+        <div class="stat-label">剩余总次数</div>
       </div>
     `;
 
@@ -179,7 +188,8 @@ function renderLogTable(container, logs) {
 }
 
 // ==================== 用户管理 ====================
-let userPage = 1, userSearch = '';
+let userPage = 1, userSearch = '', userPlanFilter = '';
+
 async function renderUsers() {
   $('#mainContent').innerHTML = `
     <div class="page-header" style="display:flex;justify-content:space-between;align-items:center">
@@ -187,10 +197,17 @@ async function renderUsers() {
       <button class="btn btn-success" onclick="showRegisterUserModal()">+ 注册用户</button>
     </div>
     <div class="card">
-      <div class="search-bar">
-        <input type="text" id="userSearch" placeholder="搜索手机号或昵称..." value="${userSearch}"
-          onkeydown="if(event.key==='Enter'){userSearch=this.value;userPage=1;renderUsers()}">
-        <button class="btn btn-primary" onclick="userSearch=$('#userSearch').value;userPage=1;renderUsers()">搜索</button>
+      <div class="toolbar">
+        <div class="search-bar">
+          <input type="text" id="userSearch" placeholder="搜索手机号或昵称..." value="${userSearch}"
+            onkeydown="if(event.key==='Enter'){userSearch=this.value;userPage=1;renderUsers()}">
+          <button class="btn btn-primary" onclick="userSearch=$('#userSearch').value;userPage=1;renderUsers()">搜索</button>
+        </div>
+        <select id="userPlanFilter" onchange="userPlanFilter=this.value;userPage=1;renderUsers()" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;min-width:120px">
+          <option value="" ${userPlanFilter === '' ? 'selected' : ''}>全部套餐</option>
+          <option value="PAY_PER_USE" ${userPlanFilter === 'PAY_PER_USE' ? 'selected' : ''}>按次用户</option>
+          <option value="MONTHLY" ${userPlanFilter === 'MONTHLY' ? 'selected' : ''}>月租用户</option>
+        </select>
       </div>
       <div class="table-container" id="userTable"><div class="empty-state">加载中...</div></div>
       <div id="userPagination"></div>
@@ -198,32 +215,46 @@ async function renderUsers() {
   `;
 
   try {
-    const data = await api(`/api/users?page=${userPage}&size=20&search=${encodeURIComponent(userSearch)}`);
+    let url = `/api/users?page=${userPage}&size=20`;
+    if (userSearch) url += `&search=${encodeURIComponent(userSearch)}`;
+    if (userPlanFilter) url += `&planType=${encodeURIComponent(userPlanFilter)}`;
+    const data = await api(url);
     if (!data.data.length) {
       $('#userTable').innerHTML = '<div class="empty-state">暂无用户数据</div>';
+      $('#userPagination').innerHTML = '';
       return;
     }
 
+    const now = Date.now();
     $('#userTable').innerHTML = `
       <table>
         <thead><tr>
-          <th>手机号</th><th>昵称</th><th>套餐类型</th><th>剩余次数</th>
+          <th>手机号</th><th>昵称</th><th>套餐类型</th><th>状态</th><th>剩余次数</th>
           <th>到期时间</th><th>注册时间</th><th>操作</th>
         </tr></thead>
-        <tbody>${data.data.map(u => `
+        <tbody>${data.data.map(u => {
+          const isMonthly = u.plan_type === 'MONTHLY';
+          const isExpired = isMonthly && u.monthly_expire_at && u.monthly_expire_at < now;
+          const statusText = isMonthly ? (isExpired ? '已过期' : '正常') : '—';
+          const statusBadge = isMonthly ? (isExpired ? 'badge-danger' : 'badge-success') : 'badge-info';
+          const quotaColor = (u.remaining_queries ?? 0) > 0 ? '#2E7D32' : '#C62828';
+          return `
           <tr>
-            <td>${u.phone}</td>
+            <td><strong>${u.phone}</strong></td>
             <td>${u.nickname || '—'}</td>
-            <td><span class="badge ${u.plan_type === 'MONTHLY' ? 'badge-success' : 'badge-info'}">${u.plan_type === 'MONTHLY' ? '月租' : '按次'}</span></td>
-            <td style="font-weight:600;color:${u.remaining_queries > 0 ? '#2E7D32' : '#C62828'}">${u.remaining_queries ?? 0}</td>
+            <td><span class="badge ${isMonthly ? 'badge-success' : 'badge-info'}">${isMonthly ? '月租' : '按次'}</span></td>
+            <td><span class="badge ${statusBadge}">${statusText}</span></td>
+            <td style="font-weight:600;color:${quotaColor}">${u.remaining_queries ?? 0}</td>
             <td>${u.monthly_expire_at ? formatDateShort(u.monthly_expire_at) : '—'}</td>
             <td>${formatDateShort(u.created_at)}</td>
-            <td>
+            <td style="white-space:nowrap">
               <button class="btn btn-outline btn-sm" onclick="showUserDetail('${u.phone}')">详情</button>
               <button class="btn btn-primary btn-sm" onclick="showQuotaModal('${u.phone}')">配额</button>
+              <button class="btn btn-warning btn-sm" onclick="showResetPasswordModal('${u.phone}')">重置密码</button>
+              <button class="btn btn-danger btn-sm" onclick="confirmDeleteUser('${u.phone}')">删除</button>
             </td>
           </tr>
-        `).join('')}</tbody>
+        `}).join('')}</tbody>
       </table>
     `;
 
@@ -235,7 +266,7 @@ async function renderUsers() {
 
 function renderPagination(container, data, onPage) {
   if (data.totalPages <= 1) { container.innerHTML = ''; return; }
-  let html = '';
+  let html = '<div class="pagination">';
   html += `<button ${data.page <= 1 ? 'disabled' : ''} onclick="void(0)">«</button>`;
   for (let i = 1; i <= data.totalPages; i++) {
     if (i === 1 || i === data.totalPages || Math.abs(i - data.page) <= 2) {
@@ -245,6 +276,7 @@ function renderPagination(container, data, onPage) {
     }
   }
   html += `<button ${data.page >= data.totalPages ? 'disabled' : ''} onclick="void(0)">»</button>`;
+  html += '</div>';
   container.innerHTML = html;
 
   const buttons = container.querySelectorAll('button:not([disabled])');
@@ -265,17 +297,24 @@ async function showUserDetail(phone) {
   try {
     const data = await api(`/api/users/${phone}`);
     const u = data.user;
+    const isMonthly = u.plan_type === 'MONTHLY';
+    const isExpired = isMonthly && u.monthly_expire_at && u.monthly_expire_at < Date.now();
     $('#modalContent').innerHTML = `
       <h3>用户详情 - ${u.phone}</h3>
-      <div class="form-group"><label>手机号</label><input value="${u.phone}" readonly></div>
-      <div class="form-group"><label>昵称</label><input value="${u.nickname || '—'}" readonly></div>
-      <div class="form-group"><label>套餐类型</label><input value="${u.plan_type === 'MONTHLY' ? '月租用户' : '按次用户'}" readonly></div>
-      <div class="form-group"><label>剩余查询次数</label><input value="${u.remaining_queries ?? 0}" readonly></div>
-      <div class="form-group"><label>月租到期</label><input value="${u.monthly_expire_at ? formatDate(u.monthly_expire_at) : '—'}" readonly></div>
-      <div class="form-group"><label>注册时间</label><input value="${formatDate(u.created_at)}" readonly></div>
+      <div class="detail-grid">
+        <div class="detail-item"><label>手机号</label><span>${u.phone}</span></div>
+        <div class="detail-item"><label>昵称</label><span>${u.nickname || '—'}</span></div>
+        <div class="detail-item"><label>套餐类型</label><span class="badge ${isMonthly ? 'badge-success' : 'badge-info'}">${isMonthly ? '月租用户' : '按次用户'}</span></div>
+        <div class="detail-item"><label>状态</label><span class="badge ${isMonthly ? (isExpired ? 'badge-danger' : 'badge-success') : 'badge-info'}">${isMonthly ? (isExpired ? '已过期' : '正常') : '—'}</span></div>
+        <div class="detail-item"><label>剩余查询次数</label><span style="font-weight:600;color:${(u.remaining_queries ?? 0) > 0 ? '#2E7D32' : '#C62828'}">${u.remaining_queries ?? 0}</span></div>
+        <div class="detail-item"><label>月租到期</label><span>${u.monthly_expire_at ? formatDate(u.monthly_expire_at) : '—'}</span></div>
+        <div class="detail-item"><label>注册时间</label><span>${formatDate(u.created_at)}</span></div>
+        <div class="detail-item"><label>最后更新</label><span>${formatDate(u.updated_at)}</span></div>
+      </div>
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="closeModal()">关闭</button>
         <button class="btn btn-primary" onclick="closeModal();showQuotaModal('${u.phone}')">修改配额</button>
+        <button class="btn btn-warning" onclick="closeModal();showResetPasswordModal('${u.phone}')">重置密码</button>
       </div>
     `;
     openModal();
@@ -284,24 +323,35 @@ async function showUserDetail(phone) {
   }
 }
 
-function showQuotaModal(phone) {
+async function showQuotaModal(phone) {
+  // 先获取用户当前配额信息
+  let currentQuota = null;
+  try {
+    const data = await api(`/api/users/${phone}`);
+    currentQuota = data.user;
+  } catch (e) { /* 忽略 */ }
+
+  const planType = currentQuota?.plan_type || 'PAY_PER_USE';
+  const remaining = currentQuota?.remaining_queries ?? 10;
+  const expireAt = currentQuota?.monthly_expire_at || '';
+
   $('#modalContent').innerHTML = `
     <h3>设置配额 - ${phone}</h3>
     <form onsubmit="handleSetQuota(event, '${phone}')">
       <div class="form-group">
         <label>套餐类型</label>
-        <select id="quotaPlanType">
-          <option value="PAY_PER_USE">按次付费</option>
-          <option value="MONTHLY">月租用户</option>
+        <select id="quotaPlanType" onchange="onQuotaPlanChange()">
+          <option value="PAY_PER_USE" ${planType === 'PAY_PER_USE' ? 'selected' : ''}>按次付费</option>
+          <option value="MONTHLY" ${planType === 'MONTHLY' ? 'selected' : ''}>月租用户</option>
         </select>
       </div>
-      <div class="form-group">
+      <div class="form-group" id="quotaRemainingGroup" style="display:${planType === 'MONTHLY' ? 'none' : 'block'}">
         <label>剩余查询次数</label>
-        <input type="number" id="quotaRemaining" value="10" min="0" required>
+        <input type="number" id="quotaRemaining" value="${remaining}" min="0" required>
       </div>
-      <div class="form-group">
-        <label>月租到期时间（月租用户填写，Unix时间戳毫秒）</label>
-        <input type="number" id="quotaExpireAt" value="" placeholder="留空不修改">
+      <div class="form-group" id="quotaExpireGroup" style="display:${planType === 'MONTHLY' ? 'block' : 'none'}">
+        <label>月租到期时间</label>
+        <input type="date" id="quotaExpireDate" value="${expireAt ? new Date(expireAt).toISOString().split('T')[0] : new Date(Date.now() + 365*24*60*60*1000).toISOString().split('T')[0]}">
       </div>
       <div class="modal-actions">
         <button type="button" class="btn btn-outline" onclick="closeModal()">取消</button>
@@ -312,11 +362,20 @@ function showQuotaModal(phone) {
   openModal();
 }
 
+function onQuotaPlanChange() {
+  const planType = $('#quotaPlanType').value;
+  $('#quotaRemainingGroup').style.display = planType === 'MONTHLY' ? 'none' : 'block';
+  $('#quotaExpireGroup').style.display = planType === 'MONTHLY' ? 'block' : 'none';
+}
+
 async function handleSetQuota(e, phone) {
   e.preventDefault();
   const planType = $('#quotaPlanType').value;
-  const remainingQueries = parseInt($('#quotaRemaining').value);
-  const monthlyExpireAt = $('#quotaExpireAt').value ? parseInt($('#quotaExpireAt').value) : undefined;
+  const remainingQueries = planType === 'MONTHLY' ? 99999 : parseInt($('#quotaRemaining').value) || 10;
+  let monthlyExpireAt = null;
+  if (planType === 'MONTHLY') {
+    monthlyExpireAt = new Date($('#quotaExpireDate').value).getTime();
+  }
 
   try {
     await api(`/api/users/${phone}/quota`, {
@@ -338,7 +397,7 @@ function showRegisterUserModal() {
     <form onsubmit="handleRegisterUser(event)">
       <div class="form-group">
         <label>手机号 <span style="color:red">*</span></label>
-        <input type="text" id="regPhone" placeholder="请输入手机号" required>
+        <input type="text" id="regPhone" placeholder="请输入11位手机号" required maxlength="11" pattern="1[3-9]\\d{9}" title="请输入正确的手机号">
       </div>
       <div class="form-group">
         <label>密码 <span style="color:red">*</span></label>
@@ -396,6 +455,72 @@ async function handleRegisterUser(e) {
       body: JSON.stringify({ phone, password, nickname: nickname || undefined, planType, remainingQueries, monthlyExpireAt })
     });
     showToast(`用户 ${phone} 注册成功（${planType === 'MONTHLY' ? '月租' : '按次'}）`, 'success');
+    closeModal();
+    renderUsers();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+// ==================== 重置密码 ====================
+function showResetPasswordModal(phone) {
+  $('#modalContent').innerHTML = `
+    <h3>重置密码 - ${phone}</h3>
+    <form onsubmit="handleResetPassword(event, '${phone}')">
+      <div class="form-group">
+        <label>新密码 <span style="color:red">*</span></label>
+        <input type="password" id="resetPassword" placeholder="至少6位" required minlength="6">
+      </div>
+      <div class="form-group">
+        <label>确认密码 <span style="color:red">*</span></label>
+        <input type="password" id="resetPassword2" placeholder="再次输入新密码" required minlength="6">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeModal()">取消</button>
+        <button type="submit" class="btn btn-warning">重置密码</button>
+      </div>
+    </form>
+  `;
+  openModal();
+}
+
+async function handleResetPassword(e, phone) {
+  e.preventDefault();
+  const p1 = $('#resetPassword').value;
+  const p2 = $('#resetPassword2').value;
+  if (p1 !== p2) {
+    showToast('两次输入的密码不一致', 'error');
+    return;
+  }
+  try {
+    await api(`/api/users/${phone}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ newPassword: p1 })
+    });
+    showToast('密码重置成功', 'success');
+    closeModal();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+// ==================== 删除用户 ====================
+function confirmDeleteUser(phone) {
+  $('#modalContent').innerHTML = `
+    <h3>确认删除</h3>
+    <p style="color:var(--danger);margin:16px 0">确定要删除用户 <strong>${phone}</strong> 吗？此操作不可恢复，将同时删除该用户的配额和同步数据。</p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-outline" onclick="closeModal()">取消</button>
+      <button class="btn btn-danger" onclick="handleDeleteUser('${phone}')">确认删除</button>
+    </div>
+  `;
+  openModal();
+}
+
+async function handleDeleteUser(phone) {
+  try {
+    await api(`/api/users/${phone}`, { method: 'DELETE' });
+    showToast('用户已删除', 'success');
     closeModal();
     renderUsers();
   } catch (err) {

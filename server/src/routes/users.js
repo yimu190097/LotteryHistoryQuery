@@ -5,6 +5,15 @@ const { authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
+// 手机号格式校验（中国大陆手机号）
+const PHONE_REGEX = /^1[3-9]\d{9}$/;
+function isValidPhone(phone) {
+  return PHONE_REGEX.test(phone);
+}
+
+// 有效的套餐类型
+const VALID_PLAN_TYPES = ['PAY_PER_USE', 'MONTHLY'];
+
 // ==================== 客户端公开接口（无需登录） ====================
 
 /**
@@ -16,6 +25,9 @@ router.post('/client/register', (req, res) => {
   const { phone, password, nickname } = req.body;
   if (!phone || !password) {
     return res.status(400).json({ error: '手机号和密码不能为空' });
+  }
+  if (!isValidPhone(phone)) {
+    return res.status(400).json({ error: '手机号格式不正确' });
   }
   if (password.length < 6) {
     return res.status(400).json({ error: '密码至少6位' });
@@ -29,12 +41,10 @@ router.post('/client/register', (req, res) => {
   const now = Date.now();
   const hash = bcrypt.hashSync(password, 10);
 
-  // 创建用户
   db.prepare(
     'INSERT INTO users (phone, password_hash, nickname, is_admin, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)'
   ).run(phone, hash, nickname || null, now, now);
 
-  // 新用户默认赠送免费次数
   const freeQuota = parseInt(
     (db.prepare("SELECT value FROM system_config WHERE key = 'free_quota'").get()?.value) || '10'
   );
@@ -42,7 +52,6 @@ router.post('/client/register', (req, res) => {
     'INSERT INTO quotas (user_phone, plan_type, remaining_queries, monthly_expire_at, server_version, local_version, updated_at) VALUES (?, ?, ?, NULL, 1, 0, ?)'
   ).run(phone, 'PAY_PER_USE', freeQuota, now);
 
-  // 记录日志
   db.prepare(
     'INSERT INTO audit_log (admin_id, admin_username, action, target, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)'
   ).run(null, 'system', 'USER_REGISTER', phone, `客户端注册，赠送${freeQuota}次`, now);
@@ -57,8 +66,6 @@ router.post('/client/register', (req, res) => {
 
 /**
  * POST /api/users/client/login - 客户端用户登录
- * Body: { phone, password }
- * 返回: { phone, nickname, planType, remainingQueries, monthlyExpireAt }
  */
 router.post('/client/login', (req, res) => {
   const { phone, password } = req.body;
@@ -88,8 +95,6 @@ router.post('/client/login', (req, res) => {
 
 /**
  * POST /api/users/client/consume - 客户端消耗查询次数
- * Body: { phone, count? }
- * 返回: { success, remainingQueries }
  */
 router.post('/client/consume', (req, res) => {
   const { phone, count } = req.body;
@@ -105,19 +110,16 @@ router.post('/client/consume', (req, res) => {
   const consumeCount = count || 1;
   const now = Date.now();
 
-  // 月租用户：不扣次数，检查是否过期
   if (quota.plan_type === 'MONTHLY') {
     if (quota.monthly_expire_at && quota.monthly_expire_at < now) {
       return res.status(403).json({ error: '月租已过期，请联系管理员续费' });
     }
-    // 记录消耗日志
     db.prepare(
       'INSERT INTO audit_log (admin_id, admin_username, action, target, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(null, 'system', 'QUERY_CONSUME', phone, `月租用户查询，不扣次数`, now);
+    ).run(null, 'system', 'QUERY_CONSUME', phone, '月租用户查询，不扣次数', now);
     return res.json({ success: true, remainingQueries: quota.remaining_queries });
   }
 
-  // 按次用户：扣减次数
   if (quota.remaining_queries < consumeCount) {
     return res.status(403).json({ error: '查询次数不足，请联系管理员充值' });
   }
@@ -146,8 +148,16 @@ router.post('/register', (req, res) => {
   if (!phone || !password) {
     return res.status(400).json({ error: '手机号和密码不能为空' });
   }
+  if (!isValidPhone(phone)) {
+    return res.status(400).json({ error: '手机号格式不正确' });
+  }
   if (password.length < 6) {
     return res.status(400).json({ error: '密码至少6位' });
+  }
+
+  const pt = planType || 'PAY_PER_USE';
+  if (!VALID_PLAN_TYPES.includes(pt)) {
+    return res.status(400).json({ error: '无效的套餐类型' });
   }
 
   const existing = db.prepare('SELECT phone FROM users WHERE phone = ?').get(phone);
@@ -162,7 +172,6 @@ router.post('/register', (req, res) => {
     'INSERT INTO users (phone, password_hash, nickname, is_admin, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)'
   ).run(phone, hash, nickname || null, now, now);
 
-  const pt = planType || 'PAY_PER_USE';
   const q = remainingQueries ?? (pt === 'MONTHLY' ? 99999 : 10);
   const expireAt = monthlyExpireAt || (pt === 'MONTHLY' ? now + 365 * 24 * 60 * 60 * 1000 : null);
 
@@ -184,22 +193,31 @@ router.post('/register', (req, res) => {
 });
 
 /**
- * GET /api/users - 用户列表（分页+搜索）
+ * GET /api/users - 用户列表（分页+搜索+套餐筛选）
+ * Query: page, size, search, planType
  */
 router.get('/', (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const size = parseInt(req.query.size) || 20;
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const size = Math.min(100, Math.max(1, parseInt(req.query.size) || 20));
   const search = req.query.search || '';
+  const planType = req.query.planType || '';
   const offset = (page - 1) * size;
 
-  let whereClause = '';
+  const conditions = [];
   const params = [];
+
   if (search) {
-    whereClause = 'WHERE u.phone LIKE ? OR u.nickname LIKE ?';
+    conditions.push('(u.phone LIKE ? OR u.nickname LIKE ?)');
     params.push(`%${search}%`, `%${search}%`);
   }
+  if (planType && VALID_PLAN_TYPES.includes(planType)) {
+    conditions.push('q.plan_type = ?');
+    params.push(planType);
+  }
 
-  const countSql = `SELECT COUNT(*) as total FROM users u ${whereClause}`;
+  const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
+  const countSql = `SELECT COUNT(*) as total FROM users u LEFT JOIN quotas q ON u.phone = q.user_phone ${whereClause}`;
   const total = db.prepare(countSql).get(...params).total;
 
   const dataSql = `
@@ -247,10 +265,15 @@ router.get('/:phone', (req, res) => {
 
 /**
  * PUT /api/users/:phone/quota - 设置用户配额
+ * Body: { planType?, remainingQueries?, monthlyExpireAt? }
  */
 router.put('/:phone/quota', (req, res) => {
   const { phone } = req.params;
   const { planType, remainingQueries, monthlyExpireAt } = req.body;
+
+  if (planType && !VALID_PLAN_TYPES.includes(planType)) {
+    return res.status(400).json({ error: '无效的套餐类型' });
+  }
 
   const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(phone);
   if (!user) {
@@ -289,6 +312,7 @@ router.put('/:phone/quota', (req, res) => {
 
 /**
  * POST /api/users/:phone/reset-password - 重置用户密码
+ * Body: { newPassword }
  */
 router.post('/:phone/reset-password', (req, res) => {
   const { phone } = req.params;
@@ -315,9 +339,38 @@ router.post('/:phone/reset-password', (req, res) => {
 });
 
 /**
+ * DELETE /api/users/:phone - 删除用户（超级管理员）
+ */
+router.delete('/:phone', (req, res) => {
+  const { phone } = req.params;
+
+  const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(phone);
+  if (!user) {
+    return res.status(404).json({ error: '用户不存在' });
+  }
+  if (user.is_admin) {
+    return res.status(403).json({ error: '不能删除管理员账号' });
+  }
+
+  const now = Date.now();
+
+  // 删除关联数据
+  db.prepare('DELETE FROM quotas WHERE user_phone = ?').run(phone);
+  db.prepare('DELETE FROM pending_sync WHERE user_phone = ?').run(phone);
+  db.prepare('DELETE FROM users WHERE phone = ?').run(phone);
+
+  db.prepare(
+    'INSERT INTO audit_log (admin_id, admin_username, action, target, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(req.admin.id, req.admin.username, 'DELETE_USER', phone, '删除用户及关联数据', now);
+
+  res.json({ message: '用户已删除' });
+});
+
+/**
  * GET /api/users/stats/overview - 用户统计概览
  */
 router.get('/stats/overview', (req, res) => {
+  const now = Date.now();
   const totalUsers = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
   const todayUsers = db.prepare(
     'SELECT COUNT(*) as count FROM users WHERE created_at >= ?'
@@ -328,9 +381,10 @@ router.get('/stats/overview', (req, res) => {
       COUNT(*) as total_with_quota,
       SUM(CASE WHEN plan_type = 'PAY_PER_USE' THEN 1 ELSE 0 END) as pay_per_use,
       SUM(CASE WHEN plan_type = 'MONTHLY' THEN 1 ELSE 0 END) as monthly,
+      SUM(CASE WHEN plan_type = 'MONTHLY' AND monthly_expire_at < ? THEN 1 ELSE 0 END) as expired_monthly,
       SUM(remaining_queries) as total_remaining
     FROM quotas
-  `).get();
+  `).get(now);
 
   res.json({
     totalUsers,

@@ -165,6 +165,14 @@ object AdminApi {
         gson.fromJson(resp, object : TypeToken<Map<String, Any>>() {}.type)
     }
 
+    suspend fun resetPassword(phone: String, newPassword: String) = withContext(Dispatchers.IO) {
+        post("/api/users/$phone/reset-password", gson.toJson(mapOf("newPassword" to newPassword)))
+    }
+
+    suspend fun deleteUser(phone: String) = withContext(Dispatchers.IO) {
+        delete("/api/users/$phone")
+    }
+
     // ========== HTTP 底层 ==========
     private fun get(path: String): String {
         val req = Request.Builder().url(baseUrl + path).get()
@@ -194,6 +202,18 @@ object AdminApi {
     private fun put(path: String, json: String): String {
         val body = json.toRequestBody(JSON)
         val req = Request.Builder().url(baseUrl + path).put(body)
+        token?.let { req.header("Authorization", "Bearer $it") }
+        val resp = client.newCall(req.build()).execute()
+        val respBody = resp.body?.string() ?: "{}"
+        if (!resp.isSuccessful) {
+            val err = try { gson.fromJson(respBody, ErrorResponse::class.java).error } catch (_: Exception) { respBody }
+            throw ApiException(resp.code, err)
+        }
+        return respBody
+    }
+
+    private fun delete(path: String): String {
+        val req = Request.Builder().url(baseUrl + path).delete()
         token?.let { req.header("Authorization", "Bearer $it") }
         val resp = client.newCall(req.build()).execute()
         val respBody = resp.body?.string() ?: "{}"

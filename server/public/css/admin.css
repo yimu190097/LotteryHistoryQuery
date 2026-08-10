@@ -383,6 +383,42 @@ table tr:hover { background: #FAFAFA; }
   to { transform: translateX(0); opacity: 1; }
 }
 
+/* ========== 工具栏 ========== */
+.toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.toolbar .search-bar {
+  flex: 1;
+  margin-bottom: 0;
+  min-width: 200px;
+}
+
+/* ========== 详情卡片 ========== */
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.detail-item {
+  padding: 8px 0;
+}
+.detail-item label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+  font-weight: 500;
+}
+.detail-item span {
+  font-size: 14px;
+  color: var(--text);
+}
+
 /* ========== 空状态 ========== */
 .empty-state {
   text-align: center;
