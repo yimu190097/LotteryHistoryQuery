@@ -1,11 +1,33 @@
 const express = require('express');
 const { db } = require('../db/database');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, userAuthMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
-// 所有接口需要登录
-router.use(authMiddleware);
+// 默认 ICE 服务器配置（可被环境变量覆盖）
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' }
+];
+
+// 如果配置了自建 coturn，加入 TURN 服务器
+if (process.env.TURN_HOST) {
+  const turnUser = process.env.TURN_USER || 'lottery';
+  const turnPass = process.env.TURN_PASS || 'lottery2026';
+  ICE_SERVERS.push({
+    urls: `turn:${process.env.TURN_HOST}:3478`,
+    username: turnUser,
+    credential: turnPass
+  });
+}
+
+/**
+ * GET /api/config/ice - 获取 WebRTC ICE 服务器配置
+ * 客户端用户和管理员都可以调用
+ */
+router.get('/ice', authMiddleware, (req, res) => {
+  res.json({ iceServers: ICE_SERVERS });
+});
 
 /**
  * GET /api/config - 获取系统配置

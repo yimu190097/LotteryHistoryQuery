@@ -2,6 +2,7 @@ const { WebSocketServer } = require('ws');
 const jwt = require('jsonwebtoken');
 const { db } = require('../db/database');
 const { JWT_SECRET } = require('../middleware/auth');
+const callMgr = require('./callManager');
 
 /**
  * WebSocket 聊天服务
@@ -101,9 +102,9 @@ function setupWebSocket(server) {
         return;
       }
 
-      // 4) WebRTC 信令：直接转发给目标
-      if (['call', 'offer', 'answer', 'candidate', 'hangup'].includes(msg.type)) {
-        forwardTo(ws, identity, msg.type, msg.to, msg.payload);
+      // 4) WebRTC 信令：经通话状态机处理后转发
+      if (['call', 'accept', 'reject', 'offer', 'answer', 'candidate', 'hangup'].includes(msg.type)) {
+        handleCallSignal(ws, identity, role, msg);
         return;
       }
     });
@@ -257,6 +258,96 @@ function forwardTo(fromWs, fromIdentity, type, to, payload) {
 
 function isUserOnline(phone) {
   return clients.has(`user:${phone}`);
+}
+
+// ============ WebRTC 通话信令处理 ============
+function handleCallSignal(ws, fromIdentity, role, msg) {
+  const { type, to, payload } = msg;
+
+  // 用户发起通话
+  if (type === 'call') {
+    if (role !== 'user') return ws.send(JSON.stringify({ type: 'error', error: '只有用户能发起通话' }));
+    // to 可以是 "admin"（推给所有在线管理员，让第一个接听的接）
+    // 也允许指定 "admin:<id>"
+    const call = callMgr.startCall(fromIdentity, to || 'admin:*', ws);
+    if (call.error) return ws.send(JSON.stringify({ type: 'error', error: call.error }));
+
+    const ringMsg = {
+      type: 'call',
+      callId: call.callId,
+      from: fromIdentity,
+      payload: { callId: call.callId }
+    };
+    if (to && to.startsWith('admin:')) {
+      sendTo(to, ringMsg);
+    } else {
+      broadcastToAdmins(ringMsg);
+    }
+    // 给发起方确认
+    ws.send(JSON.stringify({
+      type: 'call_state', state: 'ringing', callId: call.callId
+    }));
+    return;
+  }
+
+  // 管理员接听
+  if (type === 'accept') {
+    if (role !== 'admin') return ws.send(JSON.stringify({ type: 'error', error: '只有管理员能接听' }));
+    const callId = payload?.callId;
+    const c = callMgr.acceptCall(callId);
+    if (c?.error) return ws.send(JSON.stringify({ type: 'error', error: c.error }));
+    // 通知用户开始 SDP 交换
+    sendTo(c.from, {
+      type: 'accept', callId: c.callId, from: fromIdentity
+    });
+    // 通知其他管理员取消响铃
+    broadcastToAdmins({
+      type: 'call_canceled', callId: c.callId, reason: '已由其他管理员接听'
+    });
+    return;
+  }
+
+  // 拒绝
+  if (type === 'reject') {
+    const callId = payload?.callId;
+    const c = callMgr.endCall(callId, 'rejected');
+    if (c) {
+      sendTo(c.from, { type: 'reject', callId: c.callId, from: fromIdentity });
+    }
+    return;
+  }
+
+  // offer / answer / candidate 直接转发
+  if (['offer', 'answer', 'candidate'].includes(type)) {
+    const callId = payload?.callId || msg.callId;
+    if (callId) {
+      const c = callMgr.getCall(callId);
+      if (!c) return ws.send(JSON.stringify({ type: 'error', error: '通话已结束' }));
+      if (type === 'answer') callMgr.markActive(callId);
+    }
+    forwardTo(ws, fromIdentity, type, to, payload);
+    return;
+  }
+
+  // 挂断
+  if (type === 'hangup') {
+    const callId = payload?.callId || msg.callId;
+    if (callId) {
+      const c = callMgr.endCall(callId, 'hangup');
+      if (c) {
+        const other = c.from === fromIdentity ? c.to : c.from;
+        if (other === 'admin:*') {
+          broadcastToAdmins({ type: 'hangup', callId: c.callId, from: fromIdentity });
+        } else {
+          sendTo(other, { type: 'hangup', callId: c.callId, from: fromIdentity });
+        }
+      }
+    } else {
+      // 没带 callId，按身份查
+      forwardTo(ws, fromIdentity, 'hangup', to, payload);
+    }
+    return;
+  }
 }
 
 module.exports = { setupWebSocket, isUserOnline };

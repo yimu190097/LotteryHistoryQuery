@@ -46,3 +46,16 @@ releases/*.aab
 # Node.js 依赖（server/ 模块）
 server/node_modules/
 node_modules/
+
+# SQLite 数据库（运行时数据，不入仓库）
+*.db
+*.db-shm
+*.db-wal
+server/src/data/
+
+# 上传文件（用户付款截图、语音）
+server/public/uploads/
+
+# 部署生成的密钥文件
+server/.env
+deploy/.env.local

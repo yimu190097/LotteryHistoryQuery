@@ -569,3 +569,46 @@ table tr:hover { background: #FAFAFA; }
   border: none; border-radius: 20px; cursor: pointer; font-size: 14px;
 }
 .chat-input-bar button:hover { background: #c8102e; }
+
+/* ==================== WebRTC 通话弹窗 ==================== */
+.call-ring-modal, .call-progress-modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+  z-index: 9999; display: none;
+  align-items: center; justify-content: center;
+}
+.call-ring-content, .call-progress-content {
+  background: #fff; border-radius: 16px; padding: 40px;
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+  min-width: 320px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  animation: callPop 0.3s ease;
+}
+@keyframes callPop {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.call-ring-avatar, .call-progress-icon {
+  font-size: 64px;
+  animation: ringPulse 1.2s ease-in-out infinite;
+}
+@keyframes ringPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+.call-ring-title, .call-progress-status { font-size: 18px; color: #333; font-weight: 600; }
+.call-ring-from { font-size: 14px; color: #666; }
+.call-ring-actions, .call-progress-actions {
+  display: flex; gap: 16px; margin-top: 16px;
+}
+.call-ring-actions button, .call-progress-actions button {
+  width: 80px; height: 80px; border-radius: 50%; border: none;
+  font-size: 14px; cursor: pointer; color: #fff; font-weight: 600;
+}
+.btn-reject { background: #f44336; }
+.btn-accept { background: #4caf50; }
+.btn-reject:hover { background: #d32f2f; }
+.btn-accept:hover { background: #388e3c; }
+.btn-hangup { background: #f44336; width: 100px; height: 50px; border-radius: 25px; }
+.btn-hangup:hover { background: #d32f2f; }
+.btn-mute { background: #2196f3; width: 100px; height: 50px; border-radius: 25px; }
+.btn-mute:hover { background: #1976d2; }
+.call-progress-duration { font-size: 28px; font-weight: 600; color: var(--primary); font-family: monospace; }
