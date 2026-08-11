@@ -4,6 +4,26 @@
 
 ---
 
+## 📦 项目信息速览（单人维护）
+
+| 项 | 值 |
+|---|---|
+| 仓库 | https://github.com/yimu190097/LotteryHistoryQuery |
+| Owner | `yimu190097`（单人开发，无协作者） |
+| 默认分支 | `main` |
+| 仓库可见性 | PUBLIC |
+| 主要语言 | Kotlin (485 KB) + JavaScript (55 KB) + Python (17 KB) + Shell (8 KB) + CSS (9 KB) + HTML (2 KB) |
+| 仓库大小 | ~55 MB |
+| 创建时间 | 2026-08-03 |
+| 最近 push | 2026-08-11 02:53 UTC |
+| 模块 | `app`（Android 主应用）+ `admin-app`（后台管理 App）+ `server`（Node.js 后台 API） |
+| 当前版本 | v22.0 / `versionCode = 41` / `versionName = "23.5"` |
+| APK 下载 | https://github.com/yimu190097/LotteryHistoryQuery/releases/latest |
+| CI/CD | GitHub Actions：push main → 自动构建 Release APK 并发布 |
+| 本地环境详情 | 见 [§十二 本地开发环境](#十二本地开发环境) |
+
+---
+
 ## 一、项目概述
 
 国内彩票历史开奖查询 Android App，支持双色球、大乐透、福彩3D、七乐彩、排列三、排列五、七星彩、快乐8 共 8 个彩种。核心特性：**按期政策自适应展示**——不同历史阶段官方规则不同时，每期开奖数据按当期适用的规则版本正确展示，避免规则变更后历史数据展示错位。
@@ -435,3 +455,167 @@ App 启动
 - **当前版本**：v24.1
 - **Release 页**：https://github.com/yimu190097/LotteryHistoryQuery/releases/tag/v24.1
 - **APK 直链**：https://github.com/yimu190097/LotteryHistoryQuery/releases/download/v24.1/LotteryHistoryQuery_v24.1.apk
+
+---
+
+## 十二、本地开发环境
+
+> 本章节面向单人维护者，整合本地构建所需的全部配置信息。
+
+### 12.1 必备工具版本
+
+| 工具 | 版本 | 说明 |
+|---|---|---|
+| JDK | 17（Temurin/OpenJDK 17.0.2） | AGP 8.2.2 不支持 JDK 21+，必须用 17 |
+| Android cmdline-tools | 12.0 | 提供 sdkmanager |
+| platform-tools | 37.0.1 | adb / fastboot |
+| platforms;android-34 | API 34 | `compileSdk = 34` |
+| build-tools;34.0.0 | 34.0.0 | `buildToolsVersion = "34.0.0"` |
+| Gradle | 8.5（wrapper 自带） | `./gradlew` 自动下载，无需全局安装 |
+| Node.js | ≥ 18（推荐 24.x） | 仅 `server/` 模块需要 |
+| git | ≥ 2.30 | |
+| gh CLI | ≥ 2.0 | 可选，用于 Release / 仓库管理 |
+
+### 12.2 环境变量
+
+写入 `~/.bashrc` 或 `~/.zshrc`：
+
+```bash
+# ===== Android SDK =====
+export ANDROID_HOME=/opt/android-sdk                  # macOS: ~/Library/Android/sdk
+export ANDROID_SDK_ROOT=$ANDROID_HOME
+export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
+```
+
+`gradle.properties` 中已硬编码以下内容（**仅本沙箱环境适用**，CI 工作流会自动 `sed` 删除）：
+
+```properties
+org.gradle.java.home=/root/.local/share/mise/installs/java/17.0.2
+
+# 通过本地代理访问 Maven 仓库（沙箱直连外网超时）
+systemProp.http.proxyHost=127.0.0.1
+systemProp.http.proxyPort=18080
+systemProp.https.proxyHost=127.0.0.1
+systemProp.https.proxyPort=18080
+systemProp.http.nonProxyHosts=localhost|127.0.0.1
+```
+
+> 你自己机器上：把 `org.gradle.java.home` 改成本机 JDK 17 实际路径，删掉代理配置即可。
+
+### 12.3 `local.properties`（不入 git）
+
+由 Android Gradle Plugin 读取，指定 SDK 路径。已在 `.gitignore` 第 10 行屏蔽：
+
+```properties
+sdk.dir=/opt/android-sdk
+```
+
+### 12.4 签名 Keystore（不入 git）
+
+[app/build.gradle.kts](file:///workspace/app/build.gradle.kts) 中 `signingConfigs.release` 引用 `app/release.keystore`，绝不能入 git（已在 `.gitignore` 第 36 行 `*.keystore` 屏蔽）。
+
+本地首次配置命令：
+
+```bash
+keytool -genkeypair -v \
+  -keystore app/release.keystore \
+  -storetype PKCS12 \
+  -storepass Lottery2026 \
+  -alias lottery \
+  -keypass Lottery2026 \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -dname "CN=LotteryHistoryQuery, OU=Dev, O=yimu190097, L=Local, ST=Local, C=CN"
+```
+
+⚠️ **生产环境警告**：发布到应用商店的版本必须用你自己保管的真实签名密钥，**不要**用本地测试 keystore 签的包覆盖商店已发布版本，否则会因签名不一致导致用户无法升级。
+
+### 12.5 Maven 仓库镜像（避免限流挂起）
+
+[settings.gradle.kts](file:///workspace/settings.gradle.kts) 已配置阿里云镜像优先，避免 `mavenCentral()` 429 限流导致构建挂起：
+
+```kotlin
+pluginManagement {
+    repositories {
+        maven { url = uri("https://maven.aliyun.com/repository/google") }
+        maven { url = uri("https://maven.aliyun.com/repository/gradle-plugin") }
+        maven { url = uri("https://maven.aliyun.com/repository/central") }
+        maven { url = uri("https://mirrors.cloud.tencent.com/nexus/repository/maven-public/") }
+        google(); gradlePluginPortal(); mavenCentral()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        maven { url = uri("https://maven.aliyun.com/repository/google") }
+        maven { url = uri("https://maven.aliyun.com/repository/central") }
+        maven { url = uri("https://maven.aliyun.com/repository/public") }
+        maven { url = uri("https://mirrors.cloud.tencent.com/nexus/repository/maven-public/") }
+        google(); mavenCentral()
+    }
+}
+```
+
+### 12.6 常用构建命令
+
+```bash
+cd /workspace                                        # 进入项目根目录
+source ~/.bashrc                                     # 让 ANDROID_HOME 生效
+
+# ===== Android 构建 =====
+./gradlew assembleDebug                              # 构建 Debug APK
+./gradlew assembleRelease                            # 构建 Release APK（用于发布）
+./gradlew detekt                                     # Kotlin 静态代码分析
+./gradlew spotlessCheck                              # 代码格式检查
+./gradlew spotlessApply                              # 自动格式化代码
+./gradlew dependencyUpdates                          # 检查依赖新版本
+./gradlew testDebugUnitTest                          # 跑单元测试
+./gradlew jacocoDebugUnitTestReport                  # 生成单测覆盖率报告
+
+# ===== 后台 server 模块 =====
+cd server && npm install                             # 安装后台依赖
+cd server && npm run dev                             # 启动后台 API（开发模式，--watch）
+cd server && npm run init-db                         # 初始化后台 SQLite
+cd server && npm start                               # 启动后台 API（生产模式）
+
+# ===== git / GitHub =====
+git fetch --prune                                    # 拉取远程更新
+gh release list                                      # 查看 Releases
+gh release create vX.Y --notes "..." app/build/outputs/apk/release/app-release.apk
+```
+
+**构建产物路径**：
+
+| 模块 | 产物 | 路径 |
+|---|---|---|
+| app (Debug) | app-debug.apk | `app/build/outputs/apk/debug/app-debug.apk` |
+| app (Release) | app-release.apk | `app/build/outputs/apk/release/app-release.apk` |
+| admin-app (Debug) | admin-app-debug.apk | `admin-app/build/outputs/apk/debug/admin-app-debug.apk` |
+| admin-app (Release) | admin-app-release.apk | `admin-app/build/outputs/apk/release/admin-app-release.apk` |
+
+### 12.7 常见问题排查
+
+| 问题 | 原因 | 解决 |
+|---|---|---|
+| `Could not resolve xxx` 一直卡住 | `mavenCentral` 返回 429 限流 | 检查 [settings.gradle.kts](file:///workspace/settings.gradle.kts) 阿里云镜像排在 `mavenCentral()` 之前 |
+| `Keystore file '.../release.keystore' not found` | 没生成签名密钥 | 按 §12.4 用 `keytool` 生成 |
+| `SDK location not found` | 缺 `local.properties` | 按 §12.3 创建，或确保 `ANDROID_HOME` 已 export |
+| Gradle 启动报 JDK 25 警告 | `gradle.properties` 中 `org.gradle.java.home` 路径无效或指向了 25 | 改为本机 JDK 17 实际路径 |
+| 网络超时无法下载依赖 | 沙箱外网受限 | 配置 `systemProp.https.proxyHost/Port`，或确保阿里云镜像可用 |
+| `:app:compileDebugKotlin` 报 `Unresolved reference` | 源码层编译错误（非环境问题） | 看具体错误信息单独修复 |
+| Robolectric 测试首次失败 | 找不到 `android-all-instrumented` | 见 [app/build.gradle.kts](file:///workspace/app/build.gradle.kts) `testOptions` 注释，已注入本地 m2 路径 |
+
+### 12.8 当前分支与提交状态
+
+> 截止 2026-08-11：
+
+- 远程默认分支：`origin/main`
+- 本地可能存在的临时分支：`trae/agent-*`（Trae 工作分支，单人开发无需保留，可定期清理）
+- 清理临时分支：`git branch -D trae/agent-XXX` + `git push origin --delete trae/agent-XXX`
+
+### 12.9 单人开发约定（自留备忘）
+
+- **不使用 feature 分支策略**：直接在 `main` 上开发，或用短期 `trae/agent-*` 分支然后合并即删
+- **不强制 PR**：单人项目，commit 即可推送；CI 自动构建验证
+- **密钥管理**：`app/release.keystore` 永远不入 git，本地备份到密码管理器 / 私有云盘
+- **版本号规则**：`versionName` 对外发布版本（如 `23.5`），`versionCode` 单调递增整数（如 `41`）
+- **Release 命名**：tag 用 `vX.Y`（如 `v24.1`），Release 标题包含核心特性摘要

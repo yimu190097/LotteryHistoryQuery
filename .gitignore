@@ -42,3 +42,7 @@ android-sdk/
 # 发布目录
 releases/*.apk
 releases/*.aab
+
+# Node.js 依赖（server/ 模块）
+server/node_modules/
+node_modules/
