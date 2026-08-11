@@ -84,6 +84,36 @@ function initTables() {
       value TEXT NOT NULL,
       updated_at INTEGER NOT NULL
     );
+
+    -- 客服会话表：每个用户一个会话，记录最新消息和未读数
+    CREATE TABLE IF NOT EXISTS chat_sessions (
+      user_phone TEXT PRIMARY KEY,
+      user_nickname TEXT,
+      last_message TEXT,
+      last_message_at INTEGER,
+      last_message_type TEXT,
+      user_unread INTEGER NOT NULL DEFAULT 0,
+      admin_unread INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (user_phone) REFERENCES users(phone)
+    );
+
+    -- 客服消息表：存储所有聊天消息（文字/图片/语音）
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_user_phone TEXT NOT NULL,
+      role TEXT NOT NULL,              -- 'SENT' (用户发送) | 'RECEIVED' (管理员回复)
+      type TEXT NOT NULL,              -- 'TEXT' | 'IMAGE' | 'VOICE'
+      text TEXT,
+      media_path TEXT,                 -- 图片/语音文件的 URL 路径
+      duration INTEGER,                -- 语音时长（秒）
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (session_user_phone) REFERENCES chat_sessions(user_phone)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_user_phone, created_at);
+    CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC);
   `);
 
   // 插入默认管理员（admin/admin123）

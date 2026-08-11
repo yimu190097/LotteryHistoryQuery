@@ -12,6 +12,7 @@ import android.view.MotionEvent
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -19,13 +20,17 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.materialswitch.MaterialSwitch
+import java.io.File
 import com.lottery.history.R
 import com.lottery.history.adapter.ChatAdapter
+import com.lottery.history.data.SessionStore
 import com.lottery.history.db.ChatMessageDao
 import com.lottery.history.db.ChatMessageEntity
 import com.lottery.history.db.ChatRole
 import com.lottery.history.db.ChatType
 import com.lottery.history.db.LotteryDatabase
+import com.lottery.history.network.ApiClient
+import com.lottery.history.network.ChatClient
 import com.lottery.history.util.VoiceHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
@@ -34,10 +39,13 @@ import kotlinx.coroutines.withContext
 
 /**
  * 联系客服（聊天）Activity。
- * 三类型消息：文字 / 图片（付款截图）/ 语音。
  *
- * 当前阶段：后端未接入，模拟接收方自动回复，所有消息本地持久化。
- * 后期阶段：接入 WebSocket 推送真实客服消息。
+ * 接 server WebSocket：
+ * - 文字 / 图片 / 语音 发送给管理员
+ * - 接收管理员实时回复
+ * - 图片和语音先上传到 server，再通过 ws 推送
+ *
+ * 离线时：本地 Room 仍可查看历史消息，但发送会失败提示。
  */
 class CustomerServiceActivity : AppCompatActivity() {
 
@@ -51,6 +59,7 @@ class CustomerServiceActivity : AppCompatActivity() {
     private lateinit var btnHoldToTalk: TextView
     private lateinit var llInputBar: LinearLayout
     private lateinit var voiceHelper: VoiceHelper
+    private val sessionStore by lazy { SessionStore(this) }
 
     private val REQ_PERM_VOICE = 1001
     private val REQ_PERM_IMAGE = 1002
@@ -88,14 +97,14 @@ class CustomerServiceActivity : AppCompatActivity() {
                 MotionEvent.ACTION_DOWN -> startVoiceSafe()
                 MotionEvent.ACTION_UP -> {
                     val (path, dur) = voiceHelper.stopRecord() ?: return@setOnTouchListener true
-                    lifecycleScope.launch { saveAndReply(ChatType.VOICE, mediaPath = path, duration = dur) }
+                    lifecycleScope.launch { sendVoice(File(path), dur) }
                 }
                 MotionEvent.ACTION_CANCEL -> voiceHelper.cancelRecord()
             }
             true
         }
 
-        // 订阅消息
+        // 订阅本地消息（Room Flow）
         lifecycleScope.launch {
             dao.observeAll().collectLatest { list ->
                 adapter.submitList(list) {
@@ -103,6 +112,7 @@ class CustomerServiceActivity : AppCompatActivity() {
                 }
             }
         }
+
         // 首进：若空，插一条欢迎
         lifecycleScope.launch {
             if (dao.getAll().isEmpty()) {
@@ -116,6 +126,45 @@ class CustomerServiceActivity : AppCompatActivity() {
                 )
             }
         }
+
+        // 连接 WebSocket 并订阅入站消息
+        ChatClient.connect()
+        lifecycleScope.launch {
+            ChatClient.incoming.collectLatest { event ->
+                when (event) {
+                    is ChatClient.IncomingEvent.Chat -> {
+                        if (event.role == "RECEIVED") {
+                            // 来自管理员的消息：写入本地 Room
+                            // mediaPath 是 server 路径（/uploads/xxx.jpg），加载时拼接 BASE_URL
+                            val fullUrl = ApiClient.fileUrl(event.payload.mediaPath)
+                            dao.insert(
+                                ChatMessageEntity(
+                                    role = ChatRole.RECEIVED,
+                                    type = ChatType.valueOf(event.payload.type),
+                                    text = event.payload.text,
+                                    mediaPath = fullUrl,
+                                    duration = event.payload.duration,
+                                    createdAt = event.createdAt
+                                )
+                            )
+                            // 自动已读
+                            ChatClient.sendRead()
+                        }
+                    }
+                    is ChatClient.IncomingEvent.Error -> {
+                        Toast.makeText(this@CustomerServiceActivity, event.message, Toast.LENGTH_SHORT).show()
+                    }
+                    else -> {}
+                }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // 进入聊天页即标记已读
+        ChatClient.connect()
+        ChatClient.sendRead()
     }
 
     // ========== 发送文本 ==========
@@ -123,12 +172,27 @@ class CustomerServiceActivity : AppCompatActivity() {
         val text = etMessage.text?.toString()?.trim() ?: return
         if (text.isEmpty()) return
         etMessage.text?.clear()
-        lifecycleScope.launch { saveAndReply(ChatType.TEXT, text = text) }
+
+        lifecycleScope.launch {
+            // 1) 本地存 SENT（UI 立即响应）
+            val now = System.currentTimeMillis()
+            dao.insert(
+                ChatMessageEntity(
+                    role = ChatRole.SENT,
+                    type = ChatType.TEXT,
+                    text = text,
+                    createdAt = now
+                )
+            )
+            // 2) 通过 WebSocket 发给管理员
+            ChatClient.sendChatToAdmin(
+                ChatClient.ChatPayload(type = "TEXT", text = text)
+            )
+        }
     }
 
     // ========== 发送图片（付款截图） ==========
     private fun trySendImage() {
-        // 权限：13+ READ_MEDIA_IMAGES，12- READ_EXTERNAL_STORAGE
         val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             Manifest.permission.READ_MEDIA_IMAGES
         } else {
@@ -167,37 +231,55 @@ class CustomerServiceActivity : AppCompatActivity() {
         }
     }
 
-    // ========== 持久化 + 模拟客服回复（后端接入前保留） ==========
-    private suspend fun saveAndReply(
-        type: ChatType,
-        text: String? = null,
-        mediaPath: String? = null,
-        duration: Int = 0
-    ) = withContext(Dispatchers.IO) {
-        val sentId = dao.insert(
-            ChatMessageEntity(
-                role = ChatRole.SENT,
-                type = type,
-                text = text,
-                mediaPath = mediaPath,
-                duration = duration,
-                createdAt = System.currentTimeMillis()
-            )
-        )
-        // TODO(后端接入): 此处改为通过 WebSocket 推送消息，由客服真实回复。
-        //  目前用模拟回复保证交互闭环。
-        val replyText = when (type) {
-            ChatType.TEXT -> "收到您的消息：\"${text}\"。（当前为本地模拟回复，接入后端后将替换为真实客服回复）"
-            ChatType.IMAGE -> "已收到您的付款截图，我们将尽快核对并为您开通。感谢支持！"
-            ChatType.VOICE -> "已收到您的语音消息（${duration}秒），稍后为您回复。"
+    // ========== 上传图片 + 发送 ==========
+    private suspend fun sendImage(localFile: File) = withContext(Dispatchers.IO) {
+        // 1) 上传到 server
+        val upload = try {
+            ApiClient.uploadFile(localFile, "image/jpeg")
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@CustomerServiceActivity, "图片上传失败：${e.message}", Toast.LENGTH_LONG).show()
+            }
+            return@withContext
         }
+        // 2) 本地存 SENT，mediaPath 用 server URL（ChatAdapter 可直接加载 http URL）
+        val now = System.currentTimeMillis()
         dao.insert(
             ChatMessageEntity(
-                role = ChatRole.RECEIVED,
-                type = ChatType.TEXT,
-                text = replyText,
-                createdAt = System.currentTimeMillis() + 800L
+                role = ChatRole.SENT,
+                type = ChatType.IMAGE,
+                mediaPath = ApiClient.fileUrl(upload.url),
+                createdAt = now
             )
+        )
+        // 3) 通过 WebSocket 推送给管理员（payload.mediaPath 用 server 相对路径 /uploads/xxx.jpg）
+        ChatClient.sendChatToAdmin(
+            ChatClient.ChatPayload(type = "IMAGE", mediaPath = upload.url)
+        )
+    }
+
+    // ========== 上传语音 + 发送 ==========
+    private suspend fun sendVoice(localFile: File, duration: Int) = withContext(Dispatchers.IO) {
+        val upload = try {
+            ApiClient.uploadFile(localFile, "audio/mp4")
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@CustomerServiceActivity, "语音上传失败：${e.message}", Toast.LENGTH_LONG).show()
+            }
+            return@withContext
+        }
+        val now = System.currentTimeMillis()
+        dao.insert(
+            ChatMessageEntity(
+                role = ChatRole.SENT,
+                type = ChatType.VOICE,
+                mediaPath = ApiClient.fileUrl(upload.url),
+                duration = duration,
+                createdAt = now
+            )
+        )
+        ChatClient.sendChatToAdmin(
+            ChatClient.ChatPayload(type = "VOICE", mediaPath = upload.url, duration = duration)
         )
     }
 
@@ -206,18 +288,22 @@ class CustomerServiceActivity : AppCompatActivity() {
         if (requestCode == REQ_PICK_IMAGE && resultCode == Activity.RESULT_OK) {
             val uri: Uri? = data?.data
             if (uri != null) {
-                // 转为本地持久化路径：拷贝到 app files 目录，避免 uri 权限过期
                 lifecycleScope.launch {
-                    val path = withContext(Dispatchers.IO) {
+                    // 拷贝到本地文件，再上传
+                    val localFile = withContext(Dispatchers.IO) {
                         runCatching {
                             val dest = File(getExternalFilesDir(null), "img_${System.currentTimeMillis()}.jpg")
                             contentResolver.openInputStream(uri).use { inp ->
                                 dest.outputStream().use { out -> inp?.copyTo(out) }
                             }
-                            dest.absolutePath
-                        }.getOrNull() ?: uri.toString()
+                            dest
+                        }.getOrNull()
                     }
-                    saveAndReply(ChatType.IMAGE, mediaPath = path)
+                    if (localFile != null) {
+                        sendImage(localFile)
+                    } else {
+                        Toast.makeText(this@CustomerServiceActivity, "图片读取失败", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
@@ -231,5 +317,10 @@ class CustomerServiceActivity : AppCompatActivity() {
             REQ_PERM_VOICE -> toggleVoiceMode()
             REQ_PERM_IMAGE -> pickImage()
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // 不在 onDestroy 断开 ws，保持后台可收消息。Application 退出会自动断开。
     }
 }

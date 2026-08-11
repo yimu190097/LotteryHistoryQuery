@@ -1,58 +1,87 @@
 package com.lottery.history.data
 
 import android.content.Context
+import android.util.Log
 import com.lottery.history.db.LotteryDatabase
+import com.lottery.history.db.PlanType
 import com.lottery.history.db.UserEntity
+import com.lottery.history.network.ApiClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.mindrot.jbcrypt.BCrypt
 
 /**
- * 认证 Repository：面向接口，当前为本地实现，后期接服务器时替换为 RemoteAuthRepository，UI 层零改动。
+ * 认证 Repository：服务器优先 + 本地兜底（离线可登录）。
  *
- * 当前阶段（服务器未接入）：
- * - 注册：本地写 users 表，密码 bcrypt 哈希存储
- * - 登录：本地校验 bcrypt
- * - 改密：本地更新
- *
- * 后期阶段：替换为调服务器接口，token 存 SessionStore，用户信息缓存到 users 表便于离线展示。
+ * 流程：
+ * - register/login：先调 server（拿 JWT），失败时降级到本地校验（仅离线可用）
+ * - changePassword：本地改密 + 入队同步到 server
+ * - 离线时使用本地 Room 缓存的用户（首次启动必须联网注册过）
  */
 class AuthRepository(private val context: Context) {
 
     private val userDao by lazy { LotteryDatabase.get(context).userDao() }
     private val sessionStore by lazy { SessionStore(context) }
 
-    /** 注册并登录：手机号不存在则创建，初始配额见 QuotaRepository.initForNewUser */
+    /** 注册：服务器优先，拿 JWT + 配额 */
     suspend fun register(phone: String, password: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             if (!isValidPhone(phone)) return@withContext Result.failure(IllegalArgumentException("手机号格式不正确"))
             if (password.length < 6) return@withContext Result.failure(IllegalArgumentException("密码至少6位"))
-            if (userDao.countByPhone(phone) > 0) {
-                return@withContext Result.failure(IllegalArgumentException("该手机号已注册"))
+
+            // 1) 服务器注册
+            val resp = try {
+                ApiClient.register(phone, password)
+            } catch (e: ApiClient.ApiException) {
+                return@withContext Result.failure(IllegalArgumentException(e.message))
             }
+            // 2) 本地缓存用户（用 server 返回的 token，本地密码哈希仅作离线兜底）
             val now = System.currentTimeMillis()
             userDao.upsert(
                 UserEntity(
-                    phone = phone,
+                    phone = resp.phone,
                     passwordHash = BCrypt.hashpw(password, BCrypt.gensalt(12)),
                     createdAt = now,
                     updatedAt = now
                 )
             )
-            // 初始化配额（按次用户，赠送10次体验）
-            QuotaRepository(context).initForNewUser(phone)
-            sessionStore.saveLoginPhone(phone)
+            // 3) 用 server 返回的配额初始化本地缓存
+            QuotaRepository(context).applyServerSnapshot(
+                phone = resp.phone,
+                remainingQueries = resp.remainingQueries,
+                monthlyExpireAt = resp.monthlyExpireAt,
+                planType = if (resp.planType == "MONTHLY") PlanType.MONTHLY else PlanType.PAY_PER_USE,
+                serverVersion = 1
+            )
+            // sessionStore.saveLogin 已在 ApiClient.register 内部完成
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.w("AuthRepository", "register failed: ${e.message}")
             Result.failure(e)
         }
     }
 
-    /** 登录：本地校验 bcrypt */
+    /** 登录：服务器优先，失败时降级到本地（离线可用） */
     suspend fun login(phone: String, password: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            // 1) 先尝试服务器登录
+            try {
+                val resp = ApiClient.login(phone, password)
+                // 同步配额到本地缓存
+                QuotaRepository(context).applyServerSnapshot(
+                    phone = resp.phone,
+                    remainingQueries = resp.remainingQueries,
+                    monthlyExpireAt = resp.monthlyExpireAt,
+                    planType = if (resp.planType == "MONTHLY") PlanType.MONTHLY else PlanType.PAY_PER_USE,
+                    serverVersion = 1
+                )
+                return@withContext Result.success(Unit)
+            } catch (serverErr: Exception) {
+                Log.w("AuthRepository", "server login failed, fallback to local: ${serverErr.message}")
+            }
+            // 2) 服务器失败 → 本地校验（离线兜底）
             val user = userDao.getByPhone(phone)
-                ?: return@withContext Result.failure(IllegalArgumentException("用户不存在"))
+                ?: return@withContext Result.failure(IllegalArgumentException("用户不存在（且服务器不可达）"))
             if (!BCrypt.checkpw(password, user.passwordHash)) {
                 return@withContext Result.failure(IllegalArgumentException("密码错误"))
             }
@@ -63,7 +92,7 @@ class AuthRepository(private val context: Context) {
         }
     }
 
-    /** 修改密码：需校验旧密码 */
+    /** 修改密码：本地改 + 入队待同步（SyncWorker 推到 server） */
     suspend fun changePassword(oldPassword: String, newPassword: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val phone = sessionStore.getLoginPhone()
@@ -80,7 +109,7 @@ class AuthRepository(private val context: Context) {
                     updatedAt = System.currentTimeMillis()
                 )
             )
-            // 改密入队待同步（服务器接入后生效）
+            // 改密入队待同步
             QuotaRepository(context).enqueuePasswordChange(phone)
             Result.success(Unit)
         } catch (e: Exception) {

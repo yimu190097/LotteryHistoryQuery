@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { db } = require('../db/database');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, generateUserToken, userAuthMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -56,8 +56,11 @@ router.post('/client/register', (req, res) => {
     'INSERT INTO audit_log (admin_id, admin_username, action, target, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)'
   ).run(null, 'system', 'USER_REGISTER', phone, `客户端注册，赠送${freeQuota}次`, now);
 
+  const token = generateUserToken({ phone, nickname: nickname || null });
   res.json({
+    token,
     phone,
+    nickname: nickname || null,
     planType: 'PAY_PER_USE',
     remainingQueries: freeQuota,
     monthlyExpireAt: null
@@ -84,7 +87,9 @@ router.post('/client/login', (req, res) => {
   const quota = db.prepare('SELECT * FROM quotas WHERE user_phone = ?').get(phone);
   db.prepare('UPDATE users SET updated_at = ? WHERE phone = ?').run(Date.now(), phone);
 
+  const token = generateUserToken(user);
   res.json({
+    token,
     phone: user.phone,
     nickname: user.nickname,
     planType: quota?.plan_type || 'PAY_PER_USE',
@@ -94,12 +99,16 @@ router.post('/client/login', (req, res) => {
 });
 
 /**
- * POST /api/users/client/consume - 客户端消耗查询次数
+ * POST /api/users/client/consume - 客户端消耗查询次数（需要用户 Token）
  */
-router.post('/client/consume', (req, res) => {
+router.post('/client/consume', userAuthMiddleware, (req, res) => {
   const { phone, count } = req.body;
   if (!phone) {
     return res.status(400).json({ error: '手机号不能为空' });
+  }
+  // 防 IDOR：只能为自己扣次数
+  if (phone !== req.user.phone) {
+    return res.status(403).json({ error: '不能操作其他用户的配额' });
   }
 
   const quota = db.prepare('SELECT * FROM quotas WHERE user_phone = ?').get(phone);
@@ -308,6 +317,80 @@ router.put('/:phone/quota', (req, res) => {
     JSON.stringify({ planType, remainingQueries, monthlyExpireAt }), now);
 
   res.json({ message: '配额设置成功' });
+});
+
+/**
+ * POST /api/users/:phone/quota/add - 给用户增加查询次数
+ * Body: { count }
+ */
+router.post('/:phone/quota/add', (req, res) => {
+  const { phone } = req.params;
+  const { count } = req.body;
+  const addCount = parseInt(count);
+  if (!addCount || addCount <= 0) {
+    return res.status(400).json({ error: '次数必须为正整数' });
+  }
+
+  const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(phone);
+  if (!user) return res.status(404).json({ error: '用户不存在' });
+
+  const now = Date.now();
+  const quota = db.prepare('SELECT * FROM quotas WHERE user_phone = ?').get(phone);
+  if (!quota) return res.status(404).json({ error: '配额不存在，请先初始化' });
+
+  db.prepare(`
+    UPDATE quotas SET remaining_queries = remaining_queries + ?, server_version = server_version + 1, updated_at = ?
+    WHERE user_phone = ?
+  `).run(addCount, now, phone);
+
+  db.prepare(
+    'INSERT INTO audit_log (admin_id, admin_username, action, target, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(req.admin.id, req.admin.username, 'QUOTA_ADD', phone, `增加 ${addCount} 次`, now);
+
+  const updated = db.prepare('SELECT remaining_queries FROM quotas WHERE user_phone = ?').get(phone);
+  res.json({ message: '已增加次数', remainingQueries: updated.remaining_queries });
+});
+
+/**
+ * POST /api/users/:phone/quota/plan - 开通月租/年租套餐
+ * Body: { planType: "MONTHLY", days: 30 }
+ */
+router.post('/:phone/quota/plan', (req, res) => {
+  const { phone } = req.params;
+  const { planType, days } = req.body;
+  const dayCount = parseInt(days) || 30;
+
+  if (planType !== 'MONTHLY') {
+    return res.status(400).json({ error: '目前仅支持 MONTHLY 套餐' });
+  }
+  if (dayCount <= 0) return res.status(400).json({ error: '天数必须为正' });
+
+  const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(phone);
+  if (!user) return res.status(404).json({ error: '用户不存在' });
+
+  const now = Date.now();
+  const expireAt = now + dayCount * 24 * 60 * 60 * 1000;
+  const quota = db.prepare('SELECT * FROM quotas WHERE user_phone = ?').get(phone);
+
+  if (quota) {
+    db.prepare(`
+      UPDATE quotas SET plan_type = 'MONTHLY', monthly_expire_at = ?,
+        server_version = server_version + 1, updated_at = ?
+      WHERE user_phone = ?
+    `).run(expireAt, now, phone);
+  } else {
+    db.prepare(`
+      INSERT INTO quotas (user_phone, plan_type, remaining_queries, monthly_expire_at, server_version, local_version, updated_at)
+      VALUES (?, 'MONTHLY', 99999, ?, 1, 0, ?)
+    `).run(phone, expireAt, now);
+  }
+
+  const label = dayCount >= 365 ? `${dayCount}天（年租）` : `${dayCount}天`;
+  db.prepare(
+    'INSERT INTO audit_log (admin_id, admin_username, action, target, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(req.admin.id, req.admin.username, 'QUOTA_PLAN', phone, `开通月租 ${label}`, now);
+
+  res.json({ message: `已开通月租 ${dayCount} 天`, monthlyExpireAt: expireAt });
 });
 
 /**

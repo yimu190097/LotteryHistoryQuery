@@ -680,8 +680,8 @@ class LotteryFragment : Fragment() {
                 QueryRecordManager.saveQuery(
                     context = requireContext(),
                     type = config.code,
-                    primary = primaryForMatch,
-                    secondary = selectedSecondary.toList()
+                    primary = primaryForMatch.toSet(),
+                    secondary = selectedSecondary
                 )
             }
         }

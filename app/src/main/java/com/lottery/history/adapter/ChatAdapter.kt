@@ -78,7 +78,7 @@ class ChatAdapter : ListAdapter<ChatMessageEntity, ChatAdapter.VH>(DIFF) {
             marginEnd = if (isMe) 0 else 48
         }
         // 气泡背景
-        val bgRes = if (isMe) R.drawable.bg_bubble_me else R.drawable.bg_bubble_other
+        val bgRes = if (isMe) R.drawable.bg_chat_bubble_sent else R.drawable.bg_chat_bubble_received
         holder.llBubble.background = ContextCompat.getDrawable(ctx, bgRes)
         // 气泡文字颜色
         val textColor = if (isMe) android.R.color.white else R.color.text_primary

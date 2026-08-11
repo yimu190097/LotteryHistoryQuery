@@ -78,16 +78,40 @@ class QuotaRepository(private val context: Context) {
     }
 
     /**
-     * 消耗一次查询：本地扣减 + 入队待同步。
-     * 离线时只要有次数即可扣减并记录，联网后同步。
-     * @return true 扣减成功（有配额），false 无配额
+     * 消耗一次查询：服务器优先（带 JWT 鉴权），失败时降级到本地扣减 + 入队待同步。
+     *
+     * 流程：
+     * 1) 联网：调 server /api/users/client/consume → 成功则用返回的剩余次数更新本地缓存
+     * 2) 离线 / 服务器失败：本地扣减 + 入队 pending_sync，联网后 SyncWorker 推送
+     *
+     * @return true 扣减成功，false 无配额
      */
     suspend fun consumeOneQuery(phone: String): Boolean = withContext(Dispatchers.IO) {
         val quota = quotaDao.getByUser(phone) ?: return@withContext false
         if (!quota.canQuery()) return@withContext false
 
+        // 月租用户本地不扣次数（但需调 server 确认未过期）
+        if (quota.planType == PlanType.PAY_PER_USE) {
+            // 按次用户：先调服务器
+            try {
+                val resp = com.lottery.history.network.ApiClient.consumeQuery(phone, 1)
+                // 服务器权威：用返回值覆盖本地
+                applyServerSnapshot(
+                    phone = phone,
+                    remainingQueries = resp.remainingQueries,
+                    monthlyExpireAt = quota.monthlyExpireAt,
+                    planType = quota.planType,
+                    serverVersion = quota.serverVersion + 1
+                )
+                return@withContext true
+            } catch (e: Exception) {
+                android.util.Log.w("QuotaRepository", "server consume failed, fallback to local: ${e.message}")
+                // 走本地兜底
+            }
+        }
+
+        // 本地扣减（按次）+ 入队待同步
         val now = System.currentTimeMillis()
-        // 月租用户不扣次数（按次才扣）
         val newRemaining = if (quota.planType == PlanType.PAY_PER_USE) {
             quota.remainingQueries - 1
         } else {

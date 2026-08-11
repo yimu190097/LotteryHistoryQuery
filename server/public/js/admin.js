@@ -102,6 +102,7 @@ function navigate(page) {
   switch (page) {
     case 'dashboard': renderDashboard(); break;
     case 'users': renderUsers(); break;
+    case 'chat': renderChat && renderChat(); break;
     case 'audit': renderAuditLog(); break;
     case 'settings': renderSettings(); break;
   }

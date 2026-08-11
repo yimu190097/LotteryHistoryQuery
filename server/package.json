@@ -9,12 +9,13 @@
     "init-db": "node src/utils/init.js"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.0.0",
+    "cors": "^2.8.5",
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
-    "bcryptjs": "^2.4.3",
-    "cors": "^2.8.5",
+    "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
-    "morgan": "^1.10.0"
+    "ws": "^8.21.3"
   }
 }
