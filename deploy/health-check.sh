@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # ============================================================================
 # 服务健康检查
-# 用法：bash deploy/health-check.sh [host]
+# 用法：bash deploy/health-check.sh [host] [admin-user] [admin-pass]
+# 例如：bash deploy/health-check.sh http://localhost:3000 admin admin123
 # ============================================================================
 set -euo pipefail
 HOST="${1:-http://localhost:3000}"
+ADMIN_USER="${2:-admin}"
+ADMIN_PASS="${3:-admin123}"
 
 GREEN='\033[0;32m'; RED='\033[0;31m'; NC='\033[0m'
 ok()   { echo -e "${GREEN}✓ $1${NC}"; }
@@ -26,7 +29,7 @@ WS_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
   -H "Sec-WebSocket-Version: 13" \
   -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
   "$HOST/ws")
-if [[ "$WS_CODE" == "101" || "$WS_CODE" == "426" || "$WS_CODE" == "400" ]]; then
+if [[ "$WS_CODE" == "101" || "$WS_CODE" == "426" || "$WS_CODE" == "400" || "$WS_CODE" == "401" ]]; then
   ok "WebSocket /ws 端点可达（HTTP $WS_CODE）"
 else
   fail "WebSocket /ws 端点异常（HTTP $WS_CODE）"
@@ -35,7 +38,7 @@ fi
 # 管理员登录
 LOGIN_RESP=$(curl -s -X POST "$HOST/api/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}')
+  -d "{\"username\":\"$ADMIN_USER\",\"password\":\"$ADMIN_PASS\"}")
 if echo "$LOGIN_RESP" | grep -q "token"; then
   ok "管理员登录 OK"
   TOKEN=$(echo "$LOGIN_RESP" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
@@ -52,7 +55,7 @@ if echo "$LOGIN_RESP" | grep -q "token"; then
     fail "GET /api/config/ice 失败"
   fi
 else
-  fail "管理员登录失败"
+  fail "管理员登录失败（账号=$ADMIN_USER / 响应=$LOGIN_RESP）"
 fi
 
 # 静态资源

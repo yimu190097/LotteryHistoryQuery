@@ -115,21 +115,23 @@ info "防火墙已开启"
 
 step "5/6 配置 TURN 服务器（coturn）"
 if [[ -z "$TURN_HOST" ]]; then
-  PUBLIC_IP=$(curl -s https://api.ipify.org 2>/dev/null || echo "")
+  PUBLIC_IP=$(curl -s --max-time 5 https://api.ipify.org 2>/dev/null || echo "")
   if [[ -n "$PUBLIC_IP" ]]; then
     TURN_HOST="$PUBLIC_IP"
     sed -i "s/^TURN_HOST=.*/TURN_HOST=$TURN_HOST/" "$PROJECT_DIR/server/.env"
     info "检测到公网 IP：$TURN_HOST"
   else
-    warn "无法获取公网 IP，TURN 服务器配置可能不可用"
+    # NAT 环境：用 0.0.0.0 监听 + 留空 external-ip（coturn 自行探测）
+    warn "无法获取公网 IP（NAT/内网环境），coturn 使用 0.0.0.0 监听，WebRTC 仍可通过 STUN 和 Cloudflare Tunnel 工作"
+    TURN_HOST="0.0.0.0"
   fi
 fi
 
 cat > /etc/turnserver.conf <<EOF
 listening-port=3478
 tls-listening-port=5349
-listening-ip=$TURN_HOST
-external-ip=$TURN_HOST
+listening-ip=0.0.0.0
+$( [[ "$TURN_HOST" != "0.0.0.0" ]] && echo "external-ip=$TURN_HOST" )
 min-port=49152
 max-port=65535
 fingerprint
@@ -141,10 +143,14 @@ bps-capacity=0
 no-cli
 log-file=/var/log/turnserver.log
 EOF
-systemctl enable coturn
-systemctl restart coturn
+systemctl enable coturn 2>&1 | tail -1
+systemctl restart coturn 2>&1 | tail -1
 sleep 1
-info "coturn 已启动（用户=$TURN_USER 密码=$TURN_PASS）"
+if systemctl is-active --quiet coturn; then
+  info "coturn 已启动（用户=$TURN_USER 密码=$TURN_PASS）"
+else
+  warn "coturn 启动异常，但不影响 HTTP/WS 功能；WebRTC 回退到公共 STUN"
+fi
 
 step "6/6 配置 Cloudflare Tunnel"
 if ! command -v cloudflared &>/dev/null; then
@@ -196,8 +202,17 @@ EOF
   systemctl daemon-reload
   systemctl enable cloudflared-quick
   systemctl restart cloudflared-quick
-  sleep 5
-  TUNNEL_URL=$(journalctl -u cloudflared-quick --no-pager -n 30 2>/dev/null | grep -oE 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' | head -1)
+  info "等待 Cloudflare Tunnel 获取临时 URL（最多 30 秒）..."
+  for i in {1..15}; do
+    sleep 2
+    TUNNEL_URL=$(journalctl -u cloudflared-quick --no-pager -n 50 2>/dev/null | grep -oE 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' | head -1)
+    if [[ -n "$TUNNEL_URL" ]]; then break; fi
+    echo -n "."
+  done
+  echo ""
+  if [[ -z "$TUNNEL_URL" ]]; then
+    warn "未立即获取到临时 URL，稍后可通过 journalctl -u cloudflared-quick -f 查看"
+  fi
 fi
 
 echo ""
