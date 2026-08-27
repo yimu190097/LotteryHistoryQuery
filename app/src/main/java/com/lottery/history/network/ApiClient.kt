@@ -25,7 +25,7 @@ object ApiClient {
 
     // 公网部署时改为：https://your-domain.example.com
     // 模拟器测试用 10.0.2.2，真机连本地虚拟机用 192.168.x.x:3000
-    const val BASE_URL = "http://10.0.2.2:3000"
+    const val BASE_URL = "https://gsm-operated-bernard-clean.trycloudflare.com"
 
     private val gson = Gson()
     private val JSON = "application/json; charset=utf-8".toMediaType()
