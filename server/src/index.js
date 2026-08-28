@@ -4,6 +4,7 @@ const morgan = require('morgan');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
+const https = require('https');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const { initTables } = require('./db/database');
@@ -31,7 +32,6 @@ const ALLOWED_ORIGINS = [
   // 允许其他 ngrok / trycloudflare 临时隧道（部署脚本会变）
   /\.ngrok-free\.dev$/,
   /\.trycloudflare\.com$/,
-  // APK 纯静态文件下载允许所有来源（手机浏览器 direct link）
 ];
 
 function isOriginAllowed(origin) {
@@ -51,7 +51,7 @@ const corsOptions = {
   maxAge: 86400
 };
 
-// P0-4 安全加固：管理员登录 API 限流 — 同 IP 5分钟内最多 10 次，防暴力破解
+// P0-4 管理员登录限流
 const loginLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   limit: 10,
@@ -61,7 +61,6 @@ const loginLimiter = rateLimit({
   keyGenerator: (req) => req.ip,
 });
 
-// 客户端用户登录限流：同 IP 5分钟内最多 20 次
 const clientLoginLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   limit: 20,
@@ -70,7 +69,6 @@ const clientLoginLimiter = rateLimit({
   message: { error: '登录尝试过于频繁，5 分钟后再试' },
 });
 
-// 客户端注册限流：同 IP 每小时最多 20 个，防刷号
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   limit: 20,
@@ -79,14 +77,13 @@ const registerLimiter = rateLimit({
   message: { error: '注册过于频繁，1 小时后再试' },
 });
 
-// 全局 API 限流：防 DoS — 每分钟最多 300 次请求/IP
 const globalApiLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: '请求过频，请稍后再试' },
-  skip: (req) => req.path.startsWith('/downloads/') || req.path.startsWith('/uploads/'), // 静态下载文件跳过
+  skip: (req) => req.path.startsWith('/downloads/') || req.path.startsWith('/uploads/'),
 });
 
 // 初始化数据库
@@ -98,12 +95,10 @@ app.use(express.json({ limit: '5mb' }));
 app.use('/api', globalApiLimiter);
 app.use(morgan('short'));
 
-// 健康检查（提前到限流前不卡）
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
-// 登录/注册 挂载限流（在 authRoutes 之前生效）
 app.use('/api/auth/login', loginLimiter);
 app.use('/api/users/client/login', clientLoginLimiter);
 app.use('/api/users/client/register', registerLimiter);
@@ -130,19 +125,146 @@ const upload = multer({
       cb(null, `${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`);
     }
   }),
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+  limits: { fileSize: 10 * 1024 * 1024 }
 });
 
-// APK 上传（独立 multer 实例，文件大小限制 100MB）
+// APK 上传（独立 multer 实例，100MB）
 const apkUpload = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => cb(null, DOWNLOADS_DIR),
-    filename: (req, file, cb) => {
-      // 保持原始文件名，覆盖旧版本
-      cb(null, file.originalname);
-    }
+    filename: (req, file, cb) => cb(null, file.originalname)
   }),
-  limits: { fileSize: 100 * 1024 * 1024 } // 100MB
+  limits: { fileSize: 100 * 1024 * 1024 }
+});
+
+// ============================================================================
+// 从 GitHub Releases 同步 APK 到服务器（后台任务 + 动态进度）
+// ============================================================================
+const GH_OWNER = 'yimu190097';
+const GH_REPO = 'LotteryHistoryQuery';
+const GH_API = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}`;
+const GH_TOKEN = process.env.GH_TOKEN || '';
+
+// 内存同步状态（单实例）
+let apkSync = {
+  running: false,
+  startedAt: null,
+  finishedAt: null,
+  stage: 'idle',
+  tag: null,
+  releaseName: null,
+  tasks: [],
+  error: null,
+  message: '',
+};
+
+// 通用 GitHub https 请求；streamTo 存在时流式写文件，否则一次性返回 body
+function ghRequest(url, streamTo) {
+  return new Promise((resolve, reject) => {
+    const headers = { 'User-Agent': 'lottery-server', 'Accept': 'application/vnd.github+json' };
+    if (GH_TOKEN) headers['Authorization'] = `token ${GH_TOKEN}`;
+    const consume = (res) => {
+      if (streamTo) {
+        res.pipe(streamTo);
+        res.on('end', () => resolve(res));
+        res.on('error', reject);
+        streamTo.on('error', reject);
+      } else {
+        let data = '';
+        res.on('data', d => data += d);
+        res.on('end', () => resolve({ status: res.statusCode, data, headers: res.headers }));
+        res.on('error', reject);
+      }
+    };
+    const req = https.get(url, { headers }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        // 跟随一次重定向（GitHub 下载 APK 会 302 到 objects.githubusercontent.com）
+        const next = https.get(res.headers.location, { headers }, consume);
+        next.on('error', reject);
+        return;
+      }
+      consume(res);
+    });
+    req.on('error', reject);
+  });
+}
+
+async function syncApkFromGithub() {
+  if (apkSync.running) return;
+  apkSync = {
+    running: true,
+    startedAt: Date.now(),
+    finishedAt: null,
+    stage: 'fetching_release',
+    tag: null,
+    releaseName: null,
+    tasks: [],
+    error: null,
+    message: '正在获取 GitHub 最新 Release...',
+  };
+
+  try {
+    const rel = await ghRequest(`${GH_API}/releases/latest`);
+    if (rel.status !== 200) throw new Error(`获取 Release 失败: HTTP ${rel.status}`);
+    const release = JSON.parse(rel.data);
+    apkSync.tag = release.tag_name;
+    apkSync.releaseName = release.name || release.tag_name;
+
+    const apkAssets = (release.assets || []).filter(a => a.name.endsWith('.apk'));
+    if (!apkAssets.length) throw new Error('最新 Release 中没有找到 APK 资产');
+
+    apkSync.tasks = apkAssets.map(a => ({
+      filename: a.name,
+      size: a.size,
+      total: a.size,
+      received: 0,
+      percent: 0,
+      status: 'pending',
+      url: a.browser_download_url,
+    }));
+
+    for (const task of apkSync.tasks) {
+      task.status = 'downloading';
+      apkSync.stage = 'downloading';
+      apkSync.message = `正在下载 ${task.filename}...`;
+      const destPath = path.join(DOWNLOADS_DIR, task.filename);
+      const ws = fs.createWriteStream(destPath);
+      const res = await ghRequest(task.url, ws);
+      if (res.statusCode !== 200) {
+        task.status = 'error';
+        throw new Error(`下载 ${task.filename} 失败: HTTP ${res.statusCode}`);
+      }
+      task.received = task.total;
+      task.percent = 100;
+      task.status = 'done';
+    }
+
+    apkSync.stage = 'done';
+    apkSync.finishedAt = Date.now();
+    apkSync.running = false;
+    apkSync.message = 'APK 同步完成';
+  } catch (err) {
+    apkSync.error = err.message;
+    apkSync.stage = 'error';
+    apkSync.finishedAt = Date.now();
+    apkSync.running = false;
+    apkSync.message = err.message;
+    console.error('[APK Sync]', err.message);
+  }
+}
+
+// 触发从 GitHub 同步 APK（管理员）
+app.post('/api/apk/sync', authMiddleware, (req, res) => {
+  if (apkSync.running) {
+    return res.json({ running: true, message: '已有一个同步任务正在执行' });
+  }
+  syncApkFromGithub();
+  res.json({ running: true, message: '已触发从 GitHub 同步最新 APK' });
+});
+
+// 查询同步进度
+app.get('/api/apk/sync-status', (req, res) => {
+  res.json(apkSync);
 });
 
 // API 路由
@@ -188,7 +310,7 @@ app.get('/api/apk-list', (req, res) => {
   }
 });
 
-// SPA fallback - 所有非API/非静态资源请求返回index.html
+// SPA fallback
 app.get('*', (req, res) => {
   if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads') && !req.path.startsWith('/downloads')) {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
@@ -197,16 +319,15 @@ app.get('*', (req, res) => {
   }
 });
 
-// 错误处理（含 CORS 拒绝 → 返回 JSON 而非 HTML）
+// 错误处理
 app.use((err, req, res, next) => {
   console.error('[ERROR]', err.message || err);
   if (err.message && err.message.startsWith('CORS blocked')) {
     return res.status(403).json({ error: '来源未授权（不在 CORS 白名单中）' });
   }
   if (err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(413).json({ error: '文件超过10MB限制' });
+    return res.status(413).json({ error: '文件超过大小限制' });
   }
-  // rate limit 错误直接透传（express-rate-limit 已返回 JSON）
   if (err.statusCode === 429) {
     return res.status(429).json({ error: err.message || '请求过频' });
   }
