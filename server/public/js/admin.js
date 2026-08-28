@@ -66,6 +66,14 @@ async function handleLogin(e) {
     localStorage.setItem('admin_user', JSON.stringify(data.admin));
     showApp(data.admin);
     showToast('登录成功', 'success');
+
+    // P0-3 安全加固：默认密码未修改 → 强制弹窗改密码，关闭前不能使用系统
+    if (data.mustChangePassword || data.admin?.mustChangePassword) {
+      setTimeout(() => {
+        showToast('出于安全原因，请立即修改默认密码（admin123）', 'info');
+        showForceChangePasswordModal();
+      }, 300);
+    }
   } catch (err) {
     errEl.textContent = err.message;
     errEl.style.display = 'block';
@@ -791,6 +799,74 @@ async function deleteApk(filename) {
     showToast(err.message, 'error');
   }
 }
+function showForceChangePasswordModal() {
+  $('#modalContent').innerHTML = `
+    <h3 style="color:var(--danger)">⚠️ 安全要求：必须修改默认密码</h3>
+    <p style="color:var(--text-secondary);margin:12px 0">
+      当前密码仍为默认值 <code style="background:var(--danger);color:#fff;padding:2px 6px;border-radius:4px">admin123</code>，
+      首次登录后请立即修改。未修改前无法使用其他功能，且不能关闭此窗口。
+    </p>
+    <form onsubmit="handleForceChangePassword(event)">
+      <div class=\"form-group\">
+        <label>原密码 <span style=\"color:red\">*</span></label>
+        <input type=\"password\" id=\"fc_old\" value=\"admin123\" required>
+      </div>
+      <div class=\"form-group\">
+        <label>新密码 <span style=\"color:red\">*</span>（至少8位，建议含大小写+数字）</label>
+        <input type=\"password\" id=\"fc_new\" required minlength=\"8\">
+      </div>
+      <div class=\"form-group\">
+        <label>确认新密码 <span style=\"color:red\">*</span></label>
+        <input type=\"password\" id=\"fc_new2\" required minlength=\"8\">
+      </div>
+      <div class=\"modal-actions\">
+        <button type=\"submit\" class=\"btn btn-danger\">确认修改密码</button>
+      </div>
+    </form>
+  `;
+  // 强制弹出，不可关闭
+  openModal();
+  // 阻止点击遮罩关闭
+  $('#modalOverlay').onclick = (e) => { if(e.target.id !== 'modalContent' && !e.target.closest('.modal')) e.stopPropagation(); };
+}
+
+async function handleForceChangePassword(e) {
+  e.preventDefault();
+  const oldPwd = $('#fc_old').value;
+  const newPwd = $('#fc_new').value;
+  const newPwd2 = $('#fc_new2').value;
+
+  if (newPwd.length < 8) {
+    showToast('新密码至少8位', 'error'); return;
+  }
+  if (newPwd === oldPwd) {
+    showToast('新密码不能与原密码相同', 'error'); return;
+  }
+  if (newPwd === 'admin123') {
+    showToast('不能再使用 admin123 作为密码', 'error'); return;
+  }
+  if (newPwd !== newPwd2) {
+    showToast('两次输入的新密码不一致', 'error'); return;
+  }
+
+  try {
+    await api('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ oldPassword: oldPwd, newPassword: newPwd })
+    });
+    // 更新本地缓存 mustChangePassword 标记
+    const admin = JSON.parse(localStorage.getItem('admin_user') || '{}');
+    admin.mustChangePassword = false;
+    localStorage.setItem('admin_user', JSON.stringify(admin));
+    // 恢复遮罩点击关闭
+    $('#modalOverlay').onclick = (e) => { if (e.target === $('#modalOverlay')) closeModal(); };
+    showToast('密码修改成功！请务必记住新密码', 'success');
+    closeModal();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
 function openModal() { $('#modalOverlay').classList.add('show'); }
 function closeModal() { $('#modalOverlay').classList.remove('show'); }
 

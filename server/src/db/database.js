@@ -25,6 +25,7 @@ function initTables() {
       username TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'admin',
+      must_change_password INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
       last_login INTEGER
     );
@@ -116,14 +117,32 @@ function initTables() {
     CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC);
   `);
 
-  // 插入默认管理员（admin/admin123）
+  // ========== 数据库迁移（自动补列，兼容旧库） ==========
+  // admins 表补 must_change_password 列（旧库 2026-08 之前创建的无此列）
+  try {
+    db.prepare('ALTER TABLE admins ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0').run();
+    console.log('[DB Migration] 已补列: admins.must_change_password');
+  } catch (_) { /* 列已存在，忽略 */ }
+  try {
+    const col = db.prepare("PRAGMA table_info('admins')").all();
+    console.log(`[DB Migration] admins 列数=${col.length}`);
+  } catch (_) {}
+
+  // 插入默认管理员（admin/admin123），并标记必须改密码（P0-3 安全加固）
   const bcrypt = require('bcryptjs');
   const existing = db.prepare('SELECT id FROM admins WHERE username = ?').get('admin');
   if (!existing) {
     const hash = bcrypt.hashSync('admin123', 10);
-    db.prepare('INSERT INTO admins (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)')
+    db.prepare('INSERT INTO admins (username, password_hash, role, must_change_password, created_at) VALUES (?, ?, ?, 1, ?)')
       .run('admin', hash, 'super_admin', Date.now());
-    console.log('[DB] 默认管理员已创建: admin / admin123');
+    console.log('[DB] 默认管理员已创建: admin / admin123 — 首次登录后必须修改密码');
+  } else {
+    // 已存在的 admin 如果密码还是默认 admin123 → 强制标记修改
+    const admin = db.prepare('SELECT password_hash FROM admins WHERE username = ?').get('admin');
+    if (admin && bcrypt.compareSync('admin123', admin.password_hash)) {
+      db.prepare('UPDATE admins SET must_change_password = 1 WHERE username = ?').run('admin');
+      console.log('[DB] 默认密码仍为 admin123，已强制标记 must_change_password=1');
+    }
   }
 
   // 默认系统配置

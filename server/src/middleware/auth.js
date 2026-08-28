@@ -1,12 +1,19 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'lottery-admin-secret-key-2026';
+const DEFAULT_JWT_SECRET = 'lottery-admin-secret-key-2026';
+const JWT_SECRET = process.env.JWT_SECRET || DEFAULT_JWT_SECRET;
 const JWT_EXPIRES = '24h';
 
-// 启动时安全告警：JWT_SECRET 仍为默认值
-if (!process.env.JWT_SECRET) {
-  console.warn('\x1b[33m[WARN] JWT_SECRET 未设置环境变量，正在使用默认值！生产部署必须 export JWT_SECRET=<随机长串>\x1b[0m');
+// P0-2 安全加固：JWT_SECRET 仍是默认值 → 直接拒绝启动
+if (JWT_SECRET === DEFAULT_JWT_SECRET) {
+  console.error('\x1b[31m[FATAL] 安全性检查失败：JWT_SECRET 仍为默认硬编码值！\x1b[0m');
+  console.error('\x1b[31m  请在启动前设置环境变量：\x1b[0m');
+  console.error('\x1b[33m    export JWT_SECRET="$(openssl rand -base64 48)"\x1b[0m');
+  console.error('\x1b[31m  服务器拒绝启动以避免默认密钥风险。\x1b[0m');
+  process.exit(1);
 }
+
+console.log('\x1b[32m[OK] JWT_SECRET 校验通过（已使用自定义密钥）\x1b[0m');
 
 /**
  * 生成管理员 JWT Token（含 role 字段）

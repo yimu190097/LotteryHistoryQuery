@@ -29,15 +29,19 @@ router.post('/login', (req, res) => {
   // 记录日志
   db.prepare(
     'INSERT INTO audit_log (admin_id, admin_username, action, detail, created_at) VALUES (?, ?, ?, ?, ?)'
-  ).run(admin.id, admin.username, 'LOGIN', '管理员登录', Date.now());
+  ).run(admin.id, admin.username, 'LOGIN', '管理员登录' + (admin.must_change_password ? '（需强制改密）' : ''), Date.now());
 
   const token = generateToken(admin);
+
+  // P0-3: 如果标记了 must_change_password=1 → 返回标记，前端强制弹窗改密码
   res.json({
     token,
+    mustChangePassword: !!admin.must_change_password,
     admin: {
       id: admin.id,
       username: admin.username,
-      role: admin.role
+      role: admin.role,
+      mustChangePassword: !!admin.must_change_password
     }
   });
 });
@@ -60,11 +64,11 @@ router.post('/change-password', authMiddleware, (req, res) => {
   }
 
   const hash = bcrypt.hashSync(newPassword, 10);
-  db.prepare('UPDATE admins SET password_hash = ? WHERE id = ?').run(hash, req.admin.id);
+  db.prepare('UPDATE admins SET password_hash = ?, must_change_password = 0 WHERE id = ?').run(hash, req.admin.id);
 
   db.prepare(
     'INSERT INTO audit_log (admin_id, admin_username, action, detail, created_at) VALUES (?, ?, ?, ?, ?)'
-  ).run(req.admin.id, req.admin.username, 'CHANGE_PASSWORD', '修改密码', Date.now());
+  ).run(req.admin.id, req.admin.username, 'CHANGE_PASSWORD', '修改密码（must_change_password 已清除）', Date.now());
 
   res.json({ message: '密码修改成功' });
 });
@@ -73,8 +77,15 @@ router.post('/change-password', authMiddleware, (req, res) => {
  * GET /api/auth/me - 获取当前管理员信息
  */
 router.get('/me', authMiddleware, (req, res) => {
-  const admin = db.prepare('SELECT id, username, role, created_at, last_login FROM admins WHERE id = ?').get(req.admin.id);
-  res.json(admin);
+  const admin = db.prepare('SELECT id, username, role, must_change_password, created_at, last_login FROM admins WHERE id = ?').get(req.admin.id);
+  res.json({
+    id: admin.id,
+    username: admin.username,
+    role: admin.role,
+    mustChangePassword: !!admin.must_change_password,
+    createdAt: admin.created_at,
+    lastLogin: admin.last_login
+  });
 });
 
 module.exports = router;
