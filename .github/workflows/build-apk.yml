@@ -71,17 +71,27 @@ jobs:
           SERVER_TOKEN: ${{ secrets.SERVER_TOKEN }}
         run: |
           echo "📤 上传用户端 APK 到服务器..."
-          curl -sS -X POST "${SERVER_URL}/api/upload-apk" \
+          HTTP_CODE=$(curl -sS -o /tmp/upload_resp.txt -w "%{http_code}" -X POST "${SERVER_URL}/api/upload-apk" \
             -H "Authorization: Bearer ${SERVER_TOKEN}" \
-            -F "apk=@LotteryHistoryQuery_v24.2.apk" \
-            && echo "✅ 用户端 APK 上传成功" || echo "⚠️ 用户端 APK 上传失败"
+            -F "apk=@LotteryHistoryQuery_v24.2.apk")
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ 用户端 APK 上传成功 ($(cat /tmp/upload_resp.txt))"
+          else
+            echo "⚠️ 用户端 APK 上传失败 (HTTP $HTTP_CODE)"
+            cat /tmp/upload_resp.txt | head -5
+          fi
 
           if [ -f "LotteryAdmin_v1.0.apk" ]; then
             echo "📤 上传管理端 APK 到服务器..."
-            curl -sS -X POST "${SERVER_URL}/api/upload-apk" \
+            HTTP_CODE=$(curl -sS -o /tmp/upload_resp.txt -w "%{http_code}" -X POST "${SERVER_URL}/api/upload-apk" \
               -H "Authorization: Bearer ${SERVER_TOKEN}" \
-              -F "apk=@LotteryAdmin_v1.0.apk" \
-              && echo "✅ 管理端 APK 上传成功" || echo "⚠️ 管理端 APK 上传失败"
+              -F "apk=@LotteryAdmin_v1.0.apk")
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ 管理端 APK 上传成功 ($(cat /tmp/upload_resp.txt))"
+            else
+              echo "⚠️ 管理端 APK 上传失败 (HTTP $HTTP_CODE)"
+              cat /tmp/upload_resp.txt | head -5
+            fi
           fi
 
       - name: 创建 GitHub Release v24.2
