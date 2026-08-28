@@ -4,7 +4,13 @@ const fs = require('fs');
 const router = express.Router();
 
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
-const UPDATE_SCRIPT_URL = 'https://raw.githubusercontent.com/yimu190097/LotteryHistoryQuery/main/deploy/update.sh';
+// 国内镜像优先，多个源依次尝试，避免 VM 直连 GitHub 超时
+const UPDATE_SCRIPT_URLS = [
+  'https://ghfast.top/https://raw.githubusercontent.com/yimu190097/LotteryHistoryQuery/main/deploy/update.sh',
+  'https://gh-proxy.com/https://raw.githubusercontent.com/yimu190097/LotteryHistoryQuery/main/deploy/update.sh',
+  'https://raw.gitmirror.com/yimu190097/LotteryHistoryQuery/main/deploy/update.sh',
+  'https://raw.githubusercontent.com/yimu190097/LotteryHistoryQuery/main/deploy/update.sh'
+];
 const UPDATE_SCRIPT_PATH = '/tmp/lottery-update.sh';
 const LOG_PATH = '/var/log/lottery-update.log';
 const RESULT_LOG = '/var/log/lottery-deploy-result.log';
@@ -23,8 +29,15 @@ router.post('/webhook', (req, res) => {
 
   console.log('[Webhook] 收到部署请求');
 
-  // 异步执行：先下载最新脚本，再执行部署
-  const deployCmd = `curl -fsSL --connect-timeout 15 --max-time 30 "${UPDATE_SCRIPT_URL}" -o "${UPDATE_SCRIPT_PATH}" 2>&1 && bash "${UPDATE_SCRIPT_PATH}" 2>&1`;
+  // 异步执行：依次尝试多个镜像源下载最新脚本，成功后执行部署
+  const srcList = UPDATE_SCRIPT_URLS.map(u => `"${u}"`).join(' ');
+  const deployCmd =
+    `SRC_OK=0;` +
+    `for u in ${srcList}; do ` +
+    ` echo "尝试下载源: $u"; ` +
+    ` if curl -fsSL --connect-timeout 10 --max-time 25 "$u" -o "${UPDATE_SCRIPT_PATH}" 2>/dev/null; then SRC_OK=1; break; fi; ` +
+    `done; ` +
+    `if [ "$SRC_OK" = "1" ]; then echo "下载脚本成功，开始执行部署"; bash "${UPDATE_SCRIPT_PATH}" 2>&1; else echo "所有下载源均失败"; exit 1; fi`;
   const deployId = Date.now().toString(36);
 
   // 写入开始标记
