@@ -16,21 +16,29 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            storeFile = rootProject.file("app/release.keystore")
-            storePassword = "Lottery2026"
-            keyAlias = "lottery"
-            keyPassword = "Lottery2026"
+        // 存在正式 release.keystore 才启用正式签名；否则（如 CI）回退到 AGP 内置 debug 签名，保证可构建
+        val keystoreFile = rootProject.file("app/release.keystore")
+        if (keystoreFile.exists()) {
+            create("release") {
+                storeFile = keystoreFile
+                storePassword = "Lottery2026"
+                keyAlias = "lottery"
+                keyPassword = "Lottery2026"
+            }
         }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (rootProject.file("app/release.keystore").exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
         debug {
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
