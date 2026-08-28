@@ -38,6 +38,7 @@ jobs:
           sed -i '/proxyHost/d' gradle.properties
           sed -i '/proxyPort/d' gradle.properties
           sed -i '/nonProxyHosts/d' gradle.properties
+          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=512m" >> gradle.properties
           gradle assembleRelease --no-daemon -x test
 
       - name: Build Admin App Release APK
