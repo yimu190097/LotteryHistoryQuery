@@ -25,7 +25,7 @@ import org.webrtc.RtpReceiver
 import org.webrtc.RtpSender
 import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
-import org.webrtc.SoftwareAudioDecoderFactory
+
 import org.webrtc.SurfaceTextureHelper
 import org.webrtc.VideoCapturer
 import org.webrtc.VideoSource
@@ -93,10 +93,10 @@ class WebRtcClient(private val context: Context) {
             .setUseHardwareNoiseSuppressor(true)
             .createAudioDeviceModule()
 
+        // 不手动指定音频编/解码工厂：GetStream 私有仓 1.0.8 才有 JavaAudioEncoderFactory/SoftwareAudioDecoderFactory，
+        // Maven Central 的 1.x 均无。不设置则使用 WebRTC 内置默认编解码器，语音通话功能不受影响。
         factory = PeerConnectionFactory.builder()
             .setAudioDeviceModule(audioDeviceModule)
-            .setAudioEncoderFactory(org.webrtc.audio.JavaAudioEncoderFactory())
-            .setAudioDecoderFactory(SoftwareAudioDecoderFactory())
             .createPeerConnectionFactory()
     }
 
