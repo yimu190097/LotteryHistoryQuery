@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 彩票后台管理系统 - 前端应用
  * 纯原生JS，无框架依赖，兼容所有现代浏览器
  */
@@ -699,12 +699,43 @@ async function handleAddAdmin(e) {
 
 // ==================== APK 下载管理 ====================
 async function renderDownloads() {
+  const base = window.location.origin;
   $('#mainContent').innerHTML = `
     <div class="page-header">
       <h1>APK 下载管理</h1>
       <span style="color:var(--text-secondary);font-size:14px">用户可从服务器高速下载最新 APK</span>
     </div>
     <div class="card">
+      <div class="card-header"><h3>📥 下载入口</h3></div>
+      <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:16px;padding:12px;background:var(--bg-hover);border-radius:var(--radius)">
+          <span style="font-size:24px">🌐</span>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:15px">网页管理端</div>
+            <div style="color:var(--text-secondary);font-size:13px">管理员后台，无需安装，浏览器直接访问</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="copyLink('${base}')">复制链接</button>
+          <a href="${base}" target="_blank" class="btn btn-outline btn-sm">打开</a>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;padding:12px;background:var(--bg-hover);border-radius:var(--radius)" id="adminApkEntry">
+          <span style="font-size:24px">🛠️</span>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:15px">管理端 APP</div>
+            <div style="color:var(--text-secondary);font-size:13px" id="adminApkInfo">Android 管理端安装包（上传后自动显示）</div>
+          </div>
+          <span id="adminApkBtn"></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;padding:12px;background:var(--bg-hover);border-radius:var(--radius)" id="userApkEntry">
+          <span style="font-size:24px">📱</span>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:15px">用户端 APP</div>
+            <div style="color:var(--text-secondary);font-size:13px" id="userApkInfo">Android 用户端安装包（上传后自动显示）</div>
+          </div>
+          <span id="userApkBtn"></span>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
       <div class="card-header">
         <h3>📱 APK 文件列表</h3>
         <button class="btn btn-primary btn-sm" onclick="document.getElementById('apkFileInput').click()">上传 APK</button>
@@ -758,6 +789,26 @@ async function loadApkList() {
         <button class="btn btn-sm btn-outline" onclick="copyLink('${base}${f.url}')">📋</button>
       </div>
     `).join('');
+
+    // 匹配管理端和用户端 APK
+    const adminApk = files.find(f => /admin|管理/i.test(f.filename)) || files[0];
+    const userApk = files.find(f => /user|用户|app/i.test(f.filename) && !/admin|管理/i.test(f.filename)) || files[0];
+
+    if (adminApk) {
+      $('#adminApkInfo').textContent = `${adminApk.filename} (${formatFileSize(adminApk.size)})`;
+      $('#adminApkBtn').innerHTML = `
+        <button class="btn btn-primary btn-sm" onclick="copyLink('${base}${adminApk.url}')">复制链接</button>
+        <a href="${base}${adminApk.url}" class="btn btn-outline btn-sm" style="margin-left:8px">下载</a>
+      `;
+    }
+
+    if (userApk) {
+      $('#userApkInfo').textContent = `${userApk.filename} (${formatFileSize(userApk.size)})`;
+      $('#userApkBtn').innerHTML = `
+        <button class="btn btn-primary btn-sm" onclick="copyLink('${base}${userApk.url}')">复制链接</button>
+        <a href="${base}${userApk.url}" class="btn btn-outline btn-sm" style="margin-left:8px">下载</a>
+      `;
+    }
   } catch (err) {
     $('#apkTable').innerHTML = `<div class="empty-state">加载失败: ${err.message}</div>`;
   }
