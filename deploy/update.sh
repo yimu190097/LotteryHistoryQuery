@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ============================================================================
-# 彩票服务器 - 自动更新脚本
-# 主流程：并行下载代码 + npm install + 重启（快速，不阻塞）
-# APK 同步在后台独立进程执行，不占用部署超时
+# 彩票服务器 - 自动更新脚本（两阶段）
+# 阶段A：优先下载新版 deploy.js 并立即重启，让服务加载最长超时的新版部署入口
+# 阶段B：下载其余代码 + npm install + 重启；APK 后台独立进程同步
 # ============================================================================
 set -uo pipefail
 PROJECT_DIR="/root/lottery"
@@ -14,11 +14,43 @@ log() {
 
 log "========== 开始自动更新 =========="
 
-APK_DIR="$PROJECT_DIR/server/public/downloads"
+RAW_BASES=(
+  "https://ghfast.top/https://raw.githubusercontent.com/yimu190097/LotteryHistoryQuery/main"
+  "https://gh-proxy.com/https://raw.githubusercontent.com/yimu190097/LotteryHistoryQuery/main"
+  "https://raw.gitmirror.com/yimu190097/LotteryHistoryQuery/main"
+  "https://raw.githubusercontent.com/yimu190097/LotteryHistoryQuery/main"
+)
+
+download_file() {
+    local rel="$1"
+    local dest="$PROJECT_DIR/$rel"
+    mkdir -p "$(dirname "$dest")"
+    for base in "${RAW_BASES[@]}"; do
+        if curl -fsSL --connect-timeout 8 --max-time 20 "$base/$rel" -o "$dest" 2>/dev/null; then
+            log "  OK: $rel"
+            return 0
+        fi
+    done
+    log "  SKIP: $rel"
+    return 1
+}
 
 # ============================================================================
-# APK 同步（增量下载，供后台独立进程调用；不阻塞主流程）
+# 阶段 A：先保证部署入口升级（快速，1 个文件 + 立即重启）
+# 目的：把服务切换到 exec 超时=900s 的新版 deploy.js，确保大任务不被砍
 # ============================================================================
+if [ "${STAGE_A_DONE:-0}" != "1" ]; then
+  log "阶段 A: 升级部署入口 deploy.js 并重启"
+  STAGE_A_DONE=1 download_file "server/src/routes/deploy.js"
+  systemctl restart lottery-server 2>&1 | tee -a "$LOG_FILE" || log "阶段A重启失败"
+  sleep 3
+  log "阶段 A 完成，服务已切换到新版部署入口"
+fi
+
+# ============================================================================
+# 若为后台 APK 同步模式，则只同步 APK 后退出
+# ============================================================================
+APK_DIR="$PROJECT_DIR/server/public/downloads"
 sync_apk() {
     mkdir -p "$APK_DIR"
     local RELEASE_TAG="v24.2"
@@ -61,31 +93,22 @@ sync_apk() {
     done
 }
 
-# 若为后台 APK 同步模式，则只同步 APK 后退出
 if [ "${LEAN_APK:-0}" = "1" ]; then
   log "后台模式：仅同步 APK"
   sync_apk
   exit 0
 fi
 
-log "步骤 0/4: 同步 APK（后台启动，不占用主流程）"
+log "步骤启动 APK 后台同步（不占用主流程）"
 if [ "${APK_BG_STARTED:-0}" != "1" ]; then
   APK_BG_STARTED=1 LEAN_APK=1 nohup bash "$PROJECT_DIR/deploy/update.sh" >/dev/null 2>&1 &
   disown || true
 fi
 
 # ============================================================================
-# 下载最新代码（并行多源）
+# 阶段 B：下载其余代码（并行）
 # ============================================================================
-log "步骤 1/4: 下载最新代码（并行）"
-
-RAW_BASES=(
-  "https://ghfast.top/https://raw.githubusercontent.com/yimu190097/LotteryHistoryQuery/main"
-  "https://gh-proxy.com/https://raw.githubusercontent.com/yimu190097/LotteryHistoryQuery/main"
-  "https://raw.gitmirror.com/yimu190097/LotteryHistoryQuery/main"
-  "https://raw.githubusercontent.com/yimu190097/LotteryHistoryQuery/main"
-)
-
+log "阶段 B: 下载其余代码（并行）"
 FILES=(
   deploy/update.sh
   server/package.json
@@ -95,8 +118,8 @@ FILES=(
   server/src/routes/auth.js
   server/src/routes/config.js
   server/src/routes/users.js
-  server/src/routes/deploy.js
   server/src/routes/chat.js
+  server/src/routes/deploy.js
   server/src/middleware/auth.js
   server/public/index.html
   server/public/css/style.css
@@ -104,20 +127,6 @@ FILES=(
   server/public/js/chat.js
   server/public/js/call.js
 )
-
-download_file() {
-    local rel="$1"
-    local dest="$PROJECT_DIR/$rel"
-    mkdir -p "$(dirname "$dest")"
-    for base in "${RAW_BASES[@]}"; do
-        if curl -fsSL --connect-timeout 8 --max-time 20 "$base/$rel" -o "$dest" 2>/dev/null; then
-            log "  OK: $rel"
-            return 0
-        fi
-    done
-    log "  SKIP: $rel"
-    return 1
-}
 
 PIDS=()
 for f in "${FILES[@]}"; do
@@ -131,21 +140,18 @@ done
 # ============================================================================
 # npm install
 # ============================================================================
-log "步骤 2/4: npm install"
+log "阶段 B: npm install"
 cd "$PROJECT_DIR/server"
 npm install --omit=dev 2>&1 | tee -a "$LOG_FILE" || log "npm install 失败"
 
 # ============================================================================
-# 重启服务（关键：让新版 deploy.js 生效）
+# 重启服务，加载全部新代码
 # ============================================================================
-log "步骤 3/4: 重启 lottery-server"
+log "阶段 B: 重启 lottery-server"
 systemctl restart lottery-server 2>&1 | tee -a "$LOG_FILE" || log "重启失败"
 sleep 3
 
-# ============================================================================
-# 健康检查
-# ============================================================================
-log "步骤 4/4: 健康检查"
+log "阶段 B: 健康检查"
 if curl -s http://localhost:3000/api/health | grep -q '"ok"'; then
     log "更新成功！服务已重启"
 else
