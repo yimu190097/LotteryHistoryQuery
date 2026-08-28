@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================================
 # 彩票服务器 - 自动更新脚本
-# 优先 raw.githubusercontent.com（VM 可访问），其次 codeload，最后 git pull
+# 优先 raw.githubusercontent.com + 国内镜像，其次 codeload，最后 git pull
 # ============================================================================
 set -euo pipefail
 PROJECT_DIR="/root/lottery"
@@ -14,20 +14,27 @@ log() {
 log "========== 开始自动更新 =========="
 log "步骤 1/3: 下载最新代码"
 
-RAW_BASE="https://raw.githubusercontent.com/yimu190097/LotteryHistoryQuery/main"
+# 依次尝试的下载基地址（国内网络镜像，解决 VM 直连 GitHub 超时）
+RAW_BASES=(
+  "https://raw.githubusercontent.com/yimu190097/LotteryHistoryQuery/main"
+  "https://ghfast.top/https://raw.githubusercontent.com/yimu190097/LotteryHistoryQuery/main"
+  "https://gh-proxy.com/https://raw.githubusercontent.com/yimu190097/LotteryHistoryQuery/main"
+  "https://raw.gitmirror.com/yimu190097/LotteryHistoryQuery/main"
+)
 SUCCESS=0
 
-# 方案 A: raw.githubusercontent.com（VM 可直接访问，最可靠）
-log "方案 A: raw.githubusercontent.com 逐文件下载..."
+# 方案 A: 镜像列表逐个尝试，只要有一个源成功下载该文件即 OK
+log "方案 A: 镜像列表逐文件下载..."
 download_file() {
     local rel="$1"
     local dest="$PROJECT_DIR/$rel"
     mkdir -p "$(dirname "$dest")"
-    if curl -fsSL --connect-timeout 10 --max-time 30 "$RAW_BASE/$rel" -o "$dest" 2>/dev/null; then
-        return 0
-    else
-        return 1
-    fi
+    for base in "${RAW_BASES[@]}"; do
+        if curl -fsSL --connect-timeout 10 --max-time 30 "$base/$rel" -o "$dest" 2>/dev/null; then
+            return 0
+        fi
+    done
+    return 1
 }
 
 FAILED_FILES=0
