@@ -105,7 +105,8 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     // WebRTC 官方库（包含完整 org.webrtc API + 音视频引擎）
-    implementation("io.getstream:stream-webrtc-android:1.0.8")
+    // 用 Maven Central 上的 1.0.7（Central 无 1.0.8；旧 GetStream 私有仓在 CI 上不稳定、会拉取失败）
+    implementation("io.getstream:stream-webrtc-android:1.0.7")
 
     // Room
     implementation("androidx.room:room-runtime:2.6.1")
