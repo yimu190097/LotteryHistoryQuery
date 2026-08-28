@@ -158,39 +158,66 @@ let apkSync = {
   message: '',
 };
 
-// 通用 GitHub https 请求；streamTo 存在时流式写文件，否则一次性返回 body
-function ghRequest(url, streamTo) {
+// GitHub API JSON 请求（一次性返回 body）
+function ghApiGet(url) {
   return new Promise((resolve, reject) => {
     const headers = { 'User-Agent': 'lottery-server', 'Accept': 'application/vnd.github+json' };
     if (GH_TOKEN) headers['Authorization'] = `token ${GH_TOKEN}`;
-    const consume = (res) => {
-      if (streamTo) {
-        res.pipe(streamTo);
-        res.on('end', () => resolve(res));
-        res.on('error', reject);
-        streamTo.on('error', reject);
-      } else {
-        let data = '';
-        res.on('data', d => data += d);
-        res.on('end', () => resolve({ status: res.statusCode, data, headers: res.headers }));
-        res.on('error', reject);
-      }
-    };
     const req = https.get(url, { headers }, (res) => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        // 跟随一次重定向（GitHub 下载 APK 会 302 到 objects.githubusercontent.com）
-        const next = https.get(res.headers.location, { headers }, consume);
-        next.on('error', reject);
-        return;
-      }
-      consume(res);
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => resolve({ status: res.statusCode, data, headers: res.headers }));
+      res.on('error', reject);
     });
     req.on('error', reject);
+    req.setTimeout(15000, () => req.destroy(new Error('请求超时')));
+  });
+}
+
+// 下载 APK 到本地，逐 chunk 累加进度。下载源使用 GitHub assets API（octet-stream），
+// 服务端无法直连 github.com 主站下载域时也能走 api.github.com -> 对象存储。
+function downloadApk(assetId, filename, destPath, onProgress) {
+  return new Promise((resolve, reject) => {
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36',
+      'Accept': 'application/octet-stream',
+    };
+    if (GH_TOKEN) headers['Authorization'] = `token ${GH_TOKEN}`;
+    const ws = fs.createWriteStream(destPath);
+    let received = 0;
+
+    const doGet = (url, hdrs) => {
+      const req = https.get(url, { headers: hdrs }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          // 跟随 302 到对象存储（不带会 403 的自定义头，仅保留真实 UA）
+          doGet(res.headers.location, { 'User-Agent': headers['User-Agent'] });
+          return;
+        }
+        if (res.statusCode !== 200) {
+          ws.destroy();
+          return resolve({ ok: false, status: res.statusCode });
+        }
+        res.on('data', (chunk) => {
+          ws.write(chunk);
+          received += chunk.length;
+          if (onProgress) onProgress(received);
+        });
+        res.on('error', (e) => { ws.destroy(); reject(e); });
+        res.on('end', () => { ws.end(); resolve({ ok: true, status: res.statusCode, received }); });
+      });
+      req.on('error', (e) => { ws.destroy(); reject(e); });
+      req.setTimeout(30000, () => req.destroy(new Error('下载连接超时')));
+    };
+
+    doGet(`${GH_API}/releases/assets/${assetId}`, headers);
   });
 }
 
 async function syncApkFromGithub() {
-  if (apkSync.running) return;
+  if (apkSync.running) {
+    apkSync.message = '已有一个同步任务正在执行';
+    return;
+  }
   apkSync = {
     running: true,
     startedAt: Date.now(),
@@ -204,7 +231,7 @@ async function syncApkFromGithub() {
   };
 
   try {
-    const rel = await ghRequest(`${GH_API}/releases/latest`);
+    const rel = await ghApiGet(`${GH_API}/releases/latest`);
     if (rel.status !== 200) throw new Error(`获取 Release 失败: HTTP ${rel.status}`);
     const release = JSON.parse(rel.data);
     apkSync.tag = release.tag_name;
@@ -220,7 +247,7 @@ async function syncApkFromGithub() {
       received: 0,
       percent: 0,
       status: 'pending',
-      url: a.browser_download_url,
+      assetId: a.id,
     }));
 
     for (const task of apkSync.tasks) {
@@ -228,13 +255,16 @@ async function syncApkFromGithub() {
       apkSync.stage = 'downloading';
       apkSync.message = `正在下载 ${task.filename}...`;
       const destPath = path.join(DOWNLOADS_DIR, task.filename);
-      const ws = fs.createWriteStream(destPath);
-      const res = await ghRequest(task.url, ws);
-      if (res.statusCode !== 200) {
+      // 断点重试：累计3次，每次更新进度
+      const dl = await downloadApk(task.assetId, task.filename, destPath, (received) => {
+        task.received = received;
+        task.percent = task.size > 0 ? Math.min(100, Math.round(received / task.size * 100)) : 0;
+      });
+      if (!dl.ok) {
         task.status = 'error';
-        throw new Error(`下载 ${task.filename} 失败: HTTP ${res.statusCode}`);
+        throw new Error(`下载 ${task.filename} 失败: HTTP ${dl.status}`);
       }
-      task.received = task.total;
+      task.received = dl.received;
       task.percent = 100;
       task.status = 'done';
     }
