@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # ============================================================================
 # 彩票服务器 - 自动更新脚本
-# 并行下载代码（国内镜像多源）+ 增量同步 APK，避免 VM 直连 GitHub 超时
+# 主流程：并行下载代码 + npm install + 重启（快速，不阻塞）
+# APK 同步在后台独立进程执行，不占用部署超时
 # ============================================================================
 set -uo pipefail
 PROJECT_DIR="/root/lottery"
@@ -13,59 +14,68 @@ log() {
 
 log "========== 开始自动更新 =========="
 
-# ============================================================================
-# 步骤 0: APK 自动同步（增量：已存在且非空则跳过；带国内镜像多源重试）
-# ============================================================================
-log "步骤 0/4: 自动同步 APK"
 APK_DIR="$PROJECT_DIR/server/public/downloads"
-mkdir -p "$APK_DIR"
-
-# 探测最新 release tag
-RELEASE_TAG="v24.2"
-LATEST_REL=""
-for ghbase in \
-  "https://ghfast.top/https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest" \
-  "https://gh-proxy.com/https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest" \
-  "https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest"; do
-  if LATEST_REL=$(curl -fsSL --connect-timeout 8 --max-time 15 "$ghbase" 2>/dev/null); then
-    break
-  fi
-done
-if [ -n "$LATEST_REL" ]; then
-  RELEASE_TAG=$(echo "$LATEST_REL" | sed -n 's/.*"tag_name":"\([^"]*\)".*/\1/p')
-  [ -n "$RELEASE_TAG" ] || RELEASE_TAG="v24.2"
-fi
-log "  Release tag: $RELEASE_TAG"
-
-APKS=("LotteryAdmin_v1.0.apk" "LotteryHistoryQuery_v24.2.apk")
-for apk in "${APKS[@]}"; do
-  # 增量：已存在且非空直接跳过
-  if [ -s "$APK_DIR/$apk" ]; then
-    size=$(stat -c%s "$APK_DIR/$apk" 2>/dev/null || echo 0)
-    log "  APK 已存在: $apk ($(($size/1024/1024)) MB)"
-    continue
-  fi
-  ok=0
-  for base in \
-    "https://ghfast.top/https://github.com/yimu190097/LotteryHistoryQuery/releases/download/$RELEASE_TAG" \
-    "https://gh-proxy.com/https://github.com/yimu190097/LotteryHistoryQuery/releases/download/$RELEASE_TAG" \
-    "https://github.com/yimu190097/LotteryHistoryQuery/releases/download/$RELEASE_TAG"; do
-    if curl -fsSL --connect-timeout 8 --max-time 40 "$base/$apk" -o "$APK_DIR/$apk.tmp" 2>/dev/null; then
-      size=$(stat -c%s "$APK_DIR/$apk.tmp" 2>/dev/null || echo 0)
-      if [ "$size" -gt 1000000 ]; then
-        mv -f "$APK_DIR/$apk.tmp" "$APK_DIR/$apk"
-        log "  APK OK: $apk ($(($size/1024/1024)) MB)"
-        ok=1
-        break
-      fi
-      rm -f "$APK_DIR/$apk.tmp"
-    fi
-  done
-  [ "$ok" -eq 0 ] && log "  APK SKIP: $apk 下载失败（下次部署将重试）"
-done
 
 # ============================================================================
-# 步骤 1: 下载最新代码（并行多源）
+# APK 同步（增量下载，供后台独立进程调用；不阻塞主流程）
+# ============================================================================
+sync_apk() {
+    mkdir -p "$APK_DIR"
+    local RELEASE_TAG="v24.2"
+    local LATEST_REL=""
+    for ghbase in \
+      "https://ghfast.top/https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest" \
+      "https://gh-proxy.com/https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest" \
+      "https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest"; do
+      if LATEST_REL=$(curl -fsSL --connect-timeout 8 --max-time 15 "$ghbase" 2>/dev/null); then break; fi
+    done
+    if [ -n "$LATEST_REL" ]; then
+      RELEASE_TAG=$(echo "$LATEST_REL" | sed -n 's/.*"tag_name":"\([^"]*\)".*/\1/p')
+      [ -n "$RELEASE_TAG" ] || RELEASE_TAG="v24.2"
+    fi
+    local apks=("LotteryAdmin_v1.0.apk" "LotteryHistoryQuery_v24.2.apk")
+    local ok=0 size=0 apk=""
+    for apk in "${apks[@]}"; do
+      if [ -s "$APK_DIR/$apk" ]; then
+        size=$(stat -c%s "$APK_DIR/$apk" 2>/dev/null || echo 0)
+        log "  APK 已存在: $apk ($(($size/1024/1024)) MB)"
+        continue
+      fi
+      ok=0
+      for base in \
+        "https://ghfast.top/https://github.com/yimu190097/LotteryHistoryQuery/releases/download/$RELEASE_TAG" \
+        "https://gh-proxy.com/https://github.com/yimu190097/LotteryHistoryQuery/releases/download/$RELEASE_TAG" \
+        "https://github.com/yimu190097/LotteryHistoryQuery/releases/download/$RELEASE_TAG"; do
+        if curl -fsSL --connect-timeout 8 --max-time 40 "$base/$apk" -o "$APK_DIR/$apk.tmp" 2>/dev/null; then
+          size=$(stat -c%s "$APK_DIR/$apk.tmp" 2>/dev/null || echo 0)
+          if [ "$size" -gt 1000000 ]; then
+            mv -f "$APK_DIR/$apk.tmp" "$APK_DIR/$apk"
+            log "  APK OK: $apk ($(($size/1024/1024)) MB)"
+            ok=1
+            break
+          fi
+          rm -f "$APK_DIR/$apk.tmp"
+        fi
+      done
+      [ "$ok" -eq 0 ] && log "  APK SKIP: $apk 下载失败（下次部署将重试）"
+    done
+}
+
+# 若为后台 APK 同步模式，则只同步 APK 后退出
+if [ "${LEAN_APK:-0}" = "1" ]; then
+  log "后台模式：仅同步 APK"
+  sync_apk
+  exit 0
+fi
+
+log "步骤 0/4: 同步 APK（后台启动，不占用主流程）"
+if [ "${APK_BG_STARTED:-0}" != "1" ]; then
+  APK_BG_STARTED=1 LEAN_APK=1 nohup bash "$PROJECT_DIR/deploy/update.sh" >/dev/null 2>&1 &
+  disown || true
+fi
+
+# ============================================================================
+# 下载最新代码（并行多源）
 # ============================================================================
 log "步骤 1/4: 下载最新代码（并行）"
 
@@ -109,7 +119,6 @@ download_file() {
     return 1
 }
 
-# 并行下载：每个文件后台跑，等全部结束（比串行快一个数量级）
 PIDS=()
 for f in "${FILES[@]}"; do
     download_file "$f" &
@@ -120,21 +129,21 @@ for pid in "${PIDS[@]}"; do
 done
 
 # ============================================================================
-# 步骤 2: npm install
+# npm install
 # ============================================================================
 log "步骤 2/4: npm install"
 cd "$PROJECT_DIR/server"
 npm install --omit=dev 2>&1 | tee -a "$LOG_FILE" || log "npm install 失败"
 
 # ============================================================================
-# 步骤 3: 重启服务
+# 重启服务（关键：让新版 deploy.js 生效）
 # ============================================================================
 log "步骤 3/4: 重启 lottery-server"
 systemctl restart lottery-server 2>&1 | tee -a "$LOG_FILE" || log "重启失败"
 sleep 3
 
 # ============================================================================
-# 步骤 4: 健康检查
+# 健康检查
 # ============================================================================
 log "步骤 4/4: 健康检查"
 if curl -s http://localhost:3000/api/health | grep -q '"ok"'; then
