@@ -6,7 +6,7 @@
 set -euo pipefail
 
 BACKUP_DIR="/root/lottery/backups"
-DB_PATH="/root/lottery/server/data/admin.db"
+DB_PATH="/root/lottery/server/src/data/admin.db"
 MAX_BACKUPS=7
 LOG_FILE="/var/log/lottery-backup.log"
 
