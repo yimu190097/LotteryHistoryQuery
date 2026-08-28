@@ -32,25 +32,56 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Build Release APK
+      - name: Build User App Release APK
         run: |
-          # 移除本地硬编码 Java 路径 + 代理（CI 无代理）
           sed -i '/org.gradle.java.home/d' gradle.properties
           sed -i '/proxyHost/d' gradle.properties
           sed -i '/proxyPort/d' gradle.properties
           sed -i '/nonProxyHosts/d' gradle.properties
           gradle assembleRelease --no-daemon -x test
 
+      - name: Build Admin App Release APK
+        run: |
+          gradle :admin-app:assembleRelease --no-daemon -x test
+
       - name: 收集构建产物
         run: |
           APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
           if [ -z "$APK" ]; then
-            echo "❌ 未找到 APK，构建失败"
+            echo "❌ 未找到用户端 APK"
             find app/build/outputs -type f
             exit 1
           fi
           cp "$APK" "LotteryHistoryQuery_v24.2.apk"
           ls -lh LotteryHistoryQuery_v24.2.apk
+
+          ADMIN_APK=$(find admin-app/build/outputs/apk/release -name "*.apk" | head -1)
+          if [ -n "$ADMIN_APK" ]; then
+            cp "$ADMIN_APK" "LotteryAdmin_v1.0.apk"
+            ls -lh LotteryAdmin_v1.0.apk
+          else
+            echo "⚠️ 未找到管理端 APK（可能签名文件缺失）"
+          fi
+
+      - name: 上传 APK 到服务器
+        if: env.SERVER_URL != ''
+        env:
+          SERVER_URL: ${{ secrets.SERVER_URL }}
+          SERVER_TOKEN: ${{ secrets.SERVER_TOKEN }}
+        run: |
+          echo "📤 上传用户端 APK 到服务器..."
+          curl -sS -X POST "${SERVER_URL}/api/upload-apk" \
+            -H "Authorization: Bearer ${SERVER_TOKEN}" \
+            -F "apk=@LotteryHistoryQuery_v24.2.apk" \
+            && echo "✅ 用户端 APK 上传成功" || echo "⚠️ 用户端 APK 上传失败"
+
+          if [ -f "LotteryAdmin_v1.0.apk" ]; then
+            echo "📤 上传管理端 APK 到服务器..."
+            curl -sS -X POST "${SERVER_URL}/api/upload-apk" \
+              -H "Authorization: Bearer ${SERVER_TOKEN}" \
+              -F "apk=@LotteryAdmin_v1.0.apk" \
+              && echo "✅ 管理端 APK 上传成功" || echo "⚠️ 管理端 APK 上传失败"
+          fi
 
       - name: 创建 GitHub Release v24.2
         uses: softprops/action-gh-release@v2

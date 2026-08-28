@@ -1,8 +1,12 @@
 const express = require('express');
 const { db } = require('../db/database');
 const { authMiddleware, userAuthMiddleware } = require('../middleware/auth');
+const path = require('path');
+const fs = require('fs');
 
 const router = express.Router();
+
+const DOWNLOADS_DIR = path.join(__dirname, '..', '..', 'public', 'downloads');
 
 // 默认 ICE 服务器配置（可被环境变量覆盖）
 const ICE_SERVERS = [
@@ -93,6 +97,29 @@ router.post('/admins', (req, res) => {
   ).run(req.admin.id, req.admin.username, 'CREATE_ADMIN', username, '', Date.now());
 
   res.json({ message: '管理员创建成功' });
+});
+
+/**
+ * POST /api/config/apk-delete - 删除 APK 文件
+ */
+router.post('/apk-delete', authMiddleware, (req, res) => {
+  const { filename } = req.body;
+  if (!filename) return res.status(400).json({ error: '文件名不能为空' });
+
+  // 安全检查：防止路径穿越
+  const safeName = path.basename(filename);
+  if (!safeName.endsWith('.apk')) return res.status(400).json({ error: '仅支持删除 .apk 文件' });
+
+  const filePath = path.join(DOWNLOADS_DIR, safeName);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: '文件不存在' });
+
+  fs.unlinkSync(filePath);
+
+  db.prepare(
+    'INSERT INTO audit_log (admin_id, admin_username, action, target, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(req.admin.id, req.admin.username, 'DELETE_APK', safeName, '删除APK文件', Date.now());
+
+  res.json({ message: 'APK 已删除' });
 });
 
 module.exports = router;

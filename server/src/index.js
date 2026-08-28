@@ -28,13 +28,16 @@ app.use(morgan('short'));
 // 静态文件 - Web管理面板
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// 上传文件目录（图片/语音）
-const UPLOAD_DIR = path.join(__dirname, '..', 'public', 'uploads');
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
 // APK 下载目录
 const DOWNLOADS_DIR = path.join(__dirname, '..', 'public', 'downloads');
 if (!fs.existsSync(DOWNLOADS_DIR)) fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
+
+// APK 下载静态文件服务
+app.use('/downloads', express.static(DOWNLOADS_DIR));
+
+// 上传文件目录（图片/语音）
+const UPLOAD_DIR = path.join(__dirname, '..', 'public', 'uploads');
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -73,14 +76,42 @@ app.post('/api/upload', authMiddleware, upload.single('file'), (req, res) => {
   res.json({ url, size: req.file.size, mimetype: req.file.mimetype });
 });
 
+// APK 上传（仅管理员）
+app.post('/api/upload-apk', authMiddleware, apkUpload.single('apk'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: '未收到 APK 文件' });
+  const url = `/downloads/${req.file.filename}`;
+  res.json({ url, size: req.file.size, filename: req.file.filename });
+});
+
+// APK 列表
+app.get('/api/apk-list', (req, res) => {
+  try {
+    const files = fs.readdirSync(DOWNLOADS_DIR)
+      .filter(f => f.endsWith('.apk'))
+      .map(f => {
+        const stat = fs.statSync(path.join(DOWNLOADS_DIR, f));
+        return {
+          filename: f,
+          size: stat.size,
+          url: `/downloads/${f}`,
+          updatedAt: stat.mtime.toISOString()
+        };
+      })
+      .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    res.json(files);
+  } catch (e) {
+    res.json([]);
+  }
+});
+
 // 健康检查
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
-// SPA fallback - 所有非API请求返回index.html
+// SPA fallback - 所有非API/非静态资源请求返回index.html
 app.get('*', (req, res) => {
-  if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
+  if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads') && !req.path.startsWith('/downloads')) {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
   } else if (req.path.startsWith('/api')) {
     res.status(404).json({ error: 'API不存在' });
