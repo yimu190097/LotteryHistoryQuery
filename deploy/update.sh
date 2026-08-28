@@ -12,7 +12,50 @@ log() {
 }
 
 log "========== 开始自动更新 =========="
-log "步骤 1/3: 下载最新代码"
+
+# ============================================================================
+# APK 自动同步：从 GitHub Release（带国内镜像）拉取两个 APK 到 downloads 目录
+# 无需登录、随部署自动完成，避免残留 0 字节空文件
+# ============================================================================
+log "步骤 0/4: 自动同步 APK"
+APK_DIR="$PROJECT_DIR/server/public/downloads"
+mkdir -p "$APK_DIR"
+RELEASE_TAG="v24.2"
+LATEST_REL=""
+for ghbase in \
+  "https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest" \
+  "https://ghfast.top/https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest" \
+  "https://gh-proxy.com/https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest"; do
+  if LATEST_REL=$(curl -fsSL --connect-timeout 10 --max-time 20 "$ghbase" 2>/dev/null); then
+    break
+  fi
+done
+# 若没拿到 latest，退回固定 v24.2；否则取最新 tag
+if [ -n "$LATEST_REL" ]; then
+  RELEASE_TAG=$(echo "$LATEST_REL" | sed -n 's/.*"tag_name":"\([^"]*\)".*/\1/p')
+fi
+APKS=("LotteryAdmin_v1.0.apk" "LotteryHistoryQuery_v24.2.apk")
+for apk in "${APKS[@]}"; do
+  ok=0
+  for base in \
+    "https://github.com/yimu190097/LotteryHistoryQuery/releases/download/$RELEASE_TAG" \
+    "https://ghfast.top/https://github.com/yimu190097/LotteryHistoryQuery/releases/download/$RELEASE_TAG" \
+    "https://gh-proxy.com/https://github.com/yimu190097/LotteryHistoryQuery/releases/download/$RELEASE_TAG"; do
+    if curl -fsSL --connect-timeout 10 --max-time 60 "$base/$apk" -o "$APK_DIR/$apk.tmp" 2>/dev/null; then
+      size=$(stat -c%s "$APK_DIR/$apk.tmp" 2>/dev/null || echo 0)
+      if [ "$size" -gt 1000000 ]; then
+        mv -f "$APK_DIR/$apk.tmp" "$APK_DIR/$apk"
+        log "  APK OK: $apk ($(($size/1024/1024)) MB)"
+        ok=1
+        break
+      fi
+      rm -f "$APK_DIR/$apk.tmp"
+    fi
+  done
+  [ "$ok" -eq 0 ] && log "  APK SKIP: $apk 下载失败"
+done
+
+log "步骤 1/4: 下载最新代码"
 
 # 依次尝试的下载基地址（国内网络镜像，解决 VM 直连 GitHub 超时）
 RAW_BASES=(
