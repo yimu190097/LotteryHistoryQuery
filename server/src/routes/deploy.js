@@ -47,7 +47,7 @@ router.post('/webhook', (req, res) => {
     // ignore
   }
 
-  exec(deployCmd, { timeout: 180000 }, (err, stdout, stderr) => {
+  exec(deployCmd, { timeout: 900000 }, (err, stdout, stderr) => {
     const now = new Date().toISOString();
     let resultLog = `[${now}] deploy_id=${deployId}\n`;
 
