@@ -105,6 +105,7 @@ function navigate(page) {
     case 'chat': renderChat && renderChat(); break;
     case 'audit': renderAuditLog(); break;
     case 'settings': renderSettings(); break;
+    case 'downloads': renderDownloads(); break;
   }
 }
 
@@ -660,7 +661,136 @@ async function handleAddAdmin(e) {
   }
 }
 
-// ==================== 弹窗 ====================
+// ==================== APK 下载管理 ====================
+async function renderDownloads() {
+  $('#mainContent').innerHTML = `
+    <div class="page-header">
+      <h1>APK 下载管理</h1>
+      <span style="color:var(--text-secondary);font-size:14px">用户可从服务器高速下载最新 APK</span>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <h3>📱 APK 文件列表</h3>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('apkFileInput').click()">上传 APK</button>
+        <input type="file" id="apkFileInput" accept=".apk" style="display:none" onchange="handleApkUpload(this)">
+      </div>
+      <div class="table-container" id="apkTable"><div class="empty-state">加载中...</div></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-header"><h3>🔗 下载链接</h3></div>
+      <div style="padding:16px" id="apkLinks"><div class="empty-state">加载中...</div></div>
+    </div>
+  `;
+
+  await loadApkList();
+}
+
+async function loadApkList() {
+  try {
+    const files = await api('/api/apk-list');
+    const base = window.location.origin;
+
+    if (!files.length) {
+      $('#apkTable').innerHTML = '<div class="empty-state">暂无 APK 文件，请上传</div>';
+      $('#apkLinks').innerHTML = '<div class="empty-state">暂无下载链接</div>';
+      return;
+    }
+
+    $('#apkTable').innerHTML = `
+      <table>
+        <thead><tr><th>文件名</th><th>大小</th><th>更新时间</th><th>下载链接</th><th>操作</th></tr></thead>
+        <tbody>${files.map(f => `
+          <tr>
+            <td><strong>${f.filename}</strong></td>
+            <td>${formatFileSize(f.size)}</td>
+            <td>${formatDate(f.updatedAt)}</td>
+            <td><a href="${base}${f.url}" target="_blank" style="color:var(--primary)">${base}${f.url}</a></td>
+            <td>
+              <button class="btn btn-sm btn-outline" onclick="copyLink('${base}${f.url}')">复制链接</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteApk('${f.filename}')">删除</button>
+            </td>
+          </tr>
+        `).join('')}</tbody>
+      </table>
+    `;
+
+    $('#apkLinks').innerHTML = files.map(f => `
+      <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span style="font-weight:600;min-width:200px">${f.filename}</span>
+        <span style="color:var(--text-secondary);font-size:12px">${formatFileSize(f.size)}</span>
+        <code style="font-size:12px;word-break:break-all;flex:1">${base}${f.url}</code>
+        <button class="btn btn-sm btn-outline" onclick="copyLink('${base}${f.url}')">📋</button>
+      </div>
+    `).join('');
+  } catch (err) {
+    $('#apkTable').innerHTML = `<div class="empty-state">加载失败: ${err.message}</div>`;
+  }
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function copyLink(url) {
+  navigator.clipboard.writeText(url).then(() => {
+    showToast('链接已复制到剪贴板', 'success');
+  }).catch(() => {
+    showToast('复制失败，请手动复制', 'error');
+  });
+}
+
+async function handleApkUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (!file.name.endsWith('.apk')) {
+    showToast('仅支持 .apk 文件', 'error');
+    input.value = '';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('apk', file);
+
+  try {
+    showToast('正在上传...', 'info');
+    const headers = {};
+    if (API.token) headers['Authorization'] = `Bearer ${API.token}`;
+    const res = await fetch(API.base + '/api/upload-apk', {
+      method: 'POST',
+      headers,
+      body: formData
+    });
+    if (res.status === 401) {
+      localStorage.removeItem('admin_token');
+      showLogin();
+      throw new Error('登录已过期');
+    }
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '上传失败');
+    showToast(`${file.name} 上传成功`, 'success');
+    input.value = '';
+    await loadApkList();
+  } catch (err) {
+    showToast(err.message, 'error');
+    input.value = '';
+  }
+}
+
+async function deleteApk(filename) {
+  if (!confirm(`确定要删除 ${filename} 吗？`)) return;
+  try {
+    await api('/api/config/apk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ filename })
+    });
+    showToast('已删除', 'success');
+    await loadApkList();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
 function openModal() { $('#modalOverlay').classList.add('show'); }
 function closeModal() { $('#modalOverlay').classList.remove('show'); }
 
