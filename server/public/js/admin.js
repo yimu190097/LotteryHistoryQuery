@@ -709,6 +709,24 @@ async function renderDownloads() {
       <div class="card-header"><h3>📥 下载入口</h3></div>
       <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
         <div style="display:flex;align-items:center;gap:16px;padding:12px;background:var(--bg-hover);border-radius:var(--radius)">
+          <span style="font-size:24px">🐙</span>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:15px">从 GitHub 同步最新 APK</div>
+            <div style="color:var(--text-secondary);font-size:13px" id="syncApkHint">自动从 GitHub Releases 拉取最新安装包到服务器</div>
+          </div>
+          <button class="btn btn-primary btn-sm" id="syncApkBtn" onclick="startApkSync()">同步</button>
+        </div>
+        <div id="apkSyncProgress" style="display:none;padding:12px;background:var(--bg-hover);border-radius:var(--radius)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span id="syncApkStage" style="font-weight:600;font-size:14px">准备中...</span>
+            <span id="syncApkPercent" style="font-size:13px;color:var(--text-secondary)">0%</span>
+          </div>
+          <div style="height:8px;background:var(--border);border-radius:999px;overflow:hidden">
+            <div id="syncApkBar" style="height:100%;width:0%;background:var(--primary);border-radius:999px;transition:width .3s"></div>
+          </div>
+          <div id="syncApkTask" style="margin-top:6px;color:var(--text-secondary);font-size:12px"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;padding:12px;background:var(--bg-hover);border-radius:var(--radius)">
           <span style="font-size:24px">🌐</span>
           <div style="flex:1">
             <div style="font-weight:600;font-size:15px">网页管理端</div>
@@ -750,6 +768,7 @@ async function renderDownloads() {
   `;
 
   await loadApkList();
+  initApkSyncView();
 }
 
 async function loadApkList() {
@@ -818,6 +837,118 @@ function formatFileSize(bytes) {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// ==================== 从 GitHub 同步 APK（后台任务 + 动态进度） ====================
+let apkSyncPollTimer = null;
+
+async function startApkSync() {
+  try {
+    const btn = $('#syncApkBtn');
+    await api('/api/apk/sync', { method: 'POST' });
+    if (btn) { btn.disabled = true; btn.textContent = '同步中...'; }
+    showToast('已触发从 GitHub 同步，正在进行...', 'info');
+    $('#apkSyncProgress').style.display = 'block';
+    // 立即轮询一次，随后固定间隔
+    pollApkSync();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function pollApkSync() {
+  try {
+    const s = await api('/api/apk/sync-status');
+    renderApkSync(s);
+    if (s.running) {
+      if (!apkSyncPollTimer) {
+        apkSyncPollTimer = setInterval(() => {
+          api('/api/apk/sync-status').then(renderApkSync).catch(() => {});
+        }, 1200);
+      }
+      // 完成时终止轮询
+      monitorApkSyncDone();
+    } else {
+      stopApkSyncPoll();
+    }
+  } catch (err) {
+    // 忽略轮询错误
+  }
+}
+
+function monitorApkSyncDone() {
+  const check = setInterval(async () => {
+    try {
+      const s = await api('/api/apk/sync-status');
+      if (!s.running) {
+        clearInterval(check);
+        stopApkSyncPoll();
+        renderApkSync(s);
+        // 同步完成，刷新文件列表
+        loadApkList();
+      }
+    } catch (e) {}
+  }, 1500);
+}
+
+function stopApkSyncPoll() {
+  if (apkSyncPollTimer) {
+    clearInterval(apkSyncPollTimer);
+    apkSyncPollTimer = null;
+  }
+  const btn = $('#syncApkBtn');
+  if (btn) { btn.disabled = false; btn.textContent = '同步'; }
+}
+
+function renderApkSync(s) {
+  const progress = $('#apkSyncProgress');
+  if (!progress) return;
+  if (!s.running && s.stage === 'idle') { progress.style.display = 'none'; return; }
+  progress.style.display = 'block';
+
+  const active = s.tasks.filter(t => t.status !== 'pending' && t.status !== 'done' && t.status !== 'error');
+  const doneTask = s.tasks.find(t => t.status === 'done') || {};
+  const current = active[0] || doneTask || s.tasks[0] || {};
+
+  // 计算整体进度（各任务加权平均）
+  let total = 0, received = 0;
+  s.tasks.forEach(t => { total += (t.total || 0); received += (t.received || 0); });
+  const percent = total > 0 ? Math.round(received / total * 100) : (s.stage === 'done' ? 100 : 0);
+
+  $('#syncApkBar').style.width = percent + '%';
+  $('#syncApkPercent').textContent = percent + '%';
+
+  let stageText = '准备中...';
+  if (s.error) {
+    stageText = `❌ 同步失败：${s.error}`;
+    $('#syncApkBtn').textContent = '重试';
+  } else if (s.running && s.stage === 'fetching_release') {
+    stageText = '⏳ 正在获取 GitHub Release 信息...';
+  } else if (s.running && s.stage === 'downloading') {
+    const cur = active[0];
+    stageText = cur ? `⏳ 正在下载 ${cur.filename}` : '⏳ 正在下载...';
+  } else if (s.stage === 'done') {
+    stageText = `✅ ${s.tag ? '[' + s.tag + '] ' : ''}同步完成，共 ${s.tasks.length} 个 APK`;
+  }
+  $('#syncApkStage').textContent = stageText;
+
+  const taskHtml = s.tasks.map(t => {
+    const p = t.size > 0 ? Math.round((t.received || 0) / t.size * 100) : 0;
+    const icon = t.status === 'done' ? '✅' : t.status === 'error' ? '❌' : t.status === 'downloading' ? '⏳' : '⬜';
+    return `${icon} ${t.filename} — ${p}%`;
+  }).join('<br>');
+  $('#syncApkTask').innerHTML = taskHtml;
+}
+
+// 进入下载页时恢复同步状态显示
+async function initApkSyncView() {
+  try {
+    const s = await api('/api/apk/sync-status');
+    if (s.running || s.stage === 'done' || s.stage === 'error') {
+      renderApkSync(s);
+      if (s.running) pollApkSync();
+    }
+  } catch (e) {}
 }
 
 function copyLink(url) {
