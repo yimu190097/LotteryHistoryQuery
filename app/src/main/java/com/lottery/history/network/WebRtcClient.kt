@@ -125,6 +125,10 @@ class WebRtcClient(private val context: Context) {
                 onIceCandidate?.invoke(candidate)
             }
 
+            override fun onIceCandidatesRemoved(candidates: Array<IceCandidate>) {
+                // Maven Central 1.x 的 Observer 比 GetStream 1.0.8 多此抽象方法，空实现即可
+            }
+
             override fun onIceConnectionChange(state: PeerConnection.IceConnectionState) {
                 Log.d(TAG, "ICE state: $state")
             }
