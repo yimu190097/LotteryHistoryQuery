@@ -32,6 +32,10 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 const UPLOAD_DIR = path.join(__dirname, '..', 'public', 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
+// APK 下载目录
+const DOWNLOADS_DIR = path.join(__dirname, '..', 'public', 'downloads');
+if (!fs.existsSync(DOWNLOADS_DIR)) fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
+
 const upload = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => cb(null, UPLOAD_DIR),
@@ -41,6 +45,18 @@ const upload = multer({
     }
   }),
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+});
+
+// APK 上传（独立 multer 实例，文件大小限制 100MB）
+const apkUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, DOWNLOADS_DIR),
+    filename: (req, file, cb) => {
+      // 保持原始文件名，覆盖旧版本
+      cb(null, file.originalname);
+    }
+  }),
+  limits: { fileSize: 100 * 1024 * 1024 } // 100MB
 });
 
 // API 路由
