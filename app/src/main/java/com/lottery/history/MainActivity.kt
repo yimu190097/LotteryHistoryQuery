@@ -38,6 +38,7 @@ import com.lottery.history.util.BallTextHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -379,14 +380,29 @@ class MainActivity : AppCompatActivity() {
         isRefreshing = true
         updateStatusText("正在获取最新开奖数据...")
         lifecycleScope.launch {
-            val result: RefreshResult = LotteryDataManager.refresh(this@MainActivity)
-            isRefreshing = false
-            if (result.success) {
+            var success = false
+            try {
+                val result: RefreshResult = withTimeoutOrNull(90_000L) {
+                    LotteryDataManager.refresh(this@MainActivity)
+                }
+                if (result == null) {
+                    updateStatusText("网络超时，暂无新数据 · 下拉刷新可重试")
+                    updateLatestInfo()
+                    return@launch
+                }
+                success = result.success
+                if (success) {
+                    updateLatestInfo()
+                    updateStatusText(getString(R.string.refresh_success, result.successCount))
+                    notifyFragmentsRefresh()
+                } else {
+                    updateStatusTextFromMeta()
+                }
+            } catch (e: Exception) {
+                updateStatusText("网络异常，暂无新数据 · 下拉刷新可重试")
                 updateLatestInfo()
-                updateStatusText(getString(R.string.refresh_success, result.successCount))
-                notifyFragmentsRefresh()
-            } else {
-                updateStatusTextFromMeta()
+            } finally {
+                isRefreshing = false
             }
         }
     }
@@ -396,23 +412,59 @@ class MainActivity : AppCompatActivity() {
         isRefreshing = true
         binding.tvDataStatus.text = getString(R.string.refreshing)
         lifecycleScope.launch {
-            val result: RefreshResult = withContext(Dispatchers.IO) {
-                LotteryDataManager.refresh(this@MainActivity)
-            }
-            isRefreshing = false
-            if (result.success) {
-                updateLatestInfo()
-                val msg = getString(R.string.refresh_success, result.successCount)
-                binding.tvDataStatus.text = msg
-                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
-                notifyFragmentsRefresh()
-            } else {
+            try {
+                val result: RefreshResult = withTimeoutOrNull(90_000L) {
+                    withContext(Dispatchers.IO) {
+                        LotteryDataManager.refresh(this@MainActivity)
+                    }
+                }
+                if (result == null) {
+                    updateStatusTextFromMeta()
+                    Toast.makeText(
+                        this@MainActivity,
+                        "网络超时，自动使用本地缓存数据",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    updateLatestInfo()
+                    return@launch
+                }
+                if (result.success) {
+                    updateLatestInfo()
+                    val msg = getString(R.string.refresh_success, result.successCount)
+                    binding.tvDataStatus.text = msg
+                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+                    notifyFragmentsRefresh()
+                } else {
+                    updateStatusTextFromMeta()
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.refresh_fail, result.error ?: ""),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            } catch (e: java.net.UnknownHostException) {
                 updateStatusTextFromMeta()
                 Toast.makeText(
                     this@MainActivity,
-                    getString(R.string.refresh_fail, result.error ?: ""),
+                    "网络连接失败，请检查网络后重试",
                     Toast.LENGTH_LONG
                 ).show()
+            } catch (e: java.net.SocketTimeoutException) {
+                updateStatusTextFromMeta()
+                Toast.makeText(
+                    this@MainActivity,
+                    "网络超时，服务器响应过慢，请稍后重试",
+                    Toast.LENGTH_LONG
+                ).show()
+            } catch (e: Exception) {
+                updateStatusTextFromMeta()
+                Toast.makeText(
+                    this@MainActivity,
+                    "数据加载失败：${e.message ?: "未知错误"}，已使用本地缓存",
+                    Toast.LENGTH_LONG
+                ).show()
+            } finally {
+                isRefreshing = false
             }
         }
     }

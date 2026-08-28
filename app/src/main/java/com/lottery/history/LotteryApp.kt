@@ -1,6 +1,10 @@
 package com.lottery.history
 
 import android.app.Application
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import android.widget.Toast
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -24,8 +28,32 @@ class LotteryApp : Application() {
     override fun onCreate() {
         super.onCreate()
         AppContext.init(this)
+        setupGlobalExceptionHandler()
         ensureAdminAccount()
         scheduleDailyUpdate()
+    }
+
+    /**
+     * 全局未捕获异常处理器：避免闪退白屏，显示友好提示后退出。
+     * 仅兜底非预期崩溃，正常 try-catch 不会被拦截。
+     */
+    private fun setupGlobalExceptionHandler() {
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            Log.e("LotteryApp", "未捕获异常", throwable)
+            try {
+                Handler(Looper.getMainLooper()).post {
+                    Toast.makeText(
+                        this,
+                        "应用遇到异常，请重启应用\n${throwable.message ?: "未知错误"}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                // 短暂延迟让 Toast 显示出来
+                Thread.sleep(2000)
+            } catch (_: Exception) { }
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
     }
 
     /**

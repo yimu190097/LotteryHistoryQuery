@@ -162,11 +162,18 @@ object LotteryDataManager {
      *  说明：Room DAO getAllByType 是 suspend 函数（强制在后台线程），UI 调用方都在主线程，
      *  这里用 runBlocking(Dispatchers.IO) 桥接——查询量仅数百~数千条，耗时几毫秒内，
      *  不会阻塞 UI；比把所有 UI 调用方全改成 suspend 更干净。
+     *
+     *  【错误边界】：所有异常内部消化，返回空列表，绝不抛出让 UI 崩溃。
      */
     fun getAllFromDb(context: Context, code: String): List<LotteryDraw> {
-        val d = ensureDao(context) ?: return emptyList()
-        return kotlinx.coroutines.runBlocking(Dispatchers.IO) {
-            d.getAllByType(code).map { e -> e.toModel() }
+        return try {
+            val d = ensureDao(context) ?: return emptyList()
+            kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+                d.getAllByType(code).map { e -> e.toModel() }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("LotteryDataManager", "getAllFromDb($code) 失败", e)
+            emptyList()
         }
     }
     fun getAllFromDb(context: Context, config: LotteryTypeConfig): List<LotteryDraw> =
