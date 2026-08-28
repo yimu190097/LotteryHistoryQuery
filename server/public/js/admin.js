@@ -3,6 +3,34 @@
  * 纯原生JS，无框架依赖，兼容所有现代浏览器
  */
 
+// ==================== 暗黑模式 ====================
+(function initTheme() {
+  const saved = localStorage.getItem('theme');
+  if (saved === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  }
+  updateThemeIcon();
+})();
+
+function toggleTheme() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  if (isDark) {
+    document.documentElement.removeAttribute('data-theme');
+    localStorage.setItem('theme', 'light');
+  } else {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    localStorage.setItem('theme', 'dark');
+  }
+  updateThemeIcon();
+}
+
+function updateThemeIcon() {
+  const icon = document.getElementById('themeIcon');
+  if (!icon) return;
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  icon.textContent = isDark ? '☀️' : '🌙';
+}
+
 // ==================== 全局状态 ====================
 const API = {
   base: '',
