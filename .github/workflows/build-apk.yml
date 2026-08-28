@@ -11,27 +11,21 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up JDK 17
-        id: setup-java
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
-
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.5'
-
       - name: Build User App Release APK
         run: |
           sed -i '/org.gradle.java.home/d' gradle.properties
@@ -40,118 +34,50 @@ jobs:
           sed -i '/nonProxyHosts/d' gradle.properties
           echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=512m" >> gradle.properties
           gradle assembleRelease --no-daemon -x test
-
       - name: Build Admin App Release APK
         run: |
           gradle :admin-app:assembleRelease --no-daemon -x test
-
       - name: 收集构建产物
         run: |
           APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
           if [ -z "$APK" ]; then
-            echo "❌ 未找到用户端 APK"
+            echo "NO USER APK"
             find app/build/outputs -type f
             exit 1
           fi
           cp "$APK" "LotteryHistoryQuery_v24.2.apk"
           ls -lh LotteryHistoryQuery_v24.2.apk
-
           ADMIN_APK=$(find admin-app/build/outputs/apk/release -name "*.apk" | head -1)
           if [ -n "$ADMIN_APK" ]; then
             cp "$ADMIN_APK" "LotteryAdmin_v1.0.apk"
             ls -lh LotteryAdmin_v1.0.apk
           else
-            echo "⚠️ 未找到管理端 APK（可能签名文件缺失）"
+            echo "NO ADMIN APK"
           fi
-
-      - name: 上传 APK 到服务器
+      - name: 下传 APK 到服务器
         if: env.SERVER_URL != ''
         env:
           SERVER_URL: ${{ secrets.SERVER_URL }}
           SERVER_TOKEN: ${{ secrets.SERVER_TOKEN }}
         run: |
-          echo "📤 上传用户端 APK 到服务器..."
-          HTTP_CODE=$(curl -sS -o /tmp/upload_resp.txt -w "%{http_code}" -X POST "${SERVER_URL}/api/upload-apk" \
-            -H "Authorization: Bearer ${SERVER_TOKEN}" \
-            -F "apk=@LotteryHistoryQuery_v24.2.apk")
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ 用户端 APK 上传成功 ($(cat /tmp/upload_resp.txt))"
-          else
-            echo "⚠️ 用户端 APK 上传失败 (HTTP $HTTP_CODE)"
-            cat /tmp/upload_resp.txt | head -5
-          fi
-
+          HTTP_CODE=$(curl -sS -o /tmp/upload_resp.txt -w "%{http_code}" -X POST "${SERVER_URL}/api/upload-apk" -H "Authorization: Bearer ${SERVER_TOKEN}" -F "apk=@LotteryHistoryQuery_v24.2.apk")
+          echo "user: $HTTP_CODE $(head -3 /tmp/upload_resp.txt)"
           if [ -f "LotteryAdmin_v1.0.apk" ]; then
-            echo "📤 上传管理端 APK 到服务器..."
-            HTTP_CODE=$(curl -sS -o /tmp/upload_resp.txt -w "%{http_code}" -X POST "${SERVER_URL}/api/upload-apk" \
-              -H "Authorization: Bearer ${SERVER_TOKEN}" \
-              -F "apk=@LotteryAdmin_v1.0.apk")
-            if [ "$HTTP_CODE" = "200" ]; then
-              echo "✅ 管理端 APK 上传成功 ($(cat /tmp/upload_resp.txt))"
-            else
-              echo "⚠️ 管理端 APK 上传失败 (HTTP $HTTP_CODE)"
-              cat /tmp/upload_resp.txt | head -5
-            fi
+            HTTP_CODE=$(curl -sS -o /tmp/upload_resp.txt -w "%{http_code}" -X POST "${SERVER_URL}/api/upload-apk" -H "Authorization: Bearer ${SERVER_TOKEN}" -F "apk=@LotteryAdmin_v1.0.apk")
+            echo "admin: $HTTP_CODE $(head -3 /tmp/upload_resp.txt)"
           fi
-
       - name: 创建 GitHub Release v24.2
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v24.2
           name: v24.2 公网部署版 · 指向 Ubuntu 虚拟机云端地址
           body: |
-            ## v24.2 📥 从哪里下载 APK？（找不到 Releases 的看这里）
-
-            ### 方法 ①：本页面最下方 【Assets】 区 直接点 `LotteryHistoryQuery_v24.2.apk` ← 就这个文件！
-            ### 方法 ②：复制直链（手机浏览器直接打开下载）
-            ```
-            https://github.com/yimu190097/LotteryHistoryQuery/releases/download/v24.2/LotteryHistoryQuery_v24.2.apk
-            ```
-            ### 方法 ③：仓库首页怎么找 Releases？
-            - 顶部导航标签栏：`<> Code` 右边有 **`⬇️ N Releases`** → 点它
-            - 或右侧栏 **About 下方** → **Releases** 卡片 → 点 `Latest`
-
-            ---
-
-            ## 🔧 本次修复：为什么 GitHub 页面看不到 Releases？
-            仓库 settings 的 `has_downloads=false` 会导致 UI 不渲染 Releases 组件（哪怕 API 能查得到）。本次已强制 PATCH：
-            - `has_downloads=true` ✅
-            - `has_issues=true` ✅
-            - `has_projects=false` / `has_wiki=false` / `has_discussions=false`（保留干净）
-            并重建 Release v24.1，确保 GitHub 网页端一定能看到。
-
-            ---
-
-            ## 🏗️ 仓库结构（单人单分支开发 · 无分支）
-            - 仅 **main** 一个分支（已删除 trae/agent-4srDeZ、trae/agent-rM9PdF 等临时分支）
-            - 旧 Tags / 旧 Releases 全部清理干净（v9.0/v14.0/v19/v20/v21.0/v22.0/v23.0/v24.0）
-            - `releases/` 目录已清理（v2~v9/v22 共 16 个历史 APK 删除）
-
-            ## 🟢 核心功能（期政策自适应 · 数据真实不误导）
-            1. **版本定位三级兜底**：ruleVersionKey（解析期写入 Room）> 期号 issue 前缀推断年份 > date 字段 > 最新版保底
-               - 断网 Seed 无 date 老期：SSQ 前4位=年 / DLT 前2位补20 → 自动套对规则（例：issue 20020 → 超级大乐透2019版9级）
-            2. **选号命中按政策版本独立分组**（✅ P0 验收）
-               - DLT 2026 新规七等奖(0+2 / 5-7元/期) 与 DLT 2019 九等奖(0+2 / 5元/期) 独立分组，两行绿色分组标题
-               - DLT 2019 七等奖(4+0 / 100元/期) 独立桶，不再与 2026 七等奖合并
-               - LotteryMatcher 按 `BucketKey(ruleVersionKey, tier)` 独立输出；QueryResultItem 带 `sourceRuleVersionKey`；LotteryFragment 组切换时插入绿色 `▌【政策名】N级规则 生效日` 标题行
-            3. **政策徽章绑定期号**
-               - LatestDrawsDialog 绿色徽章：`超级大乐透2026新规（7级奖池联动）｜期号26088`
-               - DrawDetailDialog 顶部绿卡：`【本期适用】超级大乐透2026新规（7级奖池联动） 期号：26088 / 生效日：2026-01-31起`
-            4. **条件奖级标志（用词一致不误导）**
-               - SSQ 奖池 < 15 亿：福运奖整行浅灰 + "奖池未达门槛，本奖项停发"（不写"空开"误导字样）
-               - DLT 奖池 ≥ 8 亿：三~七等奖规则列绿色高亮「本期奖池≥8亿已上浮¥XXX」
-            5. **Mutext 修复**：刷新/加载缓存不死锁（`ensureInitialized` 拆无锁 `ensureInitializedLocked`）
-
-            ## 🛠️ Gradle 开发插件全量集成
-            - **Detekt 1.23.6** Kotlin 静态分析；**Spotless 6.25.0** + ktfmt 0.46 kotlinlangStyle 自动格式化
-            - **JaCoCo**：debug variant 覆盖率报告（HTML+XML）；**Ben-Manes versions 0.51.0** 依赖版本检查
-
-            ## 📱 手机端 6 项自测要点（安装后必核）
-            1. 冷启动≤3s / 下拉刷新3-10s正常结束不转圈卡死
-            2. 首页最新一期徽章显示「期号XXX」；单版(3D/P3/P5)徽章 GONE
-            3. 详情弹窗政策卡绑定显示「期号：XXX」；查看全部变更可展开历史版本
-            4. ★ 大乐透后区 02+09 查询 → 两个绿色分组标题（DLT 2026 7级 & DLT 2019 9级）独立分行
-            5. 断网重装 seed 老期 issue≈20020 → 【本期适用】超级大乐透2019版（9级）+9对奖级
-            6. SSQ 福运奖停发整行浅灰；DLT 奖池≥8亿三~七等奖绿色上浮高亮
-          files: LotteryHistoryQuery_v24.2.apk
+            ## v24.2 公网部署版 · 双端 APK
+            ### 用户端 APP
+            - `LotteryHistoryQuery_v24.2.apk`
+            ### 管理端 APP
+            - `LotteryAdmin_v1.0.apk`
+          files: |
+            LotteryHistoryQuery_v24.2.apk
+            LotteryAdmin_v1.0.apk
           prerelease: false
