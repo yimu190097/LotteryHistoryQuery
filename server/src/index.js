@@ -13,6 +13,7 @@ const userRoutes = require('./routes/users');
 const statsRoutes = require('./routes/stats');
 const configRoutes = require('./routes/config');
 const chatRoutes = require('./routes/chat');
+const deployRoutes = require('./routes/deploy');
 const { authMiddleware } = require('./middleware/auth');
 
 const app = express();
@@ -150,6 +151,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/deploy', deployRoutes);
 
 // 文件上传（需要客户端 Token 或管理员 Token）
 app.post('/api/upload', authMiddleware, upload.single('file'), (req, res) => {
