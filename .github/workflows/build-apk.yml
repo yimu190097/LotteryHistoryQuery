@@ -1,4 +1,4 @@
-name: Build & Release APK v24.1
+name: Build & Release APK v24.2
 
 on:
   push:
@@ -49,21 +49,21 @@ jobs:
             find app/build/outputs -type f
             exit 1
           fi
-          cp "$APK" "LotteryHistoryQuery_v24.1.apk"
-          ls -lh LotteryHistoryQuery_v24.1.apk
+          cp "$APK" "LotteryHistoryQuery_v24.2.apk"
+          ls -lh LotteryHistoryQuery_v24.2.apk
 
-      - name: 创建 GitHub Release v24.1
+      - name: 创建 GitHub Release v24.2
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v24.1
-          name: v24.1 期政策自适应展示 · 单分支整合版（GitHub UI 可见修复版·强制 has_downloads 开启）
+          tag_name: v24.2
+          name: v24.2 公网部署版 · 指向 Ubuntu 虚拟机云端地址
           body: |
-            ## v24.1 📥 从哪里下载 APK？（找不到 Releases 的看这里）
+            ## v24.2 📥 从哪里下载 APK？（找不到 Releases 的看这里）
 
-            ### 方法 ①：本页面最下方 【Assets】 区 直接点 `LotteryHistoryQuery_v24.1.apk` ← 就这个文件！
+            ### 方法 ①：本页面最下方 【Assets】 区 直接点 `LotteryHistoryQuery_v24.2.apk` ← 就这个文件！
             ### 方法 ②：复制直链（手机浏览器直接打开下载）
             ```
-            https://github.com/yimu190097/LotteryHistoryQuery/releases/download/v24.1/LotteryHistoryQuery_v24.1.apk
+            https://github.com/yimu190097/LotteryHistoryQuery/releases/download/v24.2/LotteryHistoryQuery_v24.2.apk
             ```
             ### 方法 ③：仓库首页怎么找 Releases？
             - 顶部导航标签栏：`<> Code` 右边有 **`⬇️ N Releases`** → 点它
@@ -111,5 +111,5 @@ jobs:
             4. ★ 大乐透后区 02+09 查询 → 两个绿色分组标题（DLT 2026 7级 & DLT 2019 9级）独立分行
             5. 断网重装 seed 老期 issue≈20020 → 【本期适用】超级大乐透2019版（9级）+9对奖级
             6. SSQ 福运奖停发整行浅灰；DLT 奖池≥8亿三~七等奖绿色上浮高亮
-          files: LotteryHistoryQuery_v24.1.apk
+          files: LotteryHistoryQuery_v24.2.apk
           prerelease: false

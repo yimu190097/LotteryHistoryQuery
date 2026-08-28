@@ -15,16 +15,21 @@ android {
         applicationId = "com.lottery.history"
         minSdk = 24
         targetSdk = 34
-        versionCode = 41
-        versionName = "23.5"
+        versionCode = 42
+        versionName = "23.6"
     }
 
     signingConfigs {
-        create("release") {
-            storeFile = file("release.keystore")
-            storePassword = "Lottery2026"
-            keyAlias = "lottery"
-            keyPassword = "Lottery2026"
+        // 本地存在 release.keystore 时启用正式签名（商店发布用）；
+        // 不存在时（如 CI）不创建，统一回退到 AGP 内置 debug 签名，保证能构建出可安装 APK。
+        val keystoreFile = file("release.keystore")
+        if (keystoreFile.exists()) {
+            create("release") {
+                storeFile = keystoreFile
+                storePassword = "Lottery2026"
+                keyAlias = "lottery"
+                keyPassword = "Lottery2026"
+            }
         }
     }
 
@@ -32,11 +37,15 @@ android {
         release {
             isMinifyEnabled = false
             isShrinkResources = false
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (file("release.keystore").exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         debug {
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName("debug")
             // JaCoCo 覆盖率：允许 debug buildType 生成本地单元测试的执行数据（AGP 8.x 新 API）
             testCoverage {
                 enableUnitTestCoverage = true

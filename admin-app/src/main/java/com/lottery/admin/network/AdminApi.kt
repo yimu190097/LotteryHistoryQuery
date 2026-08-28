@@ -24,7 +24,7 @@ object AdminApi {
         .build()
 
     /** 默认服务器地址，发布时替换为实际域名 */
-    var baseUrl = "https://gsm-operated-bernard-clean.trycloudflare.com"
+    var baseUrl = "https://hypothetical-loc-earning-nutritional.trycloudflare.com"
     var token: String? = null
 
     // ========== 数据模型 ==========
