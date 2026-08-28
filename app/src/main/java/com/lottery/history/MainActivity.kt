@@ -382,7 +382,7 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             var success = false
             try {
-                val result: RefreshResult = withTimeoutOrNull(90_000L) {
+                val result: RefreshResult? = withTimeoutOrNull(90_000L) {
                     LotteryDataManager.refresh(this@MainActivity)
                 }
                 if (result == null) {
@@ -413,7 +413,7 @@ class MainActivity : AppCompatActivity() {
         binding.tvDataStatus.text = getString(R.string.refreshing)
         lifecycleScope.launch {
             try {
-                val result: RefreshResult = withTimeoutOrNull(90_000L) {
+                val result: RefreshResult? = withTimeoutOrNull(90_000L) {
                     withContext(Dispatchers.IO) {
                         LotteryDataManager.refresh(this@MainActivity)
                     }
