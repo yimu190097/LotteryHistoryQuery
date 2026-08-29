@@ -735,6 +735,16 @@ async function renderDownloads() {
           <button class="btn btn-primary btn-sm" onclick="copyLink('${base}')">复制链接</button>
           <a href="${base}" target="_blank" class="btn btn-outline btn-sm">打开</a>
         </div>
+        <div style="display:flex;align-items:center;gap:16px;padding:12px;background:var(--bg-hover);border-radius:var(--radius)">
+          <span style="font-size:24px">🌏</span>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:15px">用户端网页版</div>
+            <div style="color:var(--text-secondary);font-size:13px">与 APP 同数据，浏览器直接查询开奖历史，无需安装</div>
+            <div style="color:var(--primary);font-size:12px;margin-top:4px;word-break:break-all">${base}/web/</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="copyLink('${base}/web/')">复制链接</button>
+          <a href="${base}/web/" target="_blank" class="btn btn-outline btn-sm">打开</a>
+        </div>
         <div style="display:flex;align-items:center;gap:16px;padding:12px;background:var(--bg-hover);border-radius:var(--radius)" id="adminApkEntry">
           <span style="font-size:24px">🛠️</span>
           <div style="flex:1">
