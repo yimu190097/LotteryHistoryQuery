@@ -3,247 +3,880 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>彩票历史查询 - 用户端网页版</title>
+<title>开奖历史查询 - 用户端网页版（APK像素级还原）</title>
 <style>
-  :root {
-    --primary: #2563eb; --bg: #f1f5f9; --card: #ffffff; --text: #0f172a;
-    --text2: #64748b; --border: #e2e8f0; --blue: #2563eb; --red: #dc2626;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
-    background: var(--bg); color: var(--text); min-height: 100vh; }
-  header { background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #fff;
-    padding: 20px 24px; }
-  header h1 { font-size: 20px; }
-  header p { font-size: 13px; opacity: .85; margin-top: 4px; }
-  .wrap { max-width: 960px; margin: 20px auto; padding: 0 16px; }
-  .toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
-    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-    padding: 14px 16px; margin-bottom: 16px; }
-  .toolbar label { font-size: 14px; font-weight: 600; color: var(--text2); }
-  select, input { font-size: 14px; padding: 8px 12px; border: 1px solid var(--border);
-    border-radius: 8px; background: #fff; color: var(--text); }
-  button { font-size: 14px; padding: 9px 18px; border: none; border-radius: 8px;
-    background: var(--primary); color: #fff; cursor: pointer; font-weight: 600; }
-  button:disabled { opacity: .5; cursor: not-allowed; }
-  .hint { font-size: 12px; color: var(--text2); margin-top: 6px; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-    padding: 16px; }
-  .card h2 { font-size: 16px; margin-bottom: 12px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { padding: 9px 10px; text-align: center; border-bottom: 1px solid var(--border); }
-  th { background: #f8fafc; color: var(--text2); font-weight: 600; position: sticky; top: 0; }
-  .num { display: inline-block; width: 26px; height: 26px; line-height: 26px;
-    border-radius: 50%; font-size: 12px; font-weight: 700; color: #fff; margin: 1px; }
-  .num.red { background: var(--red); }
-  .num.blue { background: var(--blue); }
-  .loading { text-align: center; color: var(--text2); padding: 30px; }
-  .empty { text-align: center; color: var(--text2); padding: 30px; }
-  .modes { display: flex; gap: 8px; margin-bottom: 16px; }
-  .modes button { background: var(--card); color: var(--text); border: 1px solid var(--border);
-    font-weight: 500; }
-  .modes button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
-  .panel { display: none; }
-  .panel.show { display: block; }
-  .fields { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .fields .n { display: flex; gap: 6px; flex-wrap: wrap; }
-  .fields .n input { width: 48px; text-align: center; }
-  .hit { margin-top: 14px; font-size: 14px; }
-  .hit.ok { color: #15803d; font-weight: 700; }
-  .hit.no { color: var(--text2); }
-  .jd-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
-  .jd-nav span { font-size: 14px; font-weight: 600; }
+/* ============ APK 配色（colors.xml 原样） ============ */
+:root{
+  --red_ball:#D32F2F; --blue_ball:#1976D2; --white_ball:#FFFFFF;
+  --ball_text_selected:#FFFFFF; --ball_text_normal:#333333; --ball_border:#CCCCCC;
+  --primary_red:#C62828; --primary_blue:#1565C0;
+  --bg_light:#F5F5F5; --surface:#FFFFFF;
+  --text_primary:#212121; --text_secondary:#757575; --text_hint:#616161;
+  --divider:#E0E0E0; --divider_subtle:#E0E0E0;
+  --button_red:#C62828; --button_gray:#BDBDBD; --surface_variant:#F5F5F5;
+  /* 字号（sp 原样）：micro<tiny<small<body<title<subtitle */
+  --micro:13px; --tiny:14px; --small:15px; --body:17px; --title:19px; --subtitle:21px;
+  --card_margin:12px; --card_padding:14px; --page_padding:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+  background:#37474F;  /* 桌面调试观感：深色底衬托手机框架 */
+  display:flex;align-items:flex-start;justify-content:center;
+  padding:24px 0;min-height:100vh;
+}
+/* ============ 手机外壳（宽 360dp，1dp=1px） ============ */
+#device{
+  width:360px;background:var(--surface);box-shadow:0 12px 40px rgba(0,0,0,.45);
+  border-radius:22px;overflow:hidden;position:relative;
+}
+#screen{height:calc(100vh - 120px);min-height:600px;background:var(--bg_light);
+  overflow-y:auto;position:relative;scrollbar-width:none;-ms-overflow-style:none;}
+#screen::-webkit-scrollbar{display:none;}
+
+/* ================= Toolbar ================= */
+#toolbar{background:var(--primary_red);height:56px;display:flex;align-items:center;
+  padding:0 4px;position:sticky;top:0;z-index:20;}
+#toolbar .title{flex:1;color:#fff;font-size:20px;font-weight:bold;padding-left:12px;white-space:nowrap;overflow:hidden;}
+#toolbar .act{color:#fff;font-size:12px;padding:6px 7px;border-radius:6px;cursor:pointer;white-space:nowrap;font-weight:600;}
+
+/* ================= 最新开奖区（白底） ================= */
+#latestSection{background:#fff;}
+#latestHead{display:flex;align-items:center;padding:8px 12px 4px;}
+#latestHead .t{flex:1;font-size:var(--body);font-weight:bold;color:var(--text_primary);}
+#latestHead .all{color:var(--primary_red);font-size:var(--small);font-weight:bold;padding:4px 10px;cursor:pointer;}
+#latestScroller{display:flex;gap:0;overflow-x:auto;padding:2px 6px 8px;scrollbar-width:none;}
+#latestScroller::-webkit-scrollbar{display:none;}
+.lcard{flex:0 0 auto;width:170px;margin:6px;padding:8px;border-radius:8px;
+  border:1px solid #E0E0E0;background:#fff;cursor:pointer;}
+.lcard .r1{display:flex;align-items:center;}
+.lcard .ln{font-size:14px;font-weight:bold;color:var(--primary_red);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:4px;}
+.lcard .iss{flex:1;text-align:right;font-size:12px;color:var(--text_secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lcard .dt{font-size:12px;color:var(--text_secondary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lcard .balls{display:flex;flex-wrap:wrap;margin-top:6px;}
+.lcard .bt{width:20px;height:20px;line-height:20px;text-align:center;border-radius:50%;
+  font-size:10px;font-weight:700;color:#fff;margin:1px;}
+.lcard .plus{font-size:13px;color:var(--text_secondary);margin:0 2px;line-height:20px;}
+.lcard .view{margin-top:4px;text-align:right;font-size:12px;font-weight:bold;color:var(--primary_red);}
+
+/* ================= 数据状态条 ================= */
+#dataStatus{background:#FFF3E0;color:#E65100;font-size:var(--small);text-align:center;
+  padding:4px 12px;line-height:1.5;}
+
+/* ================= 用户信息栏 ================= */
+#userBar{background:var(--bg_light);display:flex;align-items:center;padding:8px 12px;}
+#userPhone{color:var(--primary_red);font-size:var(--body);font-weight:bold;padding:4px 8px;cursor:pointer;}
+#userBar .dv{width:1px;height:16px;background:#E0E0E0;margin:0 8px;}
+#quotaInfo{flex:1;color:var(--text_secondary);font-size:var(--small);}
+
+/* ================= 彩种 Tab（2×4 吸顶） ================= */
+#tabBar{background:var(--primary_red);position:sticky;top:56px;z-index:19;padding:8px 8px 6px;}
+#tabGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 6px;}
+.tab{height:56px;display:flex;align-items:center;justify-content:center;border-radius:6px;
+  color:#E6FFFFFF;font-size:18px;font-weight:bold;border:1px solid rgba(255,255,255,.35);
+  background:transparent;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tab.on{background:#fff;color:var(--primary_red);border:2px solid var(--primary_red);}
+#whiteLine{height:1px;background:#fff;opacity:.75;margin-top:6px;}
+
+/* ================= 内容区 ================= */
+#content{padding:var(--page_padding);}
+.card{background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.15);
+  margin-bottom:var(--card_margin);padding:var(--card_padding);}
+
+/* 按期号查询 */
+#issueCard .t{color:var(--primary_red);font-size:var(--title);font-weight:bold;margin-bottom:8px;}
+#issueHint{font-size:var(--small);color:var(--text_secondary);margin-bottom:8px;line-height:1.5;}
+#issueRow{display:flex;align-items:center;}
+#issueInput{flex:1;height:48px;border:1px solid #CFD8DC;border-radius:8px;padding:0 12px;
+  font-size:var(--body);color:var(--text_primary);background:#fff;outline:none;}
+#issueInput::placeholder{color:var(--text_secondary);}
+#btnByIssue{flex:0 0 auto;height:48px;line-height:48px;margin-left:8px;padding:0 16px;
+  background:var(--primary_blue);color:#fff;font-size:var(--body);border-radius:8px;
+  text-align:center;cursor:pointer;font-weight:600;}
+
+/* 选号对比 */
+#pickCard .lab{color:var(--primary_red);font-size:var(--title);font-weight:bold;margin-bottom:6px;}
+#pkSelectedText{color:var(--primary_red);font-size:var(--small);margin-top:2px;margin-bottom:4px;min-height:20px;}
+#pkSelectedBalls{display:flex;flex-wrap:wrap;margin-bottom:6px;min-height:32px;}
+#pkTitle{color:var(--text_primary);font-size:var(--body);font-weight:bold;}
+#pkGrid{display:flex;flex-wrap:wrap;margin-top:4px;margin-bottom:8px;}
+/* 后区 */
+#scSection{margin-top:2px;}
+#scSelectedText{color:var(--primary_blue);font-size:var(--small);margin-bottom:4px;min-height:20px;}
+#scSelectedBalls{display:flex;flex-wrap:wrap;margin-bottom:6px;min-height:32px;}
+#scTitle{color:var(--text_primary);font-size:var(--body);font-weight:bold;}
+#scGrid{display:flex;flex-wrap:wrap;margin-top:4px;margin-bottom:12px;}
+/* 模式 Chips（3D/排列三） */
+#chipRow{display:flex;margin:6px 0 4px;}
+.chip{font-size:var(--small);font-weight:bold;padding:8px 14px;border-radius:6px;
+  margin-right:8px;cursor:pointer;border:none;}
+.chip.on{background:var(--primary_red);color:#fff;}
+.chip.off{background:#ECEFF1;color:#546E7A;}
+/* 位置球（3D/排列三 百十个） */
+#posRow{display:flex;justify-content:center;margin-bottom:8px;gap:0;}
+.posCol{flex:1;text-align:center;}
+.posCol .pt{color:#546E7A;font-size:13px;padding-bottom:4px;}
+.posCol .pball{width:32px;height:32px;line-height:32px;margin:0 auto;border-radius:50%;
+  font-size:12px;font-weight:700;color:#BDBDBD;background:#fff;border:1px solid #BDBDBD;cursor:pointer;}
+.posCol .pball.on{background:var(--primary_red);color:#fff;border-color:var(--primary_red);}
+.posCol .ptip{color:#9E9E9E;font-size:11px;padding-top:3px;}
+/* 选号球 */
+.ball{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;
+  font-family:monospace;font-weight:700;background:#fff;border:1px solid var(--ball_border);
+  color:var(--ball_text_normal);cursor:pointer;user-select:none;}
+.ball.on{background:var(--primary_red);border-color:var(--primary_red);color:#fff;}
+.ball.sec.on{background:var(--primary_blue);border-color:var(--primary_blue);color:#fff;}
+
+/* 按钮行 */
+#btnRow{display:flex;align-items:center;}
+#btnReset,#btnQuery{height:52px;flex:1;display:flex;align-items:center;justify-content:center;
+  border-radius:8px;font-size:var(--body);font-weight:600;color:#fff;cursor:pointer;border:none;}
+#btnReset{background:var(--button_gray);margin-right:6px;}
+#btnQuery{background:var(--button_red);margin-left:6px;}
+
+/* ================= 查询结果 ================= */
+#resultCard .head{display:flex;align-items:center;padding-bottom:6px;}
+#resultCard .ht{flex:1;text-align:center;font-size:var(--title);font-weight:bold;color:var(--text_primary);}
+#btnHistory{font-size:var(--small);font-weight:bold;color:var(--primary_red);
+  background:#FFF0EC;border:1px solid #F4C7BC;border-radius:6px;padding:4px 10px;cursor:pointer;}
+#selText{padding-bottom:4px;font-size:var(--small);color:var(--text_hint);line-height:1.5;white-space:pre-wrap;}
+#resultBallsRow .rb{display:flex;align-items:center;margin-top:2px;flex-wrap:wrap;}
+#resultBallsRow .rblb{color:var(--red_ball);font-size:var(--small);font-weight:bold;margin-right:4px;}
+#resultBallsRow .rbsl{color:var(--blue_ball);font-size:var(--small);font-weight:bold;margin-right:4px;}
+#resultBallsRow .ball{pointer-events:none;}
+.hline{height:0.5px;background:var(--divider);margin:6px 0;}
+/* 结果表头 */
+#tblHead{display:flex;align-items:center;padding:8px 0 6px;background:#F7F7F7;}
+#tblHead span{text-align:center;font-weight:bold;}
+#tblHead .hPrize{flex:1.3;font-size:var(--small);color:var(--text_primary);}
+#tblHead .hPri{flex:1.1;font-size:var(--small);color:var(--red_ball);}
+#tblHead .hSec{flex:1.1;font-size:var(--small);color:var(--blue_ball);}
+#tblHead .hCnt{flex:0.9;font-size:var(--small);color:var(--text_primary);}
+#tblHead .hAct{flex:1.1;font-size:var(--small);color:var(--text_primary);}
+/* 结果行 */
+.row{display:flex;align-items:center;padding:0;}
+.row:nth-child(even){background:#FAFAFA;}
+.row div{text-align:center;padding:10px 2px;font-size:15px;}
+.row .cPrize{flex:1.3;font-weight:bold;}
+.row .cPri{flex:1.1;font-weight:bold;}
+.row .cSec{flex:1.1;font-weight:bold;}
+.row .cCnt{flex:0.9;font-weight:bold;}
+.row .cAct{flex:1.1;}
+.row .actbtn{padding:8px 0;border-radius:8px;font-size:15px;font-weight:bold;color:#fff;display:inline-block;min-width:52px;cursor:pointer;}
+.row .actbtn.yes{background:var(--button_red);}
+.row .actbtn.no{background:var(--button_gray);}
+.rdiv{height:0.5px;background:#EFEFEF;}
+
+/* ================= 弹窗遮罩 ================= */
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:50;}
+.mask.show{display:flex;}
+.dialog{width:340px;max-height:78vh;background:#fff;border-radius:8px;display:flex;flex-direction:column;overflow:hidden;}
+.dialog .dhead{position:relative;padding:14px;text-align:center;font-size:var(--subtitle);font-weight:bold;color:var(--text_primary);}
+.dialog .dhead .close{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--text_secondary);font-size:var(--body);cursor:pointer;padding:6px 12px;}
+.dialog .dbody{overflow-y:auto;padding:0 14px 14px;scrollbar-width:none;}
+.dialog .dbody::-webkit-scrollbar{display:none;}
+
+/* 授权/登录 */
+.auth-field{height:48px;border:1px solid #CFD8DC;border-radius:8px;padding:0 12px;font-size:var(--body);width:100%;margin-bottom:14px;outline:none;}
+.auth-btn{height:52px;border-radius:8px;background:var(--button_red);color:#fff;font-size:var(--body);font-weight:bold;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;width:100%;}
+.auth-switch{text-align:center;color:var(--primary_red);font-size:var(--small);margin-top:12px;cursor:pointer;}
+.auth-title{font-weight:bold;}
+
+/* 查询历史条目 & 详情 */
+.hitem{padding:6px;border-bottom:0.5px solid var(--divider);}
+.hitem .r0{display:flex;align-items:center;margin-bottom:3px;}
+.hitem .idx{color:var(--text_secondary);font-size:var(--micro);min-width:18px;text-align:center;}
+.hitem .iss{color:var(--text_primary);font-size:var(--small);font-weight:bold;margin-left:6px;font-family:monospace;}
+.hitem .dt{flex:1;color:var(--text_secondary);font-size:var(--micro);text-align:right;margin-left:6px;}
+.hitem .badge{font-size:var(--micro);font-weight:bold;color:#1B5E20;background:#E8F5E9;border-radius:4px;padding:2px 6px;border:1px solid #A5D6A7;}
+.hitem .balls{display:flex;flex-wrap:wrap;margin-top:2px;}
+.hitem .bt{width:26px;height:26px;line-height:26px;text-align:center;border-radius:50%;font-size:11px;font-weight:700;color:#fff;margin:2px;}
+.hitem .view{text-align:right;margin-top:4px;}
+.hitem .view span{font-size:var(--micro);font-weight:bold;color:#fff;background:var(--button_red);border-radius:6px;padding:4px 10px;cursor:pointer;}
+.tierRow{display:flex;align-items:center;border-bottom:0.5px solid var(--divider);padding:10px 2px;font-size:15px;}
+.tierRow .nm{flex:1;}
+.tierRow .nm .pr{font-weight:bold;}
+.tierRow .nm .dsc{font-size:12px;color:var(--text_secondary);}
+.tierRow .amt{text-align:right;font-weight:bold;color:var(--primary_red);}
+.empty{text-align:center;color:var(--text_secondary);padding:30px;font-size:var(--small);}
 </style>
 </head>
 <body>
-<header>
-  <h1>&#127921; 彩票历史查询</h1>
-  <p>用户端网页版 &#183; 直连官方数据源（与 APP 数据一致）</p>
-</header>
-<div class="wrap">
-  <div class="toolbar">
-    <label>彩种</label>
-    <select id="typeSel"></select>
-    <button id="queryBtn" onclick="loadDraws()">查询开奖历史</button>
-    <button id="latestBtn" onclick="loadDraws(true)" style="background:#16a34a">最新一期</button>
-  </div>
-
-  <div class="modes">
-    <button class="active" data-mode="history" onclick="switchMode('history')">开奖历史</button>
-    <button data-mode="check" onclick="switchMode('check')">选号命中检测</button>
-  </div>
-
-  <div class="panel show" id="panel-history">
-    <div class="jd-nav" id="historyNav"></div>
-    <div class="card">
-      <h2 id="hisTitle">开奖历史（近 30 期）</h2>
-      <div style="overflow:auto;max-height:560px">
-        <table>
-          <thead><tr><th>期号</th><th>开奖日期</th><th id="mainHead">号码</th><th id="ballHead" style="display:none">蓝球/后区</th></tr></thead>
-          <tbody id="drawRows"></tbody>
-        </table>
-      </div>
+<div id="device">
+  <div id="screen">
+    <!-- Toolbar -->
+    <div id="toolbar">
+      <div class="title">开奖历史查询</div>
+      <div class="act" onclick="openAuthDialog()">登录</div>
+      <div class="act" onclick="openLatestAll()">最新</div>
+      <div class="act" onclick="focusIssueInput()">期号</div>
+      <div class="act" onclick="refreshData()">刷新</div>
     </div>
-  </div>
 
-  <div class="panel" id="panel-check">
-    <div class="card">
-      <h2>选号命中检测</h2>
-      <div class="fields">
-        <div class="n" id="mainFields"></div>
-        <div class="n" id="ballFields"></div>
-        <button onclick="doCheck()">检测本期是否命中</button>
+    <!-- 最新开奖区 -->
+    <div id="latestSection">
+      <div id="latestHead">
+        <div class="t">最新开奖</div>
+        <div class="all" onclick="openLatestAll()">查看全部</div>
       </div>
-      <div class="hint" id="checkHint">先点击「最新一期」获取最新开奖号码，再输入你的选号进行命中检测。</div>
-      <div class="hit" id="checkResult"></div>
+      <div id="latestScroller"></div>
+    </div>
+
+    <!-- 数据状态条 -->
+    <div id="dataStatus">正在获取最新开奖数据...</div>
+
+    <!-- 用户信息栏 -->
+    <div id="userBar">
+      <div id="userPhone" onclick="openAuthDialog()">点击登录</div>
+      <div class="dv"></div>
+      <div id="quotaInfo"></div>
+    </div>
+
+    <!-- 彩种 Tab -->
+    <div id="tabBar">
+      <div id="tabGrid"></div>
+      <div id="whiteLine"></div>
+    </div>
+
+    <!-- 内容区 -->
+    <div id="content">
+      <!-- 按期号查询 -->
+      <div class="card" id="issueCard">
+        <div class="t">📅 按期号查询（只记得期号？直接输）</div>
+        <div id="issueHint"></div>
+        <div id="issueRow">
+          <input id="issueInput" inputmode="numeric" placeholder="">
+          <div id="btnByIssue">查该期</div>
+        </div>
+      </div>
+
+      <!-- 选号对比 -->
+      <div class="card" id="pickCard">
+        <div class="lab" id="pkLabel">选号对比</div>
+        <div id="chipRow"></div>
+        <div id="posRow"></div>
+        <div id="pkSelectedText"></div>
+        <div id="pkSelectedBalls"></div>
+        <div id="pkTitle"></div>
+        <div id="pkGrid"></div>
+        <div id="scSection">
+          <div id="scSelectedText"></div>
+          <div id="scSelectedBalls"></div>
+          <div id="scTitle"></div>
+          <div id="scGrid"></div>
+        </div>
+        <div id="btnRow">
+          <div id="btnReset" onclick="resetSelection()">重置</div>
+          <div id="btnQuery" onclick="doQuery()">开始查询</div>
+        </div>
+      </div>
+
+      <!-- 查询结果 -->
+      <div class="card" id="resultCard">
+        <div class="head">
+          <div class="ht">查询结果</div>
+          <div id="btnHistory" onclick="openQueryRecord()">查询历史</div>
+        </div>
+        <div id="selText">请选择号码后点击查询</div>
+        <div id="resultBallsRow">
+          <div class="rb" id="rRedRow"><span class="rblb" id="rRedLabel"></span><span id="rRedBalls"></span></div>
+          <div class="rb" id="rBlueRow" style="display:none"><span class="rbsl" id="rBlueLabel"></span><span id="rBlueBalls"></span></div>
+        </div>
+        <div class="hline"></div>
+        <div id="tblHead"></div>
+        <div class="hline"></div>
+        <div id="resultContainer"></div>
+      </div>
     </div>
   </div>
 </div>
 
+<!-- 最新开奖全部 弹窗 -->
+<div class="mask" id="maskLatest"><div class="dialog" style="height:440px">
+  <div class="dhead">最新开奖（8彩种）<span class="close" onclick="closeMask('maskLatest')">关闭</span></div>
+  <div class="dbody" id="latestAllBody"></div>
+</div></div>
+
+<!-- 查询历史 弹窗 -->
+<div class="mask" id="maskHistory"><div class="dialog">
+  <div class="dhead">查询历史<span class="close" onclick="closeMask('maskHistory')">关闭</span></div>
+  <div class="dbody" id="historyBody"></div>
+</div></div>
+
+<!-- 开奖详情 弹窗 -->
+<div class="mask" id="maskDetail"><div class="dialog">
+  <div class="dhead" id="detailTitle">开奖详情<span class="close" onclick="closeMask('maskDetail')">关闭</span></div>
+  <div class="dbody" id="detailBody"></div>
+</div></div>
+
+<!-- 登录/注册 弹窗 -->
+<div class="mask" id="maskAuth"><div class="dialog" style="width:320px">
+  <div class="dhead auth-title" id="authTitle">登录<span class="close" onclick="closeMask('maskAuth')">关闭</span></div>
+  <div class="dbody">
+    <input class="auth-field" id="authPhone" placeholder="请输入手机号" inputmode="numeric">
+    <input class="auth-field" id="authPass" type="password" placeholder="请输入密码（至少6位）">
+    <button class="auth-btn" id="authBtn" onclick="submitAuth()">登录</button>
+    <div class="auth-switch" id="authSwitch" onclick="toggleAuthMode()">没有账号？去注册</div>
+  </div>
+</div></div>
+
 <script>
-const LOTTERY_TYPES = [
-  { code: 'ssq', name: '双色球', main: 6, ball: 1 },
-  { code: 'dlt', name: '大乐透', main: 5, ball: 2 },
-  { code: '3d',  name: '福彩3D', main: 3, ball: 0 },
-  { code: 'pl3', name: '排列三', main: 3, ball: 0 },
-  { code: 'pl5', name: '排列五', main: 5, ball: 0 },
-  { code: 'qx',  name: '七星彩', main: 7, ball: 0 },
-  { code: 'kl8', name: '快乐8',  main: 20, ball: 0 },
-  { code: 'qlc', name: '七乐彩', main: 7, ball: 0 },
+/* ============ 彩种配置（与 LotteryType.kt 最新政策一致） ============ */
+var TYPES=[
+ {code:'ssq',api:'ssq',name:'双色球',mainN:6,mainMin:1,mainMax:33,mainLabel:'红球',
+  hasSec:true,secN:1,secMin:1,secMax:16,secLabel:'蓝球',parseMain:6,parseSec:1,
+  pos:false,pr:[['一等奖',[[6,1]],null],['二等奖',[[6,0]],null],['三等奖',[[5,1]],3000],
+   ['四等奖',[[5,0],[4,1]],200],['五等奖',[[4,0],[3,1]],10],['六等奖',[[2,1],[1,1],[0,1]],5],
+   ['福运奖',[[3,0]],5]],set3:false},
+ {code:'dlt',api:'dlt',name:'大乐透',mainN:5,mainMin:1,mainMax:35,mainLabel:'前区',
+  hasSec:true,secN:2,secMin:1,secMax:12,secLabel:'后区',parseMain:5,parseSec:2,
+  pos:false,pr:[['一等奖',[[5,2]],null],['二等奖',[[5,1]],null],['三等奖',[[5,0],[4,2]],5000],
+   ['四等奖',[[4,1]],300],['五等奖',[[4,0],[3,2]],150],['六等奖',[[3,1],[2,2]],15],
+   ['七等奖',[[3,0],[2,1],[1,2],[0,2]],5]],set3:false},
+ {code:'3d',api:'3d',name:'福彩3D',mainN:3,mainMin:0,mainMax:9,mainLabel:'号码',
+  hasSec:false,secN:0,secMin:0,secMax:0,secLabel:'',parseMain:3,parseSec:0,
+  pos:true,pr:[['直选奖',[[3,0]],1040],['组选3',[[3,0]],346],['组选6',[[3,0]],173]],set3:true},
+ {code:'7lc',api:'qlc',name:'七乐彩',mainN:7,mainMin:1,mainMax:30,mainLabel:'基本号',
+  hasSec:true,secN:1,secMin:1,secMax:30,secLabel:'特别号',parseMain:7,parseSec:1,
+  pos:false,pr:[['一等奖',[[7,0]],null],['二等奖',[[6,1]],null],['三等奖',[[6,0]],null],
+   ['四等奖',[[5,1]],200],['五等奖',[[5,0]],50],['六等奖',[[4,1]],10],['七等奖',[[4,0]],5]],set3:false},
+ {code:'p3',api:'pl3',name:'排列三',mainN:3,mainMin:0,mainMax:9,mainLabel:'号码',
+  hasSec:false,secN:0,secMin:0,secMax:0,secLabel:'',parseMain:3,parseSec:0,
+  pos:true,pr:[['直选奖',[[3,0]],1040],['组选3',[[3,0]],346],['组选6',[[3,0]],173]],set3:true},
+ {code:'p5',api:'pl5',name:'排列五',mainN:5,mainMin:0,mainMax:9,mainLabel:'号码',
+  hasSec:false,secN:0,secMin:0,secMax:0,secLabel:'',parseMain:5,parseSec:0,
+  pos:false,pr:[['一等奖',[[5,0]],100000]],set3:false},
+ {code:'7xc',api:'qx',name:'七星彩',mainN:6,mainMin:0,mainMax:9,mainLabel:'前6位',
+  hasSec:true,secN:1,secMin:0,secMax:14,secLabel:'后1位',parseMain:6,parseSec:1,
+  pos:false,pr:[['一等奖',[[6,1]],null],['二等奖',[[6,0]],null],['三等奖',[[5,1]],3000],
+   ['四等奖',[[5,0],[4,1]],500],['五等奖',[[4,0],[3,1]],30],['六等奖',[[3,0],[2,1],[1,1],[0,1]],5]],set3:false},
+ {code:'kl8',api:'kl8',name:'快乐8',mainN:10,mainMin:1,mainMax:80,mainLabel:'号码',
+  hasSec:false,secN:0,secMin:0,secMax:0,secLabel:'',parseMain:20,parseSec:0,
+  pos:false,pr:[['一等奖',[[10,0]],null],['二等奖',[[9,0]],8000],['三等奖',[[8,0]],800],
+   ['四等奖',[[7,0]],80],['五等奖',[[6,0]],5],['六等奖',[[5,0]],3],['七等奖',[[0,0]],2]],set3:false}
 ];
+var POSITIONAL = ['3d','p3'];
+var MODES = ['直选','组选3','组选6'];
 
-let curType = LOTTERY_TYPES[0];
-let latestDraws = [];
-let latestMain = null;
-let latestBall = null;
+var cur = TYPES[0];
+var selMain = new Set(), selSec = new Set();
+var posVals = [-1,-1,-1], modeIdx = 0;
+var draws = [], latestMap = {};
+var historyRecs = {}; // code -> [record]
 
-function $(id){ return document.getElementById(id); }
+function $(id){return document.getElementById(id);}
+function pad2(n){return (n<10?'0':'')+n;}
 
-const typeSel = $('typeSel');
-LOTTERY_TYPES.forEach(t => {
-  const op = document.createElement('option');
-  op.value = t.code; op.textContent = t.name;
-  typeSel.appendChild(op);
-});
-typeSel.addEventListener('change', () => {
-  curType = LOTTERY_TYPES.find(t => t.code === typeSel.value);
-  buildTypeUI();
-});
-
-function buildTypeUI() {
-  $('mainHead').textContent = curType.ball > 0 ? '红球/前区' : '号码';
-  $('ballHead').style.display = curType.ball > 0 ? '' : 'none';
-  $('mainFields').innerHTML = (curType.ball > 0 ? '红球/前区：' : '选号：') +
-    Array.from({length: curType.main}, () => '<input type="number" min="0" max="80" class="mainIn" placeholder="数">').join('');
-  $('ballFields').innerHTML = curType.ball > 0 ? '蓝球/后区：' +
-    Array.from({length: curType.ball}, () => '<input type="number" min="1" max="20" class="ballIn" placeholder="数">').join('') : '';
-  document.querySelectorAll('.mainIn').forEach(i => i.value = '');
-  document.querySelectorAll('.ballIn').forEach(i => i.value = '');
-  buildJdNav();
+/* ---------- 球尺寸 / 列数（computeBallLayout 原样） ---------- */
+function ballLayout(){
+  var totalPad = 20*2, avail = 360 - totalPad, margin = 3;
+  var range = cur.mainMax - cur.mainMin + 1;
+  var columns;
+  if(range<=10) columns=5;
+  else if(range<=12) columns=6;
+  else if(range<=22) columns=6;
+  else if(range<=30) columns=7;
+  else columns=7;
+  var bs = Math.floor((avail - columns*margin)/columns);
+  while(bs < 32 && columns > 4){columns--; bs = Math.floor((avail - columns*margin)/columns);}
+  bs = Math.min(bs,38); if(bs<32)bs=32;
+  return {cols:columns, size:bs, margin:margin};
 }
 
-let page = 0;
-function buildJdNav() {
-  $('historyNav').innerHTML = '<span>第 ' + (page + 1) + ' 页</span>' +
-    '<button onclick="prevPage()">上一页</button>' +
-    '<button onclick="nextPage()">下一页</button>';
+/* ---------- Tab ---------- */
+function buildTabs(){
+  var g=$('tabGrid'); g.innerHTML='';
+  TYPES.forEach(function(t,i){
+    var d=document.createElement('div');
+    d.className='tab'+(i===0?' on':'');
+    d.textContent=t.name;
+    d.setAttribute('data-i',i);
+    d.onclick=function(){selectTab(i);};
+    g.appendChild(d);
+  });
 }
-function prevPage(){ if(page>0){ page--; loadDraws(); } }
-function nextPage(){ page++; loadDraws(); }
+function selectTab(i){
+  cur=TYPES[i];
+  var tabs=$('tabGrid').children;
+  for(var k=0;k<tabs.length;k++)tabs[k].className='tab'+(k==i?' on':'');
+  draws=[];
+  buildPicker();
+  loadHistory();
+}
 
-function parseDraws(text) {
-  const lines = text.split(/\r?\n/);
-  const out = [];
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    const t = line.trim().split(/\s+/);
-    if (!/^\d{5,}$/.test(t[0])) continue;
-    if (!/^\d{4}-/.test(t[1])) continue;
-    const nums = [];
-    for (let i = 2; i < t.length; i++) {
-      if (/^\d{1,2}$/.test(t[i])) { nums.push(t[i]); }
-      else break;
+/* ---------- 选号区 ---------- */
+function buildPicker(){
+  var L=ballLayout();
+  selMain=new Set(); selSec=new Set(); posVals=[-1,-1,-1]; modeIdx=0;
+  $('pkLabel').textContent='选号对比';
+  $('pkTitle').textContent=cur.mainLabel;
+  // 结果表头 label（结果区用）
+  $('rRedLabel').textContent=cur.mainLabel;
+  // 模式chips + 位置球（仅3D/排列三）
+  var isPos=cur.pos;
+  $('chipRow').innerHTML='';
+  $('posRow').innerHTML='';
+  if(isPos){
+    renderChips();
+    // 位置行
+    var cols=['百位','十位','个位'];
+    $('posRow').innerHTML=cols.map(function(n,i){
+      return '<div class="posCol"><div class="pt">'+n+'</div><div class="pball" data-i="'+i+'">-</div><div class="ptip">点击清空</div></div>';
+    }).join('');
+    $('posRow').querySelectorAll('.pball').forEach(function(p){
+      p.onclick=function(){var i=+(p.getAttribute('data-i'));posVals[i]=-1;refreshPositional();updateSelectedText();};
+    });
+    $('pkGrid').style.display='flex';
+    $('pkGrid').innerHTML='';
+    for(var n=cur.mainMin;n<=cur.mainMax;n++)$('pkGrid').appendChild(makeBall(n,true));
+    bindGrid();
+  } else {
+    $('pkGrid').style.display='flex';
+    $('pkGrid').innerHTML='';
+    for(var n=cur.mainMin;n<=cur.mainMax;n++)$('pkGrid').appendChild(makeBall(n,true));
+    bindGrid();
+  }
+  // 后区
+  var sec=cur.hasSec;
+  $('scSection').style.display=sec?'':'none';
+  $('rBlueRow').style.display=sec?'':'none';
+  if(sec){
+    $('scTitle').textContent=cur.secLabel;
+    $('rBlueLabel').textContent=cur.secLabel;
+    $('scGrid').innerHTML='';
+    for(var s=cur.secMin;s<=cur.secMax;s++)$('scGrid').appendChild(makeBall(s,false));
+    bindSecGrid();
+  }
+  setIssueHint();
+  updateSelectedText();
+  showEmptyResult();
+}
+function renderChips(){
+  $('chipRow').innerHTML=MODES.map(function(m,i){return '<button class="chip '+(i===modeIdx?'on':'off')+'" data-m="'+i+'">'+m+'</button>';}).join('');
+  $('chipRow').querySelectorAll('.chip').forEach(function(c){
+    c.onclick=function(){modeIdx=+c.getAttribute('data-m');renderChips();refreshPositional();};
+  });
+}
+function makeBall(num,isPri){
+  var L=ballLayout();
+  var b=document.createElement('div');
+  b.className='ball'+(isPri?'':' sec');
+  b.style.width=L.size+'px'; b.style.height=L.size+'px';
+  b.style.margin=L.margin+'px';
+  b.style.fontSize='12px';
+  b.textContent=pad2(num);
+  b.setAttribute('data-n',num);
+  b.setAttribute('data-p',isPri?'1':'0');
+  return b;
+}
+function bindGrid(){
+  $('pkGrid').querySelectorAll('.ball').forEach(function(b){
+    b.onclick=function(){onBall(+(b.getAttribute('data-n')),true);};
+  });
+}
+function bindSecGrid(){
+  $('scGrid').querySelectorAll('.ball').forEach(function(b){
+    b.onclick=function(){onBall(+(b.getAttribute('data-n')),false);};
+  });
+}
+function onBall(num,isPri){
+  if(isPri && cur.pos){
+    // 位置式：填槽
+    var idx=posVals.indexOf(num);
+    if(idx>=0){posVals[idx]=-1;clearBallGridSel(num,true);}
+    else{
+      var slot=posVals.indexOf(-1);
+      if(slot<0){var old=posVals[2];posVals[2]=num;clearBallGridSel(old,true);}
+      else posVals[slot]=num;
     }
-    if (nums.length < curType.main + curType.ball) continue;
-    const main = nums.slice(0, curType.main).map(n => n.padStart(2, '0'));
-    const ball = curType.ball > 0 ? nums.slice(curType.main, curType.main + curType.ball).map(n => n.padStart(2, '0')) : [];
-    out.push({ issue: t[0], date: t[1], main: main, ball: ball });
+    refreshPositional();
+  } else if(isPri){
+    if(selMain.has(num)){selMain.delete(num);clearBallGridSel(num,true);}
+    else{selMain.add(num);setBallGridSel(num,true);}
+  } else {
+    if(selSec.has(num)){selSec.delete(num);clearBallGridSel(num,false);}
+    else{selSec.add(num);setBallGridSel(num,false);}
+  }
+  updateSelectedText();
+}
+function ballEl(grid,num,isPri){
+  var sel=isPri?$('pkGrid'):$('scGrid');
+  return Array.from(sel.children).find(function(b){return +(b.getAttribute('data-n'))==num&&+(b.getAttribute('data-p'))==(isPri?1:0);});
+}
+function setBallGridSel(num,isPri){var b=ballEl(null,num,isPri); if(b)b.classList.add('on');}
+function clearBallGridSel(num,isPri){var b=ballEl(null,num,isPri); if(b)b.classList.remove('on'); else refreshGridFromSet();}
+function refreshGridFromSet(){
+  $('pkGrid').querySelectorAll('.ball').forEach(function(b){var n=+(b.getAttribute('data-n'));b.classList.toggle('on',selMain.has(n));});
+  $('scGrid').querySelectorAll('.ball').forEach(function(b){var n=+(b.getAttribute('data-n'));b.classList.toggle('on',selSec.has(n));});
+}
+function refreshPositional(){
+  $('posRow').querySelectorAll('.pball').forEach(function(p){
+    var i=+(p.getAttribute('data-i'));var v=posVals[i];
+    p.textContent=v<0?'-':pad2(v);
+    p.className='pball'+(v<0?'':' on');
+  });
+  // 同步网格高亮：positional 由 posVals 决定
+  var active=new Set(posVals.filter(function(v){return v>=0;}));
+  $('pkGrid').querySelectorAll('.ball').forEach(function(b){var n=+(b.getAttribute('data-n'));b.classList.toggle('on',active.has(n));});
+}
+function renderSelBalls(set,isPri,container,empty){
+  container.innerHTML='';
+  var list=Array.from(set).sort(function(a,b){return a-b;});
+  if(list.length===0){container.innerHTML='<span style="font-size:11px;color:#ccc;line-height:28px;">'+empty+'</span>';return;}
+  list.forEach(function(n){
+    var s=document.createElement('span');
+    s.className='ball'+(isPri?'':' sec')+' on';
+    s.style.width='28px';s.style.height='28px';s.style.margin='2px';s.style.fontSize='10px';
+    s.style.display='inline-flex';s.style.alignItems='center';s.style.justifyContent='center';
+    s.textContent=pad2(n);
+    container.appendChild(s);
+  });
+}
+function updateSelectedText(){
+  $('pkSelectedText').textContent=cur.mainLabel+'已选'+(cur.pos?posVals.filter(function(v){return v>=0;}).length:selMain.size)+'个';
+  if(cur.pos)renderSelBalls(new Set(posVals.filter(function(v){return v>=0;})),true,$('pkSelectedBalls'),'');
+  else renderSelBalls(selMain,true,$('pkSelectedBalls'),'');
+  if(cur.hasSec){
+    $('scSelectedText').textContent=cur.secLabel+'已选'+selSec.size+'个';
+    renderSelBalls(selSec,false,$('scSelectedBalls'),'');
+  }
+}
+function resetSelection(){
+  selMain=new Set();selSec=new Set();posVals=[-1,-1,-1];
+  refreshGridFromSet();refreshPositional();updateSelectedText();showEmptyResult();
+}
+function setIssueHint(){
+  var maxIssue='';
+  if(draws.length)maxIssue=draws[0].issue;
+  $('issueHint').textContent='格式示例：'+issueExample(cur.code)+(maxIssue?' ｜ 最新：'+maxIssue:'')+' ｜ 支持输后几位模糊匹配';
+  $('issueInput').placeholder='如 '+issuePattern(cur.code);
+}
+function issueExample(c){
+  if(cur.code==='3d'||cur.code==='p3'||cur.code==='p5'||cur.code==='7lc')return pad2(2026)+pad2(8)+'268';
+  return '26088';
+}
+function issuePattern(c){
+  if(cur.code==='3d'||cur.code==='p3'||cur.code==='p5'||cur.code==='7lc')return '2026268';
+  return '26088';
+}
+function focusIssueInput(){$('issueInput').focus();}
+
+/* ---------- 查询 ---------- */
+function doQuery(){
+  if(draws.length===0){toast('请先刷新获取开奖数据');return;}
+  var hasSel = cur.pos ? posVals.every(function(v){return v>=0;})
+    : (selMain.size>0 && (!cur.hasSec || selSec.size>0));
+  if(!hasSel){toast(cur.pos?'请先选满百位+十位+个位（3个号码）':'请选择号码后点击查询');showEmptyResult();return;}
+  var selPri = cur.pos?posVals.slice():(Array.from(selMain));
+  var results=matchAll(selPri, selSec);
+  renderResults(results, selPri);
+  saveRecord(selPri, selSec);
+}
+function matchAll(selPri,selSec){
+  var selPSet=new Set(selPri);
+  var list=[];
+  cur.pr.forEach(function(p){
+    var name=p[0],conds=p[1],amt=p[2];
+    var matched=[];
+    draws.forEach(function(d){
+      var mp,ms;
+      if(cur.pos){
+        if(selPri.length===3&&d.main.length===3){
+          var label=MODES[modeIdx];
+          var pc=0;
+          if(label==='直选'){
+            for(var i=0;i<3;i++)if(+(d.main[i])==selPri[i])pc++;
+          } else {
+            var ds=d.main.slice().sort(),sss=selPri.slice().sort();
+            var multi=JSON.stringify(ds)===JSON.stringify(sss);
+            if(!multi){pc=d.main.filter(function(x){return selPSet.has(+x);}).length;}
+            else{
+              var a=+sss[0],b=+sss[1],c=+sss[2];
+              var two=(a==b&&b!=c)||(b==c&&a!=b), all=a!=b&&b!=c;
+              var ok = label==='组选3'?two:(label==='组选6'?all:true);
+              pc = ok?3:2;
+            }
+          }
+          ms=0;
+          // 判断命中条件
+          var hit=conds.some(function(c){return c[0]===pc&&c[1]===ms;});
+          if(hit)matched.push(d);
+        }
+      } else {
+        mp=d.main.filter(function(x){return selPSet.has(+x);}).length;
+        ms=cur.hasSec?d.sec.filter(function(x){return selSec.has(+x);}).length:0;
+        var hit2=conds.some(function(c){return c[0]===mp&&c[1]===ms;});
+        if(hit2)matched.push(d);
+      }
+    });
+    var one=conds.length===1;
+    list.push({name:name,conds:conds,amt:amt,mp:one?conds[0][0]:-1,ms:one?conds[0][1]:-1,count:matched.length,matches:matched});
+  });
+  return list;
+}
+function renderResults(results,selPri){
+  var totalHit=results.reduce(function(s,r){return s+r.count;},0);
+  $('selText').textContent=(totalHit>0?'您选的号码，在历史上共命中 '+totalHit+' 期：':'您选的号码，在历史上暂未命中任何奖项：')
+    +(cur.code==='ssq'||cur.code==='dlt'?'\n【展示说明】：当前列表按最新政策奖级名称展示；未命中的奖项也会列出。':'');
+  $('selText').style.color=totalHit>0?'#C62828':'#546E7A';
+  $('selText').style.fontWeight='bold';
+  // 结果区已选球
+  var sorted=Array.from(selPri).sort(function(a,b){return a-b;});
+  $('rRedBalls').innerHTML=sorted.map(function(n){return '<span class="ball on" style="width:28px;height:28px;margin:2px;font-size:10px;">'+pad2(n)+'</span>';}).join('');
+  if(cur.hasSec){
+    var ss=Array.from(selSec).sort(function(a,b){return a-b;});
+    $('rBlueBalls').innerHTML=ss.map(function(n){return '<span class="ball sec on" style="width:28px;height:28px;margin:2px;font-size:10px;">'+pad2(n)+'</span>';}).join('');
+  }
+  // 表头（单区隐藏命中蓝球列）
+  var secShow=cur.hasSec;
+  $('tblHead').innerHTML='<span class="hPrize">奖项</span><span class="hPri">命中'+cur.mainLabel+'</span>'
+    +(secShow?'<span class="hSec">命中'+cur.secLabel+'</span>':'')
+    +'<span class="hCnt">次数</span><span class="hAct">操作</span>';
+  // 行
+  var c=$('resultContainer');c.innerHTML='';
+  results.forEach(function(r,i){
+    var row=document.createElement('div');row.className='row';
+    var pc=prizeColor(r.name);
+    row.innerHTML=
+      '<div class="cPrize" style="color:'+pc+';">'+r.name+'</div>'
+      +(secShow?'<div class="cSec" style="color:'+(r.ms>0?'#1565C0':'#78909C')+';">'+(r.ms<0?'—':r.ms+'个')+'</div>':'')
+      +'<div class="cPri" style="color:'+(r.mp>=3?'#C62828':'#546E7A')+';">'+(r.mp<0?'—':r.mp+'个')+'</div>'
+      +'<div class="cCnt" style="color:'+(r.count>0?'#C62828':'#9E9E9E')+';">'+(r.count>0?'中'+r.count+'次':'未中')+'</div>'
+      +'<div class="cAct">'+(r.count>0?'<span class="actbtn yes" data-m="'+i+'">查看</span>':'<span class="actbtn no">—</span>')+'</div>';
+    c.appendChild(row);
+    var dv=document.createElement('div');dv.className='rdiv';c.appendChild(dv);
+  });
+  c.querySelectorAll('.actbtn.yes').forEach(function(a){
+    a.onclick=function(){openHistory(+(a.getAttribute('data-m')),results);};
+  });
+}
+function prizeColor(name){
+  if(name.indexOf('一等')>=0)return '#C62828';
+  if(name.indexOf('二等')>=0)return '#D84315';
+  if(name.indexOf('三等')>=0)return '#EF6C00';
+  return '#212121';
+}
+function showEmptyResult(){
+  var results=cur.pr.map(function(p){
+    var one=p[1].length===1;
+    return {name:p[0],conds:p[1],amt:p[2],mp:one?p[1][0][0]:-1,ms:one?p[1][0][1]:-1,count:0,matches:[]};
+  });
+  $('selText').textContent='请选择号码后点击查询'
+    +(cur.code==='ssq'||cur.code==='dlt'?'\n提示：本彩种官方规则共2个版本（最新政策含加成奖级）\n实际命中的奖项名按各期对应规则版本展示':'');
+  $('selText').style.color='#616161';$('selText').style.fontWeight='normal';
+  $('rRedBalls').innerHTML='';$('rBlueBalls').innerHTML='';
+  var secShow=cur.hasSec;
+  $('tblHead').innerHTML='<span class="hPrize">奖项</span><span class="hPri">命中'+cur.mainLabel+'</span>'
+    +(secShow?'<span class="hSec">命中'+cur.secLabel+'</span>':'')
+    +'<span class="hCnt">次数</span><span class="hAct">操作</span>';
+  var c=$('resultContainer');c.innerHTML='';
+  results.forEach(function(r){
+    var row=document.createElement('div');row.className='row';
+    row.innerHTML='<div class="cPrize" style="color:'+prizeColor(r.name)+';">'+r.name+'</div>'
+      +(secShow?'<div class="cSec" style="color:#78909C;">—</div>':'')
+      +'<div class="cPri" style="color:#546E7A;">'+(r.mp<0?'—':r.mp+'个')+'</div>'
+      +'<div class="cCnt" style="color:#9E9E9E;">未中</div>'
+      +'<div class="cAct"><span class="actbtn no">—</span></div>';
+    c.appendChild(row);
+    var dv=document.createElement('div');dv.className='rdiv';c.appendChild(dv);
+  });
+}
+function dedupNames(){return cur.pr.map(function(p){return p[0];});}
+
+/* ---------- 查询记录 & 历史弹窗 ---------- */
+function saveRecord(selPri,selSec){
+  if(!historyRecs[cur.code])historyRecs[cur.code]=[];
+  historyRecs[cur.code].unshift({pri:selPri.slice(),sec:Array.from(selSec),t:new Date().toLocaleString()});
+  if(historyRecs[cur.code].length>30)historyRecs[cur.code].pop();
+}
+function openQueryRecord(){
+  var list=historyRecs[cur.code]||[];
+  var b=$('historyBody');
+  if(!list.length){b.innerHTML='<div class="empty">暂无查询记录</div>';showMask('maskHistory');return;}
+  b.innerHTML=list.map(function(r,i){
+    return '<div class="hitem" style="cursor:pointer;">'
+      +'<div class="r0"><span class="idx">'+(i+1)+'</span><span class="dt">'+r.t+'</span></div>'
+      +'<div class="balls">'+r.pri.map(function(n){return '<span class="bt" style="background:var(--red_ball)">'+pad2(n)+'</span>';}).join('')
+      +(cur.hasSec?'':'')+'</div>'
+      +(cur.hasSec?'<div class="balls">'+r.sec.map(function(n){return '<span class="bt" style="background:var(--blue_ball)">'+pad2(n)+'</span>';}).join('')+'</div>':'')
+      +'<div style="margin-top:4px"><span class="view"><span onclick="event.stopPropagation();importRec('+i+')">导入选号并查询</span></span></div>'
+      +'</div>';
+  }).join('');
+  b.innerHTML=b.innerHTML; // noop
+  showMask('maskHistory');
+}
+function importRec(i){
+  var r=(historyRecs[cur.code]||[])[i];if(!r)return;
+  selMain=new Set(r.pri.filter(function(v){return v>=0;}));
+  if(cur.pos){posVals=[r.pri[0]!==undefined&&r.pri[0]>=0?r.pri[0]:-1,r.pri[1]!==undefined&&r.pri[1]>=0?r.pri[1]:-1,r.pri[2]!==undefined&&r.pri[2]>=0?r.pri[2]:-1];}
+  selSec=new Set(r.sec);
+  refreshGridFromSet();refreshPositional();updateSelectedText();
+  closeMask('maskHistory');doQuery();
+}
+var lastQueryResults=null;
+function openHistory(i,results){
+  var r=results?results[i]:null;if(!r||!r.matches.length)return;
+  lastQueryResults=r;
+  var b=$('historyBody');
+  b.innerHTML='<div class="empty" style="font-size:13px;color:#546E7A;padding:10px;">「'+r.name+'」命中 '+r.count+' 期</div>'
+    +r.matches.map(function(d,k){
+      return '<div class="hitem">'
+        +'<div class="r0"><span class="idx">'+(k+1)+'</span><span class="iss">第'+d.issue+'期</span>'
+        +'<span class="dt">'+d.date+'</span><span class="badge" style="margin-left:4px">最新政策</span></div>'
+        +'<div class="balls">'+d.ballHtml+'</div>'
+        +'<div class="view"><span onclick="openDetailDraw('+k+')">查看当期所有奖项</span></div>'
+        +'</div>';
+    }).join('');
+  showMask('maskHistory');
+}
+function openDetailDraw(k){
+  if(!lastQueryResults)return;
+  var d=lastQueryResults.matches[k];
+  openDrawDetail(d);
+}
+
+/* ---------- 开奖详情弹窗 ---------- */
+function showTierRows(cfg,draw){
+  var html='';
+  // 该彩种真实奖级（模拟：用配置奖级 + 假金额，供布局调试）
+  cfg.pr.forEach(function(p){
+    var name=p[0],amt=p[2];
+    html+='<div class="tierRow"><div class="nm"><div class="pr">'+name+'</div>'
+      +'<div class="dsc">'+amountDesc(amt)+'</div></div>'
+      +'<div class="amt">'+(amt?('约'+amt+'元'):'浮动')+'</div></div>';
+  });
+  return html;
+}
+function amountDesc(amt){
+  if(amt===null||amt===undefined)return '奖金浮动，以当期开奖为准';
+  return '单注固定奖金 '+amt+' 元';
+}
+function openDrawDetail(d){
+  $('detailTitle').textContent='第'+d.issue+'期 · '+cur.name;
+  $('detailBody').innerHTML=
+    '<div style="text-align:center;color:var(--text_secondary);font-size:13px;margin-bottom:8px;">开奖日期：'+d.date+'</div>'
+    +'<div class="balls" style="display:flex;flex-wrap:wrap;justify-content:center;margin-bottom:10px;">'+d.ballHtml+'</div>'
+    +'<div class="hline"></div>'
+    +showTierRows(cur,d);
+  showMask('maskDetail');
+}
+
+/* ---------- 最新开奖 ---------- */
+function openLatestAll(){
+  var b=$('latestAllBody');
+  b.innerHTML=TYPES.map(function(t){
+    var d=latestMap[t.code];
+    if(!d)return '<div style="padding:8px;font-size:14px;"><b style="color:var(--primary_red)">'+t.name+'</b> 暂无数据</div>';
+    return '<div style="padding:8px;border-bottom:0.5px solid var(--divider);">'
+      +'<div style="font-size:14px;font-weight:bold;color:'+(t.code==='dlt'?'#1565C0':'#C62828')+';">'+t.name+' <span style="font-weight:normal;font-size:12px;color:var(--text_secondary)">第'+d.issue+'期 · '+d.date+'</span></div>'
+      +'<div class="balls" style="display:flex;flex-wrap:wrap;margin-top:6px;">'+d.ballHtml+'</div>'
+      +'<div class="view" style="text-align:right;margin-top:4px;"><span style="font-size:12px;color:var(--primary_red);font-weight:bold;cursor:pointer" onclick="detailFromLatest(\''+t.code+'\')">点击查看本期所有奖项  ›</span></div>'
+      +'</div>';
+  }).join('');
+  showMask('maskLatest');
+}
+function detailFromLatest(cd){var d=latestMap[cd];if(d){cur=TYPES.find(function(t){return t.code===cd;});selectTabTo(cd);openDrawDetail(d);}}
+function latestCards(t){
+  var d=latestMap[t.code];
+  if(!d)return '<div class="lcard"><div class="r1"><span class="ln">'+t.name+'</span><span class="iss">暂无数据</span></div></div>';
+  var label=pad2(0);
+  return '<div class="lcard" onclick="detailFromLatest(\''+t.code+'\')">'
+    +'<div class="r1"><span class="ln">'+t.name+'</span><span class="iss">第'+d.issue+'期</span></div>'
+    +'<div class="dt">'+d.date+'</div>'
+    +'<div class="balls">'+d.ballHtml+'</div>'
+    +'<div class="view">点击查看全部奖项</div>'
+    +'</div>';
+}
+function selectTabTo(cd){
+  var i=TYPES.findIndex(function(t){return t.code===cd;});if(i>=0)selectTab(i);
+}
+
+/* ---------- 数据加载 ---------- */
+function parseDraws(text){
+  var lines=text.split(/\r?\n/),out=[];
+  for(var i=0;i<lines.length;i++){
+    var line=lines[i],tr=line.trim();
+    if(!tr)continue;
+    var t=tr.split(/\s+/);
+    if(!/^\d{5,}$/.test(t[0]))continue;
+    if(!/^\d{4}-/.test(t[1]))continue;
+    var nums=[];
+    for(var j=2;j<t.length;j++){if(/^\d{1,2}$/.test(t[j]))nums.push(t[j]);else break;}
+    if(nums.length<cur.parseMain+cur.parseSec)continue;
+    var main=nums.slice(0,cur.parseMain);
+    var sec=cur.parseSec>0?nums.slice(cur.parseMain,cur.parseMain+cur.parseSec):[];
+    var bmain=main.map(function(n){return pad2(+n);});
+    var bsec=sec.map(function(n){return pad2(+n);});
+    out.push({issue:t[0],date:t[1],main:main,sec:sec,
+      ballHtml:bmain.map(function(n){return '<span class="bt" style="background:var(--red_ball)">'+n+'</span>';}).join('')
+      +(cur.hasSec&&bsec.length?('<span class="plus">+</span>'+bsec.map(function(n){return '<span class="bt" style="background:var(--blue_ball)">'+n+'</span>';}).join('')):''),
+      dmain:bmain, dsec:bsec});
   }
   return out;
 }
-
-async function loadDraws(latestOnly) {
-  if (latestOnly === true) page = 0;
-  const btn = $('queryBtn'); btn.disabled = true;
-  $('drawRows').innerHTML = '<tr><td colspan="4" class="loading">加载中，请稍候...</td></tr>';
-  try {
-    const res = await fetch('/api/lottery/' + curType.code);
-    if (!res.ok) throw new Error('接口返回 ' + res.status);
-    const text = await res.text();
-    const draws = parseDraws(text);
-    latestDraws = draws;
-    if (draws.length) { latestMain = draws[0].main; latestBall = draws[0].ball; }
-    $('historyNav').style.display = draws.length ? '' : 'none';
-    if (latestOnly === true) {
-      renderRows(draws.slice(0, 1));
-      $('hisTitle').textContent = '最新一期 &#183; ' + curType.name;
-    } else {
-      const start = page * 15;
-      renderRows(draws.slice(start, start + 15));
-      $('hisTitle').textContent = '开奖历史（第 ' + (page + 1) + ' 页 &#183; 共 ' + draws.length + ' 期）';
-    }
-    $('checkHint').textContent = latestMain
-      ? '最新一期 ' + draws[0].issue + '：' + drawText(draws[0]) + '。输入你的选号进行命中检测。'
-      : '暂无数据';
-  } catch (e) {
-    $('drawRows').innerHTML = '<tr><td colspan="4" class="empty">加载失败：' + e.message + '</td></tr>';
-  } finally {
-    btn.disabled = false;
+async function loadHistory(){
+  try{
+    var res=await fetch('/api/lottery/'+cur.api);
+    if(!res.ok)throw new Error('接口返回 '+res.status);
+    var text=await res.text();
+    draws=parseDraws(text);
+    setIssueHint();
+    refreshLatest();
+  }catch(e){
+    $('dataStatus').textContent='加载失败：'+e.message;
   }
 }
-
-function renderRows(rows) {
-  $('drawRows').innerHTML = rows.length
-    ? rows.map(d => '<tr><td>' + d.issue + '</td><td>' + d.date + '</td>' +
-        '<td>' + d.main.map(n => '<span class="num ' + (curType.ball > 0 ? 'red' : 'blue') + '">' + n + '</span>').join('') + '</td>' +
-        '<td>' + (d.ball.length ? d.ball.map(n => '<span class="num blue">' + n + '</span>').join('') : '—') + '</td></tr>').join('')
-    : '<tr><td colspan="4" class="empty">暂无数据</td></tr>';
-}
-
-function drawText(d) {
-  return d.main.join(' ') + (d.ball.length ? ' + ' + d.ball.join(' ') : '');
-}
-
-function switchMode(m) {
-  document.querySelectorAll('.modes button').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
-  $('panel-history').classList.toggle('show', m === 'history');
-  $('panel-check').classList.toggle('show', m === 'check');
-}
-
-function doCheck() {
-  const result = $('checkResult');
-  if (!latestMain) { result.className = 'hit no'; result.textContent = '请先点击「最新一期」加载开奖号码。'; return; }
-  const main = Array.from(document.querySelectorAll('.mainIn')).map(i => i.value.trim()).filter(Boolean);
-  const ball = Array.from(document.querySelectorAll('.ballIn')).map(i => i.value.trim()).filter(Boolean);
-  if (main.length !== curType.main || (curType.ball > 0 && ball.length !== curType.ball)) {
-    result.className = 'hit no';
-    result.textContent = '请填满选号（' + curType.name + ' 需 ' + curType.main + (curType.ball ? '个主号 + ' + curType.ball + '个蓝球' : '个号码') + '）。';
-    return;
+async function loadAllLatest(){
+  for(var i=0;i<TYPES.length;i++){
+    var t=TYPES[i];
+    try{
+      var res=await fetch('/api/lottery/'+t.api);
+      if(!res.ok)continue;
+      var text=await res.text();
+      var oldCur=cur;cur=t;
+      var dl=parseDraws(text);
+      cur=oldCur;
+      if(dl.length)latestMap[t.code]=dl[0];
+    }catch(e){}
   }
-  const hitMain = main.filter(n => latestMain.includes(n.padStart(2, '0'))).length;
-  const hitBall = curType.ball > 0 ? ball.filter(n => latestBall.includes(n.padStart(2, '0'))).length : 0;
-  let allHit;
-  if (curType.ball > 0) {
-    allHit = hitMain === curType.main && hitBall === curType.ball;
-    result.textContent = allHit ? '🎉 命中全部号码！' : '命中 ' + hitMain + '/' + curType.main + ' 个主号 + ' + hitBall + '/' + curType.ball + ' 个蓝球。';
-  } else {
-    allHit = hitMain === curType.main;
-    result.textContent = allHit ? '🎉 命中全部号码！' : '命中 ' + hitMain + '/' + curType.main + ' 个号码。';
-  }
-  result.className = allHit ? 'hit ok' : 'hit no';
+  refreshLatest();
+  $('dataStatus').textContent='已更新 8 个彩种 · 共'+TYPES.reduce(function(s,tv){return s+drawCount(tv.code);},0)+'期';
+}
+function drawCount(cd){return latestMap[cd]?1:0;}
+function refreshLatest(){
+  $('latestScroller').innerHTML=TYPES.map(latestCards).join('');
+}
+function refreshData(){loadHistory();}
+
+/* ---------- UI 工具 ---------- */
+function showMask(id){$(id).classList.add('show');}
+function closeMask(id){$(id).classList.remove('show');'maskDetail'===id?0:0;}
+function toast(msg){$('dataStatus').textContent=msg;setTimeout(function(){if(!draws.length)$('dataStatus').textContent='暂无数据';},2500);}
+
+/* ---------- 登录 ---------- */
+var authMode='login';
+function openAuthDialog(){authMode='login';renderAuth();showMask('maskAuth');}
+function toggleAuthMode(){authMode=authMode==='login'?'register':'login';renderAuth();}
+function renderAuth(){
+  $('authTitle').textContent=authMode==='login'?'登录':'注册';
+  $('authBtn').textContent=authMode==='login'?'登录':'注册并登录';
+  $('authSwitch').textContent=authMode==='login'?'没有账号？去注册':'已有账号？去登录';
+}
+function submitAuth(){
+  var ph=$('authPhone').value.trim();var pw=$('authPass').value;
+  if(!ph||pw.length<6){toast('请输入手机号及至少6位密码');return;}
+  var masked=ph.replace(/^(\d{3})\d{4}/,'$1****');
+  $('userPhone').textContent=masked;
+  $('quotaInfo').textContent='月租用户·剩余 30 天';
+  closeMask('maskAuth');toast('登录成功');
 }
 
-buildTypeUI();
+/* ---------- init ---------- */
+buildTabs();
+buildPicker();
+loadAllLatest();
+loadHistory();
 </script>
 </body>
 </html>
