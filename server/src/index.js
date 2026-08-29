@@ -113,6 +113,32 @@ if (!fs.existsSync(DOWNLOADS_DIR)) fs.mkdirSync(DOWNLOADS_DIR, { recursive: true
 // APK 下载静态文件服务
 app.use('/downloads', express.static(DOWNLOADS_DIR));
 
+// ============================================================================
+// 用户端网页版：开奖历史数据代理接口
+// APP 端直连 http://data.17500.cn/{code}_desc.txt，浏览器受同源限制无法直连，
+// 因此经后端转发原始文本返回（客户端自行解析）。
+// ============================================================================
+const LOTTERY_CODES = ['ssq', 'dlt', '3d', 'pl3', 'pl5', 'qx', 'kl8', 'qlc'];
+app.get('/api/lottery/:code', (req, res) => {
+  const code = String(req.params.code || '').toLowerCase();
+  if (!LOTTERY_CODES.includes(code)) {
+    return res.status(400).json({ error: '不支持的彩种代码，可选: ' + LOTTERY_CODES.join('/') });
+  }
+  const url = `http://data.17500.cn/${code}_desc.txt`;
+  const outgoing = http.get(url, (r) => {
+    if (r.statusCode !== 200) {
+      r.resume();
+      return res.status(r.statusCode).json({ error: `数据源返回状态 ${r.statusCode}` });
+    }
+    let buf = '';
+    r.setEncoding('utf8');
+    r.on('data', (chunk) => { buf += chunk; });
+    r.on('end', () => res.type('text/plain; charset=utf-8').send(buf));
+  });
+  outgoing.on('error', (e) => res.status(502).json({ error: '数据源连接失败: ' + e.message }));
+  outgoing.setTimeout(20000, () => outgoing.destroy(new Error('数据源连接超时')));
+});
+
 // 上传文件目录（图片/语音）
 const UPLOAD_DIR = path.join(__dirname, '..', 'public', 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
