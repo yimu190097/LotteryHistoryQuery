@@ -209,6 +209,7 @@ body{
     <div id="toolbar">
       <div class="title">开奖历史查询</div>
       <div class="act" onclick="openAuthDialog()">登录</div>
+      <div class="act" onclick="downloadUserApk()">下载APP</div>
       <div class="act" onclick="openLatestAll()">最新</div>
       <div class="act" onclick="focusIssueInput()">期号</div>
       <div class="act" onclick="refreshData()">刷新</div>
@@ -325,36 +326,41 @@ body{
 /* ============ 彩种配置（与 LotteryType.kt 最新政策一致） ============ */
 var TYPES=[
  {code:'ssq',api:'ssq',name:'双色球',mainN:6,mainMin:1,mainMax:33,mainLabel:'红球',
-  hasSec:true,secN:1,secMin:1,secMax:16,secLabel:'蓝球',parseMain:6,parseSec:1,
-  pos:false,pr:[['一等奖',[[6,1]],null],['二等奖',[[6,0]],null],['三等奖',[[5,1]],3000],
-   ['四等奖',[[5,0],[4,1]],200],['五等奖',[[4,0],[3,1]],10],['六等奖',[[2,1],[1,1],[0,1]],5],
-   ['福运奖',[[3,0]],5]],set3:false},
- {code:'dlt',api:'dlt',name:'大乐透',mainN:5,mainMin:1,mainMax:35,mainLabel:'前区',
-  hasSec:true,secN:2,secMin:1,secMax:12,secLabel:'后区',parseMain:5,parseSec:2,
-  pos:false,pr:[['一等奖',[[5,2]],null],['二等奖',[[5,1]],null],['三等奖',[[5,0],[4,2]],5000],
-   ['四等奖',[[4,1]],300],['五等奖',[[4,0],[3,2]],150],['六等奖',[[3,1],[2,2]],15],
-   ['七等奖',[[3,0],[2,1],[1,2],[0,2]],5]],set3:false},
+  hasSec:true,secN:1,secMin:1,secMax:16,secLabel:'蓝球',parseMain:6,parseSec:1,pos:false,
+  vers:[
+   {d:'2026-02-01',r:[[6,1,'一等奖',null],[6,0,'二等奖',null],[5,1,'三等奖',3000],[5,0,'四等奖',200],[4,1,'四等奖',200],[4,0,'五等奖',10],[3,1,'五等奖',10],[2,1,'六等奖',5],[1,1,'六等奖',5],[0,1,'六等奖',5],[3,0,'福运奖',5,'fuyun']]},
+   {d:'2003-02-16',r:[[6,1,'一等奖',null],[6,0,'二等奖',null],[5,1,'三等奖',3000],[5,0,'四等奖',200],[4,1,'四等奖',200],[4,0,'五等奖',10],[3,1,'五等奖',10],[2,1,'六等奖',5],[1,1,'六等奖',5],[0,1,'六等奖',5]]}
+  ]},
+ {code:'dlt',api:'dlt2',name:'大乐透',mainN:5,mainMin:1,mainMax:35,mainLabel:'前区',
+  hasSec:true,secN:2,secMin:1,secMax:12,secLabel:'后区',parseMain:5,parseSec:2,pos:false,
+  vers:[
+   {d:'2026-01-31',r:[[5,2,'一等奖',null],[5,1,'二等奖',null],[5,0,'三等奖',5000],[4,2,'三等奖',5000],[4,1,'四等奖',300],[4,0,'五等奖',150],[3,2,'五等奖',150],[3,1,'六等奖',15],[2,2,'六等奖',15],[3,0,'七等奖',5],[2,1,'七等奖',5],[1,2,'七等奖',5],[0,2,'七等奖',5]]},
+   {d:'2019-02-18',r:[[5,2,'一等奖',null],[5,1,'二等奖',null],[5,0,'三等奖',10000],[4,2,'四等奖',3000],[4,1,'五等奖',300],[4,0,'六等奖',200],[3,2,'六等奖',200],[3,1,'七等奖',100],[2,2,'七等奖',100],[3,0,'八等奖',15],[2,1,'八等奖',15],[1,2,'八等奖',15],[0,2,'八等奖',15],[2,0,'九等奖',5],[1,1,'九等奖',5],[1,0,'九等奖',5],[0,1,'九等奖',5]]},
+   {d:'2014-05-05',r:[[5,2,'一等奖',null],[5,1,'二等奖',null],[5,0,'三等奖',null],[4,2,'三等奖',null],[4,1,'四等奖',null],[4,0,'五等奖',200],[3,2,'五等奖',200],[3,1,'六等奖',100],[2,2,'六等奖',100]]},
+   {d:'2009-10-17',r:[[5,2,'一等奖',null],[5,1,'二等奖',null],[5,0,'三等奖',null],[4,2,'四等奖',3000],[4,1,'五等奖',500],[4,0,'六等奖',200],[3,2,'六等奖',200],[3,1,'七等奖',10],[2,2,'七等奖',10],[3,0,'八等奖',5],[2,1,'八等奖',5],[1,2,'八等奖',5]]},
+   {d:'2007-05-28',r:[[5,2,'一等奖',null],[5,1,'二等奖',null],[5,0,'三等奖',null],[4,2,'四等奖',3000],[4,1,'五等奖',500],[4,0,'六等奖',100],[3,2,'六等奖',100],[3,1,'七等奖',10],[2,2,'七等奖',10],[3,0,'八等奖',5],[2,1,'八等奖',5],[1,2,'八等奖',5]]}
+  ]},
  {code:'3d',api:'3d',name:'福彩3D',mainN:3,mainMin:0,mainMax:9,mainLabel:'号码',
-  hasSec:false,secN:0,secMin:0,secMax:0,secLabel:'',parseMain:3,parseSec:0,
-  pos:true,pr:[['直选奖',[[3,0]],1040],['组选3',[[3,0]],346],['组选6',[[3,0]],173]],set3:true},
- {code:'7lc',api:'qlc',name:'七乐彩',mainN:7,mainMin:1,mainMax:30,mainLabel:'基本号',
-  hasSec:true,secN:1,secMin:1,secMax:30,secLabel:'特别号',parseMain:7,parseSec:1,
-  pos:false,pr:[['一等奖',[[7,0]],null],['二等奖',[[6,1]],null],['三等奖',[[6,0]],null],
-   ['四等奖',[[5,1]],200],['五等奖',[[5,0]],50],['六等奖',[[4,1]],10],['七等奖',[[4,0]],5]],set3:false},
+  hasSec:false,secN:0,secMin:0,secMax:0,secLabel:'',parseMain:3,parseSec:0,pos:true,
+  vers:[{d:'2004-10-18',r:[[3,0,'直选奖',1040],[3,0,'组选3',346],[3,0,'组选6',173]]}]},
+ {code:'7lc',api:'7lc',name:'七乐彩',mainN:7,mainMin:1,mainMax:30,mainLabel:'基本号',
+  hasSec:true,secN:1,secMin:1,secMax:30,secLabel:'特别号',parseMain:7,parseSec:1,pos:false,
+  vers:[{d:'2000-01-01',r:[[7,0,'一等奖',null],[6,1,'二等奖',null],[6,0,'三等奖',null],[5,1,'四等奖',200],[5,0,'五等奖',50],[4,1,'六等奖',10],[4,0,'七等奖',5]]}]},
  {code:'p3',api:'pl3',name:'排列三',mainN:3,mainMin:0,mainMax:9,mainLabel:'号码',
-  hasSec:false,secN:0,secMin:0,secMax:0,secLabel:'',parseMain:3,parseSec:0,
-  pos:true,pr:[['直选奖',[[3,0]],1040],['组选3',[[3,0]],346],['组选6',[[3,0]],173]],set3:true},
+  hasSec:false,secN:0,secMin:0,secMax:0,secLabel:'',parseMain:3,parseSec:0,pos:true,
+  vers:[{d:'2004-12-18',r:[[3,0,'直选奖',1040],[3,0,'组选3',346],[3,0,'组选6',173]]}]},
  {code:'p5',api:'pl5',name:'排列五',mainN:5,mainMin:0,mainMax:9,mainLabel:'号码',
-  hasSec:false,secN:0,secMin:0,secMax:0,secLabel:'',parseMain:5,parseSec:0,
-  pos:false,pr:[['一等奖',[[5,0]],100000]],set3:false},
- {code:'7xc',api:'qx',name:'七星彩',mainN:6,mainMin:0,mainMax:9,mainLabel:'前6位',
-  hasSec:true,secN:1,secMin:0,secMax:14,secLabel:'后1位',parseMain:6,parseSec:1,
-  pos:false,pr:[['一等奖',[[6,1]],null],['二等奖',[[6,0]],null],['三等奖',[[5,1]],3000],
-   ['四等奖',[[5,0],[4,1]],500],['五等奖',[[4,0],[3,1]],30],['六等奖',[[3,0],[2,1],[1,1],[0,1]],5]],set3:false},
+  hasSec:false,secN:0,secMin:0,secMax:0,secLabel:'',parseMain:5,parseSec:0,pos:false,
+  vers:[{d:'2004-12-18',r:[[5,0,'一等奖',100000]]}]},
+ {code:'7xc',api:'7xc',name:'七星彩',mainN:6,mainMin:0,mainMax:9,mainLabel:'前6位',
+  hasSec:true,secN:1,secMin:0,secMax:14,secLabel:'后1位',parseMain:6,parseSec:1,pos:false,
+  vers:[
+   {d:'2020-10-11',r:[[6,1,'一等奖',null],[6,0,'二等奖',null],[5,1,'三等奖',3000],[5,0,'四等奖',500],[4,1,'四等奖',500],[4,0,'五等奖',30],[3,1,'五等奖',30],[3,0,'六等奖',5],[2,1,'六等奖',5],[1,1,'六等奖',5],[0,1,'六等奖',5]]},
+   {d:'2004-05-18',r:[[6,1,'一等奖',null],[6,0,'二等奖',null],[5,1,'三等奖',1800],[5,0,'四等奖',300],[4,1,'四等奖',300],[4,0,'五等奖',20],[3,1,'五等奖',20],[3,0,'六等奖',5],[2,1,'六等奖',5],[1,1,'六等奖',5],[0,1,'六等奖',5]]}
+  ]},
  {code:'kl8',api:'kl8',name:'快乐8',mainN:10,mainMin:1,mainMax:80,mainLabel:'号码',
-  hasSec:false,secN:0,secMin:0,secMax:0,secLabel:'',parseMain:20,parseSec:0,
-  pos:false,pr:[['一等奖',[[10,0]],null],['二等奖',[[9,0]],8000],['三等奖',[[8,0]],800],
-   ['四等奖',[[7,0]],80],['五等奖',[[6,0]],5],['六等奖',[[5,0]],3],['七等奖',[[0,0]],2]],set3:false}
+  hasSec:false,secN:0,secMin:0,secMax:0,secLabel:'',parseMain:20,parseSec:0,pos:false,
+  vers:[{d:'2020-10-28',r:[[10,0,'一等奖',null],[9,0,'二等奖',8000],[8,0,'三等奖',800],[7,0,'四等奖',80],[6,0,'五等奖',5],[5,0,'六等奖',3],[0,0,'七等奖',2]]}]}
 ];
 var POSITIONAL = ['3d','p3'];
 var MODES = ['直选','组选3','组选6'];
@@ -573,45 +579,86 @@ function doQuery(){
   renderResults(results, selPri);
   saveRecord(selPri, selSec);
 }
-function matchAll(selPri,selSec){
-  var selPSet=new Set(selPri);
-  var list=[];
-  cur.pr.forEach(function(p){
-    var name=p[0],conds=p[1],amt=p[2];
-    var matched=[];
-    draws.forEach(function(d){
-      var mp,ms;
-      if(cur.pos){
-        if(selPri.length===3&&d.main.length===3){
-          var label=MODES[modeIdx];
-          var pc=0;
-          if(label==='直选'){
-            for(var i=0;i<3;i++)if(+(d.main[i])==selPri[i])pc++;
-          } else {
-            var ds=d.main.slice().sort(),sss=selPri.slice().sort();
-            var multi=JSON.stringify(ds)===JSON.stringify(sss);
-            if(!multi){pc=d.main.filter(function(x){return selPSet.has(+x);}).length;}
-            else{
-              var a=+sss[0],b=+sss[1],c=+sss[2];
-              var two=(a==b&&b!=c)||(b==c&&a!=b), all=a!=b&&b!=c;
-              var ok = label==='组选3'?two:(label==='组选6'?all:true);
-              pc = ok?3:2;
-            }
-          }
-          ms=0;
-          // 判断命中条件
-          var hit=conds.some(function(c){return c[0]===pc&&c[1]===ms;});
-          if(hit)matched.push(d);
-        }
-      } else {
-        mp=d.main.filter(function(x){return selPSet.has(+x);}).length;
-        ms=cur.hasSec?d.sec.filter(function(x){return selSec.has(+x);}).length:0;
-        var hit2=conds.some(function(c){return c[0]===mp&&c[1]===ms;});
-        if(hit2)matched.push(d);
+/* 最新版规则 → 展示列（[奖项名, [[主中,后中],...], 单注奖金] 数组） */
+function latestPr(t){
+  var rules=t.vers[0].r, order=[], map={};
+  rules.forEach(function(r){
+    if(!map[r[2]]){map[r[2]]={name:r[2],conds:[],amt:r[3]};order.push(r[2]);}
+    map[r[2]].conds.push([r[0],r[1]]);
+  });
+  return order.map(function(n){return [map[n].name,map[n].conds,map[n].amt];});
+}
+/* 按期开奖日期定位规则版本（与 APK rulesForDate 一致：日期 >= 生效日，取最新） */
+function verForDate(t,date){
+  if(!date||date.length!==10)return null;
+  for(var i=0;i<t.vers.length;i++){if(date>=t.vers[i].d)return t.vers[i];}
+  return null;
+}
+/* 单期命中前区/后区计数（3D/排列三 按直选/组3/组6） */
+function hitCount(t,selPri,selPSet,selSec,d){
+  if(t.pos&&selPri.length===3&&d.main.length===3){
+    var pc=0;
+    if(modeIdx===0){for(var i=0;i<3;i++)if(+(d.main[i])===selPri[i])pc++;}
+    else{
+      var ds=d.main.slice().map(function(x){return +x;}).sort(function(a,b){return a-b;});
+      var sss=selPri.slice().map(function(x){return +x;}).sort(function(a,b){return a-b;});
+      var multi=ds.join()===sss.join();
+      if(!multi){pc=d.main.filter(function(x){return selPSet.has(+x);}).length;}
+      else{
+        var a=sss[0],b=sss[1],c=sss[2];
+        var two=(a===b&&b!==c)||(b===c&&a!==b), all=a!==b&&b!==c;
+        var ok=modeIdx===1?two:(modeIdx===2?all:true);
+        pc=ok?3:2;
       }
+    }
+    return {pc:pc,sc:0};
+  }
+  var mp=d.main.filter(function(x){return selPSet.has(+x);}).length;
+  var ms=t.hasSec?d.sec.filter(function(x){return selSec.has(+x);}).length:0;
+  return {pc:mp,sc:ms};
+}
+function matchAll(selPri,selSec){
+  var t=cur, selPSet=new Set(selPri);
+  // 1) 每期独立用其规则版本算命中，写入聚合桶
+  var buckets={};
+  draws.forEach(function(d){
+    var ver=verForDate(t,d.date)||t.vers[t.vers.length-1];
+    for(var i=0;i<ver.r.length;i++){
+      var r=ver.r[i];
+      var hc=hitCount(t,selPri,selPSet,selSec,d);
+      if(hc.pc===r[0]&&hc.sc===r[1]){
+        var key=ver.d+'|'+r[0]+'|'+r[1]+'|'+r[2];
+        if(!buckets[key])buckets[key]={mp:r[0],ms:r[1],name:r[2],draws:[]};
+        buckets[key].draws.push(d);
+        break;
+      }
+    }
+  });
+  // 2) 按最新版奖项名顺序合并展示
+  var latest=t.vers[0].r, uniqueNames=[], nameConds={}, latestByCond={};
+  latest.forEach(function(r){
+    if(!nameConds[r[2]]){nameConds[r[2]]=[];uniqueNames.push(r[2]);}
+    nameConds[r[2]].push([r[0],r[1]]);
+    latestByCond[r[0]+','+r[1]]=r[2];
+  });
+  var list=[], consumed={};
+  uniqueNames.forEach(function(name){
+    var conds=nameConds[name], one=conds.length===1, matched=[];
+    Object.keys(buckets).forEach(function(k){
+      if(consumed[k])return; var b=buckets[k];
+      if(conds.some(function(c){return c[0]===b.mp&&c[1]===b.ms;})){matched=matched.concat(b.draws);consumed[k]=true;}
     });
-    var one=conds.length===1;
+    var amt=null; latest.forEach(function(r){if(r[2]===name&&amt===null)amt=r[3];});
     list.push({name:name,conds:conds,amt:amt,mp:one?conds[0][0]:-1,ms:one?conds[0][1]:-1,count:matched.length,matches:matched});
+  });
+  // 3) 剩余桶（老版本奖级，最新版无对应条件）→ 就近归属或保留原奖级名
+  Object.keys(buckets).forEach(function(k){
+    if(consumed[k])return; var b=buckets[k]; consumed[k]=true;
+    var ln=latestByCond[b.mp+','+b.ms]||null;
+    var existing=null;
+    for(var i2=0;i2<list.length;i2++){if(list[i2].name===(ln||b.name)){existing=list[i2];break;}}
+    if(existing){existing.matches=existing.matches.concat(b.draws);existing.count=existing.matches.length;existing.mp=-1;existing.ms=-1;}
+    else{list.push({name:b.name,conds:[[b.mp,b.ms]],amt:null,mp:b.mp,ms:b.ms,count:b.draws.length,matches:b.draws});}
   });
   return list;
 }
@@ -658,7 +705,7 @@ function prizeColor(name){
   return '#212121';
 }
 function showEmptyResult(){
-  var results=cur.pr.map(function(p){
+  var results=latestPr(cur).map(function(p){
     var one=p[1].length===1;
     return {name:p[0],conds:p[1],amt:p[2],mp:one?p[1][0][0]:-1,ms:one?p[1][0][1]:-1,count:0,matches:[]};
   });
@@ -682,7 +729,7 @@ function showEmptyResult(){
     var dv=document.createElement('div');dv.className='rdiv';c.appendChild(dv);
   });
 }
-function dedupNames(){return cur.pr.map(function(p){return p[0];});}
+function dedupNames(){return latestPr(cur).map(function(p){return p[0];});}
 
 /* ---------- 查询记录 & 历史弹窗 ---------- */
 function saveRecord(selPri,selSec){
@@ -739,8 +786,8 @@ function openDetailDraw(k){
 /* ---------- 开奖详情弹窗 ---------- */
 function showTierRows(cfg,draw){
   var html='';
-  // 该彩种真实奖级（模拟：用配置奖级 + 假金额，供布局调试）
-  cfg.pr.forEach(function(p){
+  // 该彩种真实奖级（按最新版规则展示奖级与奖金）
+  latestPr(cfg).forEach(function(p){
     var name=p[0],amt=p[2];
     html+='<div class="tierRow"><div class="nm"><div class="pr">'+name+'</div>'
       +'<div class="dsc">'+amountDesc(amt)+'</div></div>'
@@ -853,6 +900,18 @@ function refreshData(){loadHistory();}
 function showMask(id){$(id).classList.add('show');}
 function closeMask(id){$(id).classList.remove('show');'maskDetail'===id?0:0;}
 function toast(msg){$('dataStatus').textContent=msg;setTimeout(function(){if(!draws.length)$('dataStatus').textContent='暂无数据';},2500);}
+
+/* ---------- 下载 APP ---------- */
+async function downloadUserApk(){
+  try{
+    var res=await fetch('/api/apk-list');
+    var files=await res.json();
+    if(!files||!files.length){toast('暂无可用安装包，稍后再试');return;}
+    var apk=files.find(function(f){return /user|用户/i.test(f.filename)&&!/admin|管理/i.test(f.filename);})||files[0];
+    var a=document.createElement('a');
+    a.href=apk.url; a.download=apk.filename; document.body.appendChild(a); a.click(); a.remove();
+  }catch(e){toast('下载失败：'+e.message);}
+}
 
 /* ---------- 登录 ---------- */
 var authMode='login';
