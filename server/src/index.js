@@ -118,7 +118,7 @@ app.use('/downloads', express.static(DOWNLOADS_DIR));
 // APP 端直连 http://data.17500.cn/{code}_desc.txt，浏览器受同源限制无法直连，
 // 因此经后端转发原始文本返回（客户端自行解析）。
 // ============================================================================
-const LOTTERY_CODES = ['ssq', 'dlt', '3d', 'pl3', 'pl5', 'qx', 'kl8', 'qlc'];
+const LOTTERY_CODES = ['ssq', 'dlt2', '3d', 'pl3', 'pl5', '7xc', 'kl8', '7lc'];
 app.get('/api/lottery/:code', (req, res) => {
   const code = String(req.params.code || '').toLowerCase();
   if (!LOTTERY_CODES.includes(code)) {
