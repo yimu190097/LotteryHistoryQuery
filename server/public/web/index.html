@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>彩票历史查询 - 用户端网页版</title>
+<style>
+  :root {
+    --primary: #2563eb; --bg: #f1f5f9; --card: #ffffff; --text: #0f172a;
+    --text2: #64748b; --border: #e2e8f0; --blue: #2563eb; --red: #dc2626;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh; }
+  header { background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #fff;
+    padding: 20px 24px; }
+  header h1 { font-size: 20px; }
+  header p { font-size: 13px; opacity: .85; margin-top: 4px; }
+  .wrap { max-width: 960px; margin: 20px auto; padding: 0 16px; }
+  .toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; margin-bottom: 16px; }
+  .toolbar label { font-size: 14px; font-weight: 600; color: var(--text2); }
+  select, input { font-size: 14px; padding: 8px 12px; border: 1px solid var(--border);
+    border-radius: 8px; background: #fff; color: var(--text); }
+  button { font-size: 14px; padding: 9px 18px; border: none; border-radius: 8px;
+    background: var(--primary); color: #fff; cursor: pointer; font-weight: 600; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .hint { font-size: 12px; color: var(--text2); margin-top: 6px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px; }
+  .card h2 { font-size: 16px; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 9px 10px; text-align: center; border-bottom: 1px solid var(--border); }
+  th { background: #f8fafc; color: var(--text2); font-weight: 600; position: sticky; top: 0; }
+  .num { display: inline-block; width: 26px; height: 26px; line-height: 26px;
+    border-radius: 50%; font-size: 12px; font-weight: 700; color: #fff; margin: 1px; }
+  .num.red { background: var(--red); }
+  .num.blue { background: var(--blue); }
+  .loading { text-align: center; color: var(--text2); padding: 30px; }
+  .empty { text-align: center; color: var(--text2); padding: 30px; }
+  .modes { display: flex; gap: 8px; margin-bottom: 16px; }
+  .modes button { background: var(--card); color: var(--text); border: 1px solid var(--border);
+    font-weight: 500; }
+  .modes button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .panel { display: none; }
+  .panel.show { display: block; }
+  .fields { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .fields .n { display: flex; gap: 6px; flex-wrap: wrap; }
+  .fields .n input { width: 48px; text-align: center; }
+  .hit { margin-top: 14px; font-size: 14px; }
+  .hit.ok { color: #15803d; font-weight: 700; }
+  .hit.no { color: var(--text2); }
+  .jd-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .jd-nav span { font-size: 14px; font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <h1>&#127921; 彩票历史查询</h1>
+  <p>用户端网页版 &#183; 直连官方数据源（与 APP 数据一致）</p>
+</header>
+<div class="wrap">
+  <div class="toolbar">
+    <label>彩种</label>
+    <select id="typeSel"></select>
+    <button id="queryBtn" onclick="loadDraws()">查询开奖历史</button>
+    <button id="latestBtn" onclick="loadDraws(true)" style="background:#16a34a">最新一期</button>
+  </div>
+
+  <div class="modes">
+    <button class="active" data-mode="history" onclick="switchMode('history')">开奖历史</button>
+    <button data-mode="check" onclick="switchMode('check')">选号命中检测</button>
+  </div>
+
+  <div class="panel show" id="panel-history">
+    <div class="jd-nav" id="historyNav"></div>
+    <div class="card">
+      <h2 id="hisTitle">开奖历史（近 30 期）</h2>
+      <div style="overflow:auto;max-height:560px">
+        <table>
+          <thead><tr><th>期号</th><th>开奖日期</th><th id="mainHead">号码</th><th id="ballHead" style="display:none">蓝球/后区</th></tr></thead>
+          <tbody id="drawRows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-check">
+    <div class="card">
+      <h2>选号命中检测</h2>
+      <div class="fields">
+        <div class="n" id="mainFields"></div>
+        <div class="n" id="ballFields"></div>
+        <button onclick="doCheck()">检测本期是否命中</button>
+      </div>
+      <div class="hint" id="checkHint">先点击「最新一期」获取最新开奖号码，再输入你的选号进行命中检测。</div>
+      <div class="hit" id="checkResult"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const LOTTERY_TYPES = [
+  { code: 'ssq', name: '双色球', main: 6, ball: 1 },
+  { code: 'dlt', name: '大乐透', main: 5, ball: 2 },
+  { code: '3d',  name: '福彩3D', main: 3, ball: 0 },
+  { code: 'pl3', name: '排列三', main: 3, ball: 0 },
+  { code: 'pl5', name: '排列五', main: 5, ball: 0 },
+  { code: 'qx',  name: '七星彩', main: 7, ball: 0 },
+  { code: 'kl8', name: '快乐8',  main: 20, ball: 0 },
+  { code: 'qlc', name: '七乐彩', main: 7, ball: 0 },
+];
+
+let curType = LOTTERY_TYPES[0];
+let latestDraws = [];
+let latestMain = null;
+let latestBall = null;
+
+function $(id){ return document.getElementById(id); }
+
+const typeSel = $('typeSel');
+LOTTERY_TYPES.forEach(t => {
+  const op = document.createElement('option');
+  op.value = t.code; op.textContent = t.name;
+  typeSel.appendChild(op);
+});
+typeSel.addEventListener('change', () => {
+  curType = LOTTERY_TYPES.find(t => t.code === typeSel.value);
+  buildTypeUI();
+});
+
+function buildTypeUI() {
+  $('mainHead').textContent = curType.ball > 0 ? '红球/前区' : '号码';
+  $('ballHead').style.display = curType.ball > 0 ? '' : 'none';
+  $('mainFields').innerHTML = (curType.ball > 0 ? '红球/前区：' : '选号：') +
+    Array.from({length: curType.main}, () => '<input type="number" min="0" max="80" class="mainIn" placeholder="数">').join('');
+  $('ballFields').innerHTML = curType.ball > 0 ? '蓝球/后区：' +
+    Array.from({length: curType.ball}, () => '<input type="number" min="1" max="20" class="ballIn" placeholder="数">').join('') : '';
+  document.querySelectorAll('.mainIn').forEach(i => i.value = '');
+  document.querySelectorAll('.ballIn').forEach(i => i.value = '');
+  buildJdNav();
+}
+
+let page = 0;
+function buildJdNav() {
+  $('historyNav').innerHTML = '<span>第 ' + (page + 1) + ' 页</span>' +
+    '<button onclick="prevPage()">上一页</button>' +
+    '<button onclick="nextPage()">下一页</button>';
+}
+function prevPage(){ if(page>0){ page--; loadDraws(); } }
+function nextPage(){ page++; loadDraws(); }
+
+function parseDraws(text) {
+  const lines = text.split(/\r?\n/);
+  const out = [];
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const t = line.trim().split(/\s+/);
+    if (!/^\d{5,}$/.test(t[0])) continue;
+    if (!/^\d{4}-/.test(t[1])) continue;
+    const nums = [];
+    for (let i = 2; i < t.length; i++) {
+      if (/^\d{1,2}$/.test(t[i])) { nums.push(t[i]); }
+      else break;
+    }
+    if (nums.length < curType.main + curType.ball) continue;
+    const main = nums.slice(0, curType.main).map(n => n.padStart(2, '0'));
+    const ball = curType.ball > 0 ? nums.slice(curType.main, curType.main + curType.ball).map(n => n.padStart(2, '0')) : [];
+    out.push({ issue: t[0], date: t[1], main: main, ball: ball });
+  }
+  return out;
+}
+
+async function loadDraws(latestOnly) {
+  if (latestOnly === true) page = 0;
+  const btn = $('queryBtn'); btn.disabled = true;
+  $('drawRows').innerHTML = '<tr><td colspan="4" class="loading">加载中，请稍候...</td></tr>';
+  try {
+    const res = await fetch('/api/lottery/' + curType.code);
+    if (!res.ok) throw new Error('接口返回 ' + res.status);
+    const text = await res.text();
+    const draws = parseDraws(text);
+    latestDraws = draws;
+    if (draws.length) { latestMain = draws[0].main; latestBall = draws[0].ball; }
+    $('historyNav').style.display = draws.length ? '' : 'none';
+    if (latestOnly === true) {
+      renderRows(draws.slice(0, 1));
+      $('hisTitle').textContent = '最新一期 &#183; ' + curType.name;
+    } else {
+      const start = page * 15;
+      renderRows(draws.slice(start, start + 15));
+      $('hisTitle').textContent = '开奖历史（第 ' + (page + 1) + ' 页 &#183; 共 ' + draws.length + ' 期）';
+    }
+    $('checkHint').textContent = latestMain
+      ? '最新一期 ' + draws[0].issue + '：' + drawText(draws[0]) + '。输入你的选号进行命中检测。'
+      : '暂无数据';
+  } catch (e) {
+    $('drawRows').innerHTML = '<tr><td colspan="4" class="empty">加载失败：' + e.message + '</td></tr>';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderRows(rows) {
+  $('drawRows').innerHTML = rows.length
+    ? rows.map(d => '<tr><td>' + d.issue + '</td><td>' + d.date + '</td>' +
+        '<td>' + d.main.map(n => '<span class="num ' + (curType.ball > 0 ? 'red' : 'blue') + '">' + n + '</span>').join('') + '</td>' +
+        '<td>' + (d.ball.length ? d.ball.map(n => '<span class="num blue">' + n + '</span>').join('') : '—') + '</td></tr>').join('')
+    : '<tr><td colspan="4" class="empty">暂无数据</td></tr>';
+}
+
+function drawText(d) {
+  return d.main.join(' ') + (d.ball.length ? ' + ' + d.ball.join(' ') : '');
+}
+
+function switchMode(m) {
+  document.querySelectorAll('.modes button').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+  $('panel-history').classList.toggle('show', m === 'history');
+  $('panel-check').classList.toggle('show', m === 'check');
+}
+
+function doCheck() {
+  const result = $('checkResult');
+  if (!latestMain) { result.className = 'hit no'; result.textContent = '请先点击「最新一期」加载开奖号码。'; return; }
+  const main = Array.from(document.querySelectorAll('.mainIn')).map(i => i.value.trim()).filter(Boolean);
+  const ball = Array.from(document.querySelectorAll('.ballIn')).map(i => i.value.trim()).filter(Boolean);
+  if (main.length !== curType.main || (curType.ball > 0 && ball.length !== curType.ball)) {
+    result.className = 'hit no';
+    result.textContent = '请填满选号（' + curType.name + ' 需 ' + curType.main + (curType.ball ? '个主号 + ' + curType.ball + '个蓝球' : '个号码') + '）。';
+    return;
+  }
+  const hitMain = main.filter(n => latestMain.includes(n.padStart(2, '0'))).length;
+  const hitBall = curType.ball > 0 ? ball.filter(n => latestBall.includes(n.padStart(2, '0'))).length : 0;
+  let allHit;
+  if (curType.ball > 0) {
+    allHit = hitMain === curType.main && hitBall === curType.ball;
+    result.textContent = allHit ? '🎉 命中全部号码！' : '命中 ' + hitMain + '/' + curType.main + ' 个主号 + ' + hitBall + '/' + curType.ball + ' 个蓝球。';
+  } else {
+    allHit = hitMain === curType.main;
+    result.textContent = allHit ? '🎉 命中全部号码！' : '命中 ' + hitMain + '/' + curType.main + ' 个号码。';
+  }
+  result.className = allHit ? 'hit ok' : 'hit no';
+}
+
+buildTypeUI();
+</script>
+</body>
+</html>
