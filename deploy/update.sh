@@ -124,6 +124,7 @@ FILES=(
   server/public/index.html
   server/public/css/style.css
   server/public/js/admin.js
+  server/public/web/index.html
   server/public/js/chat.js
   server/public/js/call.js
 )
