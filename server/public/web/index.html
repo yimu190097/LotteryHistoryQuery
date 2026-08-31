@@ -1185,26 +1185,21 @@ function showTierRows(cfg,draw,ver){
     var baseCnt=td?td.count:null;
     var baseAmt=td?td.amount:null;
     var appAmt=atd?atd.amount:null;
-    // 注数（对齐 APK: 合并基本+追加为总注数，追加另起一行）
+    // 注数（对齐 APK: 合并基本+追加为总注数，追加注数移到金额列一起展示）
     var cntStr='—';
     if(isFuyunOff){
       cntStr='—（奖池未达门槛，本奖项停发）';
     }else if(baseCnt!==null){
       if(hasAppend&&atd){
         var mergedCnt=baseCnt+(appCnt>0?appCnt:0);
-        if(mergedCnt>0){
-          cntStr=mergedCnt.toLocaleString()+'注';
-          if(appCnt>0)cntStr+='<br><span class="apn">（追加'+appCnt.toLocaleString()+'注）</span>';
-          else cntStr+='<br><span class="apn">（追加空开）</span>';
-        }else{
-          cntStr='空开<br><span class="apn">（追加空开）</span>';
-        }
+        if(mergedCnt>0)cntStr=mergedCnt.toLocaleString()+'注';
+        else cntStr='空开';
       }else{
         if(baseCnt>0)cntStr=baseCnt.toLocaleString()+'注';
         else cntStr='空开';
       }
     }
-    // 金额（对齐 APK: 基本投注/追加投注 分行，带标签）
+    // 金额（对齐 APK: 基本投注/追加投注 分行，追加注数+金额一起展示）
     var amtStr='—';
     if(isFuyunOff){
       amtStr='—（奖池未达门槛，本奖项停发）';
@@ -1214,8 +1209,9 @@ function showTierRows(cfg,draw,ver){
         if(baseCnt>0&&baseAmt>0)parts.push('基本投注 '+fmtAmt(baseAmt));
         else if(baseCnt===0)parts.push('空开无奖金');
         else parts.push('基本投注 —');
-        if(appCnt>0&&appAmt>0)parts.push('<span class="apa">追加投注 '+fmtAmt(appAmt)+'</span>');
-        else parts.push('<span class="apa">追加投注 —</span>');
+        if(appCnt>0&&appAmt>0)parts.push('<span class="apa">追加'+appCnt.toLocaleString()+'注 '+fmtAmt(appAmt)+'</span>');
+        else if(appCnt>0)parts.push('<span class="apa">追加'+appCnt.toLocaleString()+'注 —</span>');
+        else parts.push('<span class="apa">追加空开 —</span>');
         amtStr=parts.join('<br>');
       }else{
         if(baseAmt>0)amtStr=fmtAmt(baseAmt);
