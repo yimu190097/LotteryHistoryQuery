@@ -11,12 +11,19 @@
   --ball_text_selected:#FFFFFF; --ball_text_normal:#333333; --ball_border:#CCCCCC;
   --primary_red:#C62828; --primary_blue:#1565C0;
   --bg_light:#F5F5F5; --surface:#FFFFFF;
-  --text_primary:#212121; --text_secondary:#757575; --text_hint:#616161;
+  --text_primary:#212121; --text_secondary:#555555; --text_hint:#444444;
   --divider:#E0E0E0; --divider_subtle:#E0E0E0;
-  --button_red:#C62828; --button_gray:#BDBDBD; --surface_variant:#F5F5F5;
-  --micro:13px; --tiny:14px; --small:15px; --body:17px; --title:19px; --subtitle:21px;
-  --card_margin:12px; --card_padding:14px; --page_padding:14px;
+  --button_red:#C62828; --button_gray:#9E9E9E; --surface_variant:#F5F5F5;
+  /* 适老化：默认字体比标准大 2px，large 模式再 +2px */
+  --fs-base:0px;
+  --micro:calc(15px + var(--fs-base)); --tiny:calc(16px + var(--fs-base));
+  --small:calc(17px + var(--fs-base)); --body:calc(19px + var(--fs-base));
+  --title:calc(21px + var(--fs-base)); --subtitle:calc(23px + var(--fs-base));
+  --card_margin:14px; --card_padding:16px; --page_padding:16px;
   --max-width:420px;
+}
+:root.large{
+  --fs-base:2px;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;}
@@ -36,10 +43,10 @@ body{
 #screen::-webkit-scrollbar{display:none;}
 
 /* ================= Toolbar ================= */
-#toolbar{background:var(--primary_red);height:56px;display:flex;align-items:center;
+#toolbar{background:var(--primary_red);height:60px;display:flex;align-items:center;
   padding:0 8px;position:sticky;top:0;z-index:20;gap:4px;}
-#toolbar .title{flex:1;color:#fff;font-size:20px;font-weight:bold;padding-left:4px;white-space:nowrap;overflow:hidden;}
-#toolbar .act{color:#fff;font-size:13px;padding:6px 8px;border-radius:6px;cursor:pointer;white-space:nowrap;font-weight:600;background:rgba(255,255,255,.12);}
+#toolbar .title{flex:1;color:#fff;font-size:22px;font-weight:bold;padding-left:4px;white-space:nowrap;overflow:hidden;}
+#toolbar .act{color:#fff;font-size:14px;padding:8px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;font-weight:600;background:rgba(255,255,255,.12);min-height:44px;display:flex;align-items:center;}
 #toolbar .act:active{background:rgba(255,255,255,.25);}
 
 /* ================= 最新开奖区（白底） ================= */
@@ -56,8 +63,8 @@ body{
 .lcard .iss{flex:1;text-align:right;font-size:12px;color:var(--text_secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .lcard .dt{font-size:12px;color:var(--text_secondary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .lcard .balls{display:flex;flex-wrap:wrap;margin-top:6px;}
-.lcard .bt{width:20px;height:20px;line-height:20px;text-align:center;border-radius:50%;
-  font-size:10px;font-weight:700;color:#fff;margin:1px;}
+.lcard .bt{width:24px;height:24px;line-height:24px;text-align:center;border-radius:50%;
+  font-size:12px;font-weight:700;color:#fff;margin:2px;}
 .lcard .plus{font-size:13px;color:var(--text_secondary);margin:0 2px;line-height:20px;}
 .lcard .view{margin-top:4px;text-align:right;font-size:12px;font-weight:bold;color:var(--primary_red);}
 
@@ -83,9 +90,9 @@ body{
 #upgradeBtn{display:none;font-size:12px;font-weight:bold;color:#fff;background:var(--primary_red);border-radius:6px;padding:5px 10px;cursor:pointer;white-space:nowrap;}
 
 /* ================= 彩种 Tab（2×4 吸顶） ================= */
-#tabBar{background:var(--primary_red);position:sticky;top:56px;z-index:19;padding:8px 8px 6px;}
+#tabBar{background:var(--primary_red);position:sticky;top:60px;z-index:19;padding:8px 8px 6px;}
 #tabGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 6px;}
-.tab{height:56px;display:flex;align-items:center;justify-content:center;border-radius:6px;
+.tab{height:60px;display:flex;align-items:center;justify-content:center;border-radius:6px;
   color:#E6FFFFFF;font-size:18px;font-weight:bold;border:1px solid rgba(255,255,255,.35);
   background:transparent;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .tab.on{background:#fff;color:var(--primary_red);border:2px solid var(--primary_red);}
@@ -142,10 +149,10 @@ body{
 
 /* 按钮行 */
 #btnRow{display:flex;align-items:center;}
-#btnReset,#btnQuery{height:52px;flex:1;display:flex;align-items:center;justify-content:center;
+#btnReset,#btnQuery{height:56px;flex:1;display:flex;align-items:center;justify-content:center;
   border-radius:8px;font-size:var(--body);font-weight:600;color:#fff;cursor:pointer;border:none;}
-#btnReset{background:var(--button_gray);margin-right:6px;}
-#btnQuery{background:var(--button_red);margin-left:6px;}
+#btnReset{background:var(--button_gray);margin-right:8px;}
+#btnQuery{background:var(--button_red);margin-left:8px;}
 
 /* ================= 查询结果 ================= */
 #resultCard .head{display:flex;align-items:center;padding-bottom:6px;}
@@ -239,6 +246,7 @@ body{
     <!-- Toolbar -->
     <div id="toolbar">
       <div class="title">开奖历史查询</div>
+      <div class="act" onclick="toggleFontSize()" id="fontBtn" title="切换字号大小">Aa</div>
       <div class="act" onclick="openAuthDialog()">登录</div>
       <div class="act" onclick="downloadUserApk()">下载APP</div>
       <div class="act" onclick="refreshData()">刷新</div>
@@ -408,6 +416,16 @@ var historyRecs = {}; // code -> [record]
 
 function $(id){return document.getElementById(id);}
 function pad2(n){return (n<10?'0':'')+n;}
+// 字体大小切换（适老化）
+function toggleFontSize(){
+  var root=document.documentElement;
+  var isLarge=root.classList.toggle('large');
+  localStorage.setItem('font_large',isLarge?'1':'0');
+  $('fontBtn').textContent=isLarge?'Aa+':'Aa';
+}
+(function(){
+  if(localStorage.getItem('font_large')==='1'){document.documentElement.classList.add('large');$('fontBtn')&&($('fontBtn').textContent='Aa+');}
+})();
 
 /* ---------- 认证状态管理 ---------- */
 var authState = {
@@ -1108,6 +1126,18 @@ function isFuyunOn(t){
   if(!jackpot)return false;
   return jackpot>=1500000000;
 }
+function parseNumberSafe(raw){
+  var s=raw.trim();if(!s)return null;
+  // 纯整数
+  if(s.indexOf(',')===-1&&s.indexOf('.')===-1)return parseInt(s,10)||0;
+  // 小数（无千分位）：8000.0 → 8000
+  if(s.indexOf(',')===-1)return parseInt(s.split('.')[0],10)||0;
+  // 美式千分位：84,337,222.00 → 84337222
+  if(/^[+-]?\d{1,3}(?:,\d{3})*(?:\.\d+)?$/.test(s))return parseInt(s.replace(/,/g,'').split('.')[0],10)||0;
+  // 欧式：84.337.222,00 → 84337222
+  if(/^[+-]?\d{1,3}(?:\.\d{3})*(?:,\d+)?$/.test(s))return parseInt(s.replace(/\./g,'').split(',')[0],10)||0;
+  return null;
+}
 function parseDraws(text){
   var lines=text.split(/\r?\n/),out=[];
   for(var i=0;i<lines.length;i++){
@@ -1117,17 +1147,36 @@ function parseDraws(text){
     if(!/^\d{5,}$/.test(t[0]))continue;
     if(!/^\d{4}-/.test(t[1]))continue;
     var nums=[];
-    for(var j=2;j<t.length;j++){if(/^\d{1,2}$/.test(t[j]))nums.push(t[j]);else break;}
+    var numEnd=2;
+    for(var j=2;j<t.length;j++){if(/^\d{1,2}$/.test(t[j])){nums.push(t[j]);numEnd=j+1;}else break;}
     if(nums.length<cur.parseMain+cur.parseSec)continue;
     var main=nums.slice(0,cur.parseMain);
     var sec=cur.parseSec>0?nums.slice(cur.parseMain,cur.parseMain+cur.parseSec):[];
     var bmain=main.map(function(n){return pad2(+n);});
     var bsec=sec.map(function(n){return pad2(+n);});
+    // 号码之后提取奖级数据（跳过extra字段：销售额、奖池等）
+    var extraCount=cur.extraCount||(cur.code==='ssq'?8:cur.code==='dlt'?2:cur.code==='3d'?6:cur.code==='7xc'?2:cur.code==='kl8'?2:cur.code==='7lc'?2:cur.code==='p3'?1:cur.code==='p5'?1:2);
+    var tierStart=numEnd+extraCount;
+    var tiers=[];
+    for(var k=0;k<15;k++){
+      var ci=tierStart+k*2,ai=tierStart+k*2+1;
+      if(ci>=t.length||ai>=t.length)break;
+      var cRaw=t[ci],aRaw=t[ai];
+      if(cRaw==='-'||aRaw==='-'||!cRaw||!aRaw){tiers.push(null);continue;}
+      var cnt=parseNumberSafe(cRaw),amt=parseNumberSafe(aRaw);
+      if(cnt===null||amt===null){tiers.push(null);continue;}
+      tiers.push({count:cnt,amount:amt});
+    }
+    // 取前N个有效奖级
+    var validTiers=tiers.filter(function(x){return x!==null;});
+    var tierCount=cur.tierCount||(cur.code==='ssq'?7:cur.code==='dlt'?7:cur.code==='3d'?3:cur.code==='7xc'?6:cur.code==='kl8'?7:cur.code==='7lc'?7:cur.code==='p3'?3:cur.code==='p5'?1:7);
+    var displayTiers=validTiers.slice(0,tierCount);
     out.push({issue:t[0],date:t[1],main:main,sec:sec,
       ballHtml:bmain.map(function(n){return '<span class="bt" style="background:var(--red_ball)">'+n+'</span>';}).join('')
       +(cur.hasSec&&bsec.length?('<span class="plus">+</span>'+bsec.map(function(n){return '<span class="bt" style="background:var(--blue_ball)">'+n+'</span>';}).join('')):''),
       dmain:bmain, dsec:bsec,
-      fuyun:cur.code==='ssq'&&isFuyunOn(t)});
+      fuyun:cur.code==='ssq'&&isFuyunOn(t),
+      tiers:displayTiers, allTiers:tiers});
   }
   return out;
 }

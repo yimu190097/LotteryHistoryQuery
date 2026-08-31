@@ -121,8 +121,8 @@ object LotteryType {
     // ==================== 双色球（2026-02-01起增设福运奖）====================
     val SSQ = LotteryTypeConfig(
         code = "ssq", displayName = "双色球",
-        url = "http://data.17500.cn/ssq_desc.txt",
-        txtFallbackUrl = "http://data.17500.cn/ssq_desc.txt",
+        url = "https://data.17500.cn/ssq_desc.txt",
+        txtFallbackUrl = "https://data.17500.cn/ssq_desc.txt",
         primaryMin = 1, primaryMax = 33, primaryPickCount = 6, primaryLabel = "红球",
         secondaryMin = 1, secondaryMax = 16, secondaryPickCount = 1, secondaryLabel = "蓝球",
         hasSecondary = true,
@@ -180,8 +180,8 @@ object LotteryType {
     //  26088期验证：[12-25]正好7对基本投注（一等2/9662603→七等9077777/5全对），后续是追加
     val DLT = LotteryTypeConfig(
         code = "dlt", displayName = "大乐透",
-        url = "http://data.17500.cn/dlt2_desc.txt",
-        txtFallbackUrl = "http://data.17500.cn/dlt2_desc.txt",
+        url = "https://data.17500.cn/dlt2_desc.txt",
+        txtFallbackUrl = "https://data.17500.cn/dlt2_desc.txt",
         primaryMin = 1, primaryMax = 35, primaryPickCount = 5, primaryLabel = "前区",
         secondaryMin = 1, secondaryMax = 12, secondaryPickCount = 2, secondaryLabel = "后区",
         hasSecondary = true,
@@ -329,8 +329,8 @@ object LotteryType {
     //  组选3/6 是投注方式而非不同匹配条件，详情页已展示官方真实三档奖级数据。
     val FC3D = LotteryTypeConfig(
         code = "3d", displayName = "福彩3D",
-        url = "http://data.17500.cn/3d_desc.txt",
-        txtFallbackUrl = "http://data.17500.cn/3d_desc.txt",
+        url = "https://data.17500.cn/3d_desc.txt",
+        txtFallbackUrl = "https://data.17500.cn/3d_desc.txt",
         primaryMin = 0, primaryMax = 9, primaryPickCount = 3, primaryLabel = "号码",
         hasSecondary = false,
         ruleVersions = listOf(
@@ -357,8 +357,8 @@ object LotteryType {
     // ==================== 七乐彩（规则长期稳定）====================
     val QLC = LotteryTypeConfig(
         code = "7lc", displayName = "七乐彩",
-        url = "http://data.17500.cn/7lc_desc.txt",
-        txtFallbackUrl = "http://data.17500.cn/7lc_desc.txt",
+        url = "https://data.17500.cn/7lc_desc.txt",
+        txtFallbackUrl = "https://data.17500.cn/7lc_desc.txt",
         primaryMin = 1, primaryMax = 30, primaryPickCount = 7, primaryLabel = "基本号",
         secondaryMin = 1, secondaryMax = 30, secondaryPickCount = 1, secondaryLabel = "特别号",
         hasSecondary = true,
@@ -390,8 +390,8 @@ object LotteryType {
     //  同 FC3D：3 位全中 = 中奖，组选3/6 是投注方式，详情页展示真实三档奖级。
     val P3 = LotteryTypeConfig(
         code = "p3", displayName = "排列三",
-        url = "http://data.17500.cn/pl3_desc.txt",
-        txtFallbackUrl = "http://data.17500.cn/pl3_desc.txt",
+        url = "https://data.17500.cn/pl3_desc.txt",
+        txtFallbackUrl = "https://data.17500.cn/pl3_desc.txt",
         primaryMin = 0, primaryMax = 9, primaryPickCount = 3, primaryLabel = "号码",
         hasSecondary = false,
         ruleVersions = listOf(
@@ -418,8 +418,8 @@ object LotteryType {
     // ==================== 排列五（长期稳定）====================
     val P5 = LotteryTypeConfig(
         code = "p5", displayName = "排列五",
-        url = "http://data.17500.cn/pl5_desc.txt",
-        txtFallbackUrl = "http://data.17500.cn/pl5_desc.txt",
+        url = "https://data.17500.cn/pl5_desc.txt",
+        txtFallbackUrl = "https://data.17500.cn/pl5_desc.txt",
         primaryMin = 0, primaryMax = 9, primaryPickCount = 5, primaryLabel = "号码",
         hasSecondary = false,
         ruleVersions = listOf(
@@ -445,8 +445,8 @@ object LotteryType {
     //  20100期(新)验证：三76/3000  四2670/500 五40708/30 六1515095/5
     val QXC = LotteryTypeConfig(
         code = "7xc", displayName = "七星彩",
-        url = "http://data.17500.cn/7xc_desc.txt",
-        txtFallbackUrl = "http://data.17500.cn/7xc_desc.txt",
+        url = "https://data.17500.cn/7xc_desc.txt",
+        txtFallbackUrl = "https://data.17500.cn/7xc_desc.txt",
         primaryMin = 0, primaryMax = 9, primaryPickCount = 6, primaryLabel = "前6位",
         secondaryMin = 0, secondaryMax = 14, secondaryPickCount = 1, secondaryLabel = "后1位",
         hasSecondary = true,
@@ -503,8 +503,8 @@ object LotteryType {
     // ==================== 快乐8（选十玩法·长期稳定，中八=800元数据源验证）====================
     val KL8 = LotteryTypeConfig(
         code = "kl8", displayName = "快乐8",
-        url = "http://data.17500.cn/kl8_desc.txt",
-        txtFallbackUrl = "http://data.17500.cn/kl8_desc.txt",
+        url = "https://data.17500.cn/kl8_desc.txt",
+        txtFallbackUrl = "https://data.17500.cn/kl8_desc.txt",
         primaryMin = 1, primaryMax = 80, primaryPickCount = 10, primaryLabel = "号码",
         hasSecondary = false,
         ruleVersions = listOf(

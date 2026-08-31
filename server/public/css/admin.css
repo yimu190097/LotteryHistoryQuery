@@ -6,7 +6,7 @@
   --bg: #F5F5F5;
   --card-bg: #FFFFFF;
   --text: #212121;
-  --text-secondary: #757575;
+  --text-secondary: #555555;
   --border: #E0E0E0;
   --success: #2E7D32;
   --warning: #F57F17;
@@ -72,8 +72,8 @@ body {
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: 16px;
+  line-height: 1.6;
 }
 
 /* ========== 登录页 ========== */
@@ -289,7 +289,7 @@ table th {
   background: var(--table-hover);
   padding: 12px 16px;
   text-align: left;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-secondary);
   border-bottom: 2px solid var(--border);
@@ -298,7 +298,7 @@ table th {
 table td {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
-  font-size: 14px;
+  font-size: 15px;
 }
 table tr:hover { background: var(--table-hover); }
 
@@ -307,10 +307,10 @@ table tr:hover { background: var(--table-hover); }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
+  padding: 10px 18px;
   border: none;
   border-radius: var(--radius);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -325,7 +325,7 @@ table tr:hover { background: var(--table-hover); }
   color: var(--primary);
   border: 1px solid var(--primary);
 }
-.btn-sm { padding: 4px 12px; font-size: 13px; }
+.btn-sm { padding: 6px 14px; font-size: 14px; }
 .btn-danger { background: var(--danger); color: #FFF; }
 
 .search-bar {
@@ -420,9 +420,9 @@ table tr:hover { background: var(--table-hover); }
 /* ========== 标签/徽章 ========== */
 .badge {
   display: inline-block;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 12px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
 }
 .badge-success { background: #E8F5E9; color: #2E7D32; }
@@ -479,13 +479,13 @@ table tr:hover { background: var(--table-hover); }
 }
 .detail-item label {
   display: block;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
   margin-bottom: 2px;
   font-weight: 500;
 }
 .detail-item span {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text);
 }
 
