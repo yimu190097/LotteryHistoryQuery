@@ -136,48 +136,54 @@ const lotteryCircuit = new Map();
 
 function fetchLotteryUpstream(code) {
   return new Promise((resolve, reject) => {
-    // 优先 HTTPS，降级 HTTP（数据完整性校验在返回后做）
-    const url = `https://data.17500.cn/${code}_desc.txt`;
+    const proxyUrl = process.env.HTTP_PROXY || process.env.http_proxy || '';
+    const useProxy = !!proxyUrl;
+    // 沙箱内通过代理出站，优先 HTTP（代理隧道兼容性更好）
+    const url = useProxy
+      ? `http://data.17500.cn/${code}_desc.txt`
+      : `https://data.17500.cn/${code}_desc.txt`;
     let settled = false;
-    const transport = url.startsWith('https') ? https : http;
-    const req = transport.get(url, (r) => {
-      // 重定向跟随（HTTPS→HTTP 降级等）
-      if (r.statusCode >= 300 && r.statusCode < 400 && r.headers.location) {
-        r.resume();
-        const redirectUrl = r.headers.location;
-        const redirectTransport = redirectUrl.startsWith('https') ? https : http;
-        const r2 = redirectTransport.get(redirectUrl, (r2r) => {
-          if (r2r.statusCode !== 200) {
-            r2r.resume();
-            if (!settled) { settled = true; reject(new Error(`upstream status ${r2r.statusCode}`)); }
-            return;
-          }
-          readResponse(r2r);
-        });
-        r2r.setTimeout(LOTTERY_UPSTREAM_TIMEOUT, () => { r2r.destroy(new Error('数据源响应超时')); });
-        r2r.on('error', (e) => { if (!settled) { settled = true; reject(e); } });
-        r2r.on('timeout', () => { if (!settled) { settled = true; reject(new Error('数据源响应超时')); } });
-        return;
+
+    const doRequest = (targetUrl, redirectDepth) => {
+      if (redirectDepth > 3) { reject(new Error('重定向次数过多')); return; }
+      const isHttps = targetUrl.startsWith('https');
+      const transport = isHttps ? https : http;
+
+      const options = {};
+      if (useProxy) {
+        const pu = new URL(proxyUrl);
+        options.host = pu.hostname;
+        options.port = pu.port || 80;
+        options.path = targetUrl;
+        options.headers = { Host: new URL(targetUrl).host };
       }
-      if (r.statusCode !== 200) {
-        r.resume();
-        if (!settled) { settled = true; reject(new Error(`upstream status ${r.statusCode}`)); }
-        return;
-      }
-      readResponse(r);
-    });
-    req.setTimeout(LOTTERY_UPSTREAM_TIMEOUT, () => {
-      req.destroy(new Error('数据源响应超时'));
-    });
-    req.on('error', (e) => {
-      if (!settled) { settled = true; reject(e); }
-    });
-    req.on('timeout', () => {
-      if (!settled) { settled = true; reject(new Error('数据源响应超时')); }
-    });
+
+      const req = transport.get(useProxy ? options : targetUrl, (r) => {
+        if (r.statusCode >= 300 && r.statusCode < 400 && r.headers.location) {
+          r.resume();
+          const redirectUrl = r.headers.location;
+          doRequest(redirectUrl, redirectDepth + 1);
+          return;
+        }
+        if (r.statusCode !== 200) {
+          r.resume();
+          if (!settled) { settled = true; reject(new Error(`upstream status ${r.statusCode}`)); }
+          return;
+        }
+        readResponse(r);
+      });
+      req.setTimeout(LOTTERY_UPSTREAM_TIMEOUT, () => {
+        req.destroy(new Error('数据源响应超时'));
+      });
+      req.on('error', (e) => {
+        if (!settled) { settled = true; reject(e); }
+      });
+      req.on('timeout', () => {
+        if (!settled) { settled = true; reject(new Error('数据源响应超时')); }
+      });
+    };
 
     function readResponse(r) {
-      // 数据完整性：检查 Content-Length 和实际接收大小
       const expectedLen = parseInt(r.headers['content-length'], 10) || 0;
       let buf = '';
       let byteLen = 0;
@@ -186,12 +192,10 @@ function fetchLotteryUpstream(code) {
       r.on('end', () => {
         if (!settled) {
           settled = true;
-          // 最小数据量校验：至少要有 200 字节（彩票数据不可能这么短）
           if (byteLen < 200) {
             reject(new Error('数据源返回数据异常（过短）：' + byteLen + ' bytes'));
             return;
           }
-          // Content-Length 校验（允许 10% 误差，因为 chunked 编码可能无 Content-Length）
           if (expectedLen > 0 && Math.abs(byteLen - expectedLen) > expectedLen * 0.1) {
             console.warn(`[lottery] ${code}: Content-Length=${expectedLen} 实际=${byteLen}, 差异=${Math.abs(byteLen - expectedLen)}`);
           }
@@ -202,6 +206,8 @@ function fetchLotteryUpstream(code) {
         if (!settled) { settled = true; reject(e); }
       });
     }
+
+    doRequest(url, 0);
   });
 }
 
