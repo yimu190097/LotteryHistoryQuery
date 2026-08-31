@@ -43,8 +43,8 @@ class HistoryAdapter(
     // ===== 规则版本不明（resolveRuleVersion 返回 null）时的统一占位常量 =====
     //   用一个特殊 key+label 保证这些 draw 也能被正确分组展示，绝不 NPE 崩溃。
     private val UNKNOWN_VERSION_KEY = "__UNKNOWN_RULE_VERSION__"
-    private val UNKNOWN_VERSION_LABEL = "元数据缺失·版本不明"
-    private val UNKNOWN_VERSION_NOTE = "本期无法确定适用规则版本，显示可能不匹配当期真实政策。"
+    private val UNKNOWN_VERSION_LABEL = "版本信息缺失"
+    private val UNKNOWN_VERSION_NOTE = "本期版本信息缺失，奖项显示可能不准确。"
 
     init {
         rebuildGroupCache()

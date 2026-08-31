@@ -79,12 +79,8 @@ class DrawDetailDialog(
         // ====== P0 修复：元数据缺失时，最顶部第一时间插红色警告 ======
         if (metadataMissing) {
             val fatalWarn = TextView(context).apply {
-                text = buildString {
-                    append("✖ 严重：本期元数据缺失，无法确定适用规则版本。\n")
-                    append("当前展示基于【最旧版规则结构】仅供参考，可能与当期真实奖级不符。\n")
-                    append("请下拉刷新重新解析网络数据以恢复正确版本。")
-                }
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                text = "数据解析异常，请下拉刷新重试。如问题持续，请联系客服。"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 setTextColor(0xFFFFFFFF.toInt())
                 setBackgroundColor(0xFFB71C1C.toInt())
                 val pad = (10 * density).toInt()
@@ -181,13 +177,11 @@ class DrawDetailDialog(
             val warnText: String? = when (status) {
                 com.lottery.history.model.TierMatchStatus.MATCH -> null
                 com.lottery.history.model.TierMatchStatus.FEWER ->
-                    "⚠ 结构提示：本期实际公布 ${draw.actualTierCount ?: 0} 个奖级，少于规则配置 " +
-                        "${ruleVersion.realTiersToUse} 个（部分奖级可能停发或未公布）"
+                    "部分奖级未公布（本期共 ${draw.actualTierCount ?: 0} 个奖级有数据）"
                 com.lottery.history.model.TierMatchStatus.MORE ->
-                    "✖ 数据异常：本期实际解析到 ${draw.actualTierCount ?: 0} 个奖级，多于规则配置 " +
-                        "${ruleVersion.realTiersToUse} 个（数据源结构可能已变化，请更新应用）"
+                    "数据异常：奖级数量多于预期，请更新应用"
                 com.lottery.history.model.TierMatchStatus.MISMATCH ->
-                    "✖ 数据异常：未能解析到有效奖级数据，请稍后刷新或联系客服"
+                    "未解析到有效奖级数据，请刷新重试"
                 else -> null
             }
             if (warnText != null) {
@@ -257,7 +251,7 @@ class DrawDetailDialog(
         } else if (missingCount > 0) {
             // 部分奖级缺数据：一句话说明（看情况展示）
             val warn = TextView(context).apply {
-                text = "注：$missingCount 个奖级明细未完全公布。"
+                text = "注：$missingCount 个奖级明细暂未公布。"
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 setTextColor(0xFF5D4037.toInt())
                 setBackgroundColor(0xFFFFF3E0.toInt())
@@ -359,11 +353,9 @@ class DrawDetailDialog(
         //   startsWith 判断必错），改追加【最高严重级别红色警告】。
         val extraHint = buildString {
             if (metadataMissing) {
-                append("⚠【最高警告】元数据缺失：本期无法定位真实规则版本，")
-                append("奖级数量/奖项名/金额联动展示可能全部错误！\n")
-                append("立即操作：返回主界面 → 下拉刷新 → 重新下载官方最新数据解析。\n")
+                append("数据解析异常，请返回主界面下拉刷新。如问题持续，请联系客服。")
             } else {
-                append("空开=本期无人中；\"规则固定¥X\"为基础额度，每期实际金额以官方公布为准。")
+                append("空开=本期无人中奖；\"规则固定¥X\"为基础额度，每期实际金额以官方公布为准。")
             }
             // —— 奖池联动说明仅在规则版本明确时展示（缺失时 ruleVersion 是占位骨架，startsWith 必错）——
             if (!metadataMissing) {
@@ -385,7 +377,7 @@ class DrawDetailDialog(
                     if (jp != null) append("奖池${formatAmount(jp)}，")
                     append(when (fuyunState) {
                         ConditionalValue.ON -> "≥15亿福运奖已开启（中3红=5元）"
-                        ConditionalValue.OFF -> "<3亿福运奖已停止（中3红不中奖）"
+                        ConditionalValue.OFF -> "福运奖未开启（奖池<15亿或已停止，中3红不中奖）"
                         else -> "3亿~15亿之间福运奖维持上期状态"
                     })
                 }
@@ -393,7 +385,7 @@ class DrawDetailDialog(
         }
         val footer = TextView(context).apply {
             text = extraHint
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             // 元数据缺失：footer 也用红底白字警告，保证用户滑到底也一定能看到
             if (metadataMissing) {
                 setTextColor(0xFFFFFFFF.toInt())
@@ -476,9 +468,7 @@ class DrawDetailDialog(
         val issueTag = draw?.issue?.let { "  期号：$it" } ?: ""
         val tvCurrent = TextView(context).apply {
             text = if (metadataMissing) {
-                "【⚠ 元数据缺失·规则版本不明】${issueTag}\n" +
-                    "当前展示结构基于【最旧版规则】仅供参考，" +
-                    "请下拉刷新重新解析获取正确版本。"
+                "【规则版本未知】请下拉刷新重试"
             } else {
                 "【本期适用】${currentRule.policyLabel}${issueTag}\n生效日期：${currentRule.effectiveFromDate}起"
             }

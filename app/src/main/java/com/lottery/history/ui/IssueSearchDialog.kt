@@ -330,7 +330,7 @@ class IssueSearchDialog(context: Context) : Dialog(context) {
                 flags[ConditionalKey.SSQ_FUYUN]?.let { state ->
                     add(when (state) {
                         ConditionalValue.ON -> "★ 福运奖：≥15亿已开启（中3红=5元）"
-                        ConditionalValue.OFF -> "★ 福运奖：<3亿已停止（中3红不中奖）"
+                        ConditionalValue.OFF -> "★ 福运奖：未开启（中3红不中奖）"
                         else -> "★ 福运奖：奖池3~15亿间维持上期状态"
                     })
                 }

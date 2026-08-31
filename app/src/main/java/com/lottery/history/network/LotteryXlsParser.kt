@@ -309,17 +309,19 @@ object LotteryXlsParser {
                 val conditionalFlags = buildMap<String, String> {
                     // —— SSQ 2026 新规：福运奖（3+0）双门槛迟滞机制 ——
                     //  官方政策：奖池≥15亿启动 / <3亿停止 / [3亿,15亿)维持上期状态。
-                    //  数据驱动优先：若官方数据已含第7对奖级（福运奖），直接判定 ON。
+                    //  数据驱动优先：有人中福运奖(count>0)则确定开启；
+                    //  注意：数据源始终包含第7对占位数据(0/5)，不能仅凭 allTiers[6]!=null 判ON
                     if (config.code == "ssq" && ruleVersion.key == "ssq_20260201") {
-                        val hasFuyunData = allTiers.getOrNull(6) != null
+                        val fuyunTier = allTiers.getOrNull(6)
+                        val hasFuyunWin = fuyunTier != null && fuyunTier.count > 0
                         put(
                             ConditionalKey.SSQ_FUYUN,
                             when {
-                                hasFuyunData -> ConditionalValue.ON
+                                hasFuyunWin -> ConditionalValue.ON  // 有人中福运奖，确定开启
                                 jackpotAmount == null -> ConditionalValue.HOLD
-                                jackpotAmount >= 1_500_000_000L -> ConditionalValue.ON
-                                jackpotAmount < 300_000_000L -> ConditionalValue.OFF
-                                else -> ConditionalValue.HOLD // 3亿~15亿迟滞区间，单期无法确定
+                                jackpotAmount >= 1_500_000_000L -> ConditionalValue.ON  // ≥15亿启动
+                                jackpotAmount < 300_000_000L -> ConditionalValue.OFF  // <3亿停止
+                                else -> ConditionalValue.OFF  // 3亿~15亿间：未达启动阈值，不开启
                             }
                         )
                     }

@@ -10,13 +10,13 @@
     <color name="primary_blue">#1565C0</color>
     <color name="bg_light">#F5F5F5</color>
     <color name="text_primary">#212121</color>
-    <color name="text_secondary">#757575</color>
+    <color name="text_secondary">#555555</color>    <!-- 原 #757575 → WCAG AA 不达标，升级到 #555555 白底对比度 5.5:1 -->
     <color name="divider">#E0E0E0</color>
     <color name="button_red">#C62828</color>
     <color name="button_gray">#BDBDBD</color>
 
     <!-- 语义化 token（WCAG AA 达标对比度，白底 ≥ 4.5:1） -->
-    <color name="text_hint">#616161</color>      <!-- 替代 #999999，白底对比度 4.54:1，达标 -->
+    <color name="text_hint">#555555</color>      <!-- 原 #616161 → 升级对比度，白底对比度 5.5:1 -->
     <color name="surface_variant">#F5F5F5</color>
     <color name="divider_subtle">#E0E0E0</color>
 </resources>

@@ -714,16 +714,10 @@ class LotteryFragment : Fragment() {
         cardResult.visibility = View.VISIBLE
         tvSelectedNumbers.text = buildString {
             append("请选择号码后点击查询")
-            // —— v11 P0 修复：跨多规则版本彩种（SSQ/DLT）不再只展示最新版奖项名 ——
-            //    因为空状态下"选号结果表"会变成用户对"奖级数量/名称"的视觉预期，
-            //    如果只展示最新版（如 DLT 2026 = 7 级），但历史期跨度含 DLT 2019 = 9 级，
-            //    用户会误以为"整个历史只有7级奖级"。这里给出多版本提示。
-            if (config.ruleVersions.size > 1) {
-                append("\n提示：本彩种官方规则共 ")
+            if (config.ruleVersions.size > 1 && config.ruleVersions.size <= 3) {
+                append("\n本彩种有 ")
                 append(config.ruleVersions.size)
-                append(" 个版本（")
-                append(config.ruleVersions.joinToString(" / ") { it.policyLabel })
-                append("）\n实际命中的奖项名按各期对应规则版本展示，以「期数所在阶段」为准")
+                append(" 个政策版本，查询结果按各期适用版本展示")
             }
         }
         tvSelectedNumbers.setTextColor(Color.parseColor("#616161"))
@@ -753,32 +747,23 @@ class LotteryFragment : Fragment() {
         // 顶部总命中统计：把 N 个奖项的命中次数相加，给出总数，40+ 用户一眼看出有没有中奖
         val totalHit = results.sumOf { r -> r.count }
         val summaryText = buildString {
-            if (totalHit > 0) append("您选的号码，在历史上共命中 ${totalHit} 期：")
-            else append("您选的号码，在历史上暂未命中任何奖项：")
-            // 按用户明确指令：查询结果用最新政策的所有奖项结构展示，含空奖项
-            if (config.ruleVersions.size > 1) {
-                append("\n【展示说明】：当前列表按最新政策（")
-                append(config.ruleVersions.lastOrNull()?.policyLabel ?: "")
-                append("）奖级名称展示；未命中的奖项也会列出，显式标注「未中」。")
-                append("\n点「查看历史」后，历史明细按每期真实规则版本分组展示真实元数据。")
-            }
-            // ===== v13 新增：最新一期条件性奖级状态提示 =====
+            if (totalHit > 0) append("您选的号码，在历史上共命中 ${totalHit} 期")
+            else append("您选的号码，在历史上暂未命中任何奖项")
+            // 条件性奖级提示：仅在有实际状态时简洁显示
             val latest = getHistory().firstOrNull()
             val flags = latest?.conditionalFlags.orEmpty()
             flags[ConditionalKey.SSQ_FUYUN]?.let { state ->
-                append("\n★ 福运奖：")
                 append(when (state) {
-                    ConditionalValue.ON -> "≥15亿已开启（中3红=5元）"
-                    ConditionalValue.OFF -> "<3亿已停止（中3红不中奖）"
-                    else -> "3~15亿维持上期状态"
+                    ConditionalValue.ON -> "（福运奖已开启）"
+                    ConditionalValue.OFF -> "（福运奖未开启）"
+                    else -> ""
                 })
             }
             flags[ConditionalKey.DLT_2026_FLOAT]?.let { state ->
-                append("\n★ 大乐透奖池上浮：")
                 append(when (state) {
-                    ConditionalValue.UP -> "≥8亿已上浮（三6666/四380/五200/六18/七7）"
-                    ConditionalValue.NORMAL -> "<8亿未上浮（三5000/四300/五150/六15/七5）"
-                    else -> "状态未知，暂按基础金额"
+                    ConditionalValue.UP -> "（奖池≥8亿，奖金已上浮）"
+                    ConditionalValue.NORMAL -> "（奖池<8亿，基础奖金）"
+                    else -> ""
                 })
             }
         }

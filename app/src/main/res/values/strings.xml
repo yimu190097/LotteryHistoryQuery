@@ -22,7 +22,7 @@
     <string name="refresh_success">已更新%1$d个彩种</string>
     <string name="refresh_fail">更新失败：%1$s</string>
     <string name="refreshing">正在更新最新开奖数据...</string>
-    <string name="data_info">内置数据·点击右上角更新</string>
+    <string name="data_info">离线数据·点击刷新获取最新</string>
     <string name="latest_draws_title">最新开奖（8彩种）</string>
     <string name="action_latest">最新开奖</string>
     <string name="close">关闭</string>
@@ -39,11 +39,11 @@
     <string name="switch_to_login">已有账号？去登录</string>
     <string name="not_logged_in">未登录</string>
     <string name="tap_to_login">点击登录</string>
-    <string name="quota_free">免费 %1$d/%2$d 次</string>
-    <string name="quota_vip">%1$s·剩余 %2$d 天</string>
-    <string name="quota_vip_expired">VIP已过期·免费 %1$d/%2$d 次</string>
+    <string name="quota_free">今日免费已用 %1$d/%2$d 次</string>
+    <string name="quota_vip">%1$s·无限次·剩余 %2$d 天</string>
+    <string name="quota_vip_expired">VIP已过期·今日免费已用 %1$d/%2$d 次</string>
     <string name="quota_expired">配额已用尽</string>
-    <string name="quota_insufficient">今日免费查询次数已用完，请开通VIP</string>
+    <string name="quota_insufficient">今日免费次数已用完（明日0点刷新），开通VIP即享无限次查询</string>
     <string name="logout">退出登录</string>
     <string name="change_password">修改密码</string>
 </resources>

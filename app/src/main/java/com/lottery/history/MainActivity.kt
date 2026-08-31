@@ -509,10 +509,10 @@ class MainActivity : AppCompatActivity() {
         }
         if (lastMs > 0 && totalCached > 0) {
             val fmt = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
-            val failInfo = if (failedN > 0) " · ${failedN}个失败" else ""
-            updateStatusText("已更新 ${fmt.format(Date(lastMs))} · ${successN}个彩种$failInfo · 共${totalCached}期")
+            val failInfo = if (failedN > 0) " · ${failedN}个彩种更新失败" else ""
+            updateStatusText("数据更新于 ${fmt.format(Date(lastMs))} · ${successN}个彩种$failInfo · 共${totalCached}期")
         } else {
-            updateStatusText("内置数据·共${totalCached}期·右上角刷新")
+            updateStatusText("离线数据·共${totalCached}期·点击刷新获取最新")
         }
     }
 
