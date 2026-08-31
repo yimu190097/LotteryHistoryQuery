@@ -100,9 +100,12 @@ router.post('/client/login', (req, res) => {
 
 /**
  * POST /api/users/client/consume - 客户端消耗查询次数（需要用户 Token）
+ *
+ * 幂等性：若 Body 携带 clientOpId，则相同 clientOpId 重复调用只扣一次，
+ * 后续重试直接返回首次结果。覆盖「服务器已扣减但响应丢失 → 客户端重试」场景。
  */
 router.post('/client/consume', userAuthMiddleware, (req, res) => {
-  const { phone, count } = req.body;
+  const { phone, count, clientOpId } = req.body || {};
   if (!phone) {
     return res.status(400).json({ error: '手机号不能为空' });
   }
@@ -111,38 +114,101 @@ router.post('/client/consume', userAuthMiddleware, (req, res) => {
     return res.status(403).json({ error: '不能操作其他用户的配额' });
   }
 
+  const now = Date.now();
+
+  // 幂等检查：相同 clientOpId 直接复用首次结果
+  if (clientOpId) {
+    const cached = db.prepare('SELECT result_payload FROM idempotency_log WHERE op_id = ?').get(clientOpId);
+    if (cached) {
+      if (cached.result_payload) {
+        return res.json(JSON.parse(cached.result_payload));
+      }
+      // 极少数情况：占位行存在但结果未写入（异常崩溃），返回当前配额快照
+      const q = db.prepare('SELECT remaining_queries FROM quotas WHERE user_phone = ?').get(phone);
+      return res.json({ success: true, remainingQueries: q?.remaining_queries ?? 0 });
+    }
+  }
+
   const quota = db.prepare('SELECT * FROM quotas WHERE user_phone = ?').get(phone);
   if (!quota) {
     return res.status(404).json({ error: '用户配额不存在' });
   }
 
   const consumeCount = count || 1;
-  const now = Date.now();
 
-  if (quota.plan_type === 'MONTHLY') {
-    if (quota.monthly_expire_at && quota.monthly_expire_at < now) {
-      return res.status(403).json({ error: '月租已过期，请联系管理员续费' });
+  // 占位 clientOpId（如有），后续无论扣减是否成功都写入结果，防止并发重复入账
+  const tx = db.transaction(() => {
+    if (clientOpId) {
+      const ins = db.prepare(
+        'INSERT OR IGNORE INTO idempotency_log (op_id, user_phone, action, result_payload, created_at) VALUES (?, ?, ?, ?, ?)'
+      ).run(clientOpId, phone, 'QUERY_CONSUME', '', now);
+      if (ins.changes === 0) {
+        // 并发情况下另一请求已占用 op_id，回退读快照
+        const c = db.prepare('SELECT result_payload FROM idempotency_log WHERE op_id = ?').get(clientOpId);
+        if (c && c.result_payload) return JSON.parse(c.result_payload);
+        const q = db.prepare('SELECT remaining_queries FROM quotas WHERE user_phone = ?').get(phone);
+        return { success: true, remainingQueries: q?.remaining_queries ?? 0 };
+      }
     }
+
+    if (quota.plan_type === 'MONTHLY') {
+      if (quota.monthly_expire_at && quota.monthly_expire_at < now) {
+        const err = { error: '月租已过期，请联系管理员续费' };
+        if (clientOpId) {
+          db.prepare('UPDATE idempotency_log SET result_payload = ? WHERE op_id = ?')
+            .run(JSON.stringify(err), clientOpId);
+        }
+        return err;
+      }
+      db.prepare(
+        'INSERT INTO audit_log (admin_id, admin_username, action, target, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+      ).run(null, 'system', 'QUERY_CONSUME', phone, '月租用户查询，不扣次数', now);
+      const result = { success: true, remainingQueries: quota.remaining_queries };
+      if (clientOpId) {
+        db.prepare('UPDATE idempotency_log SET result_payload = ? WHERE op_id = ?')
+          .run(JSON.stringify(result), clientOpId);
+      }
+      return result;
+    }
+
+    if (quota.remaining_queries < consumeCount) {
+      const err = { error: '查询次数不足，请联系管理员充值' };
+      if (clientOpId) {
+        db.prepare('UPDATE idempotency_log SET result_payload = ? WHERE op_id = ?')
+          .run(JSON.stringify(err), clientOpId);
+      }
+      return err;
+    }
+
+    db.prepare(
+      'UPDATE quotas SET remaining_queries = remaining_queries - ?, server_version = server_version + 1, updated_at = ? WHERE user_phone = ?'
+    ).run(consumeCount, now, phone);
+
     db.prepare(
       'INSERT INTO audit_log (admin_id, admin_username, action, target, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(null, 'system', 'QUERY_CONSUME', phone, '月租用户查询，不扣次数', now);
-    return res.json({ success: true, remainingQueries: quota.remaining_queries });
+    ).run(null, 'system', 'QUERY_CONSUME', phone, `消耗${consumeCount}次查询`, now);
+
+    const updated = db.prepare('SELECT remaining_queries FROM quotas WHERE user_phone = ?').get(phone);
+    const result = { success: true, remainingQueries: updated.remaining_queries };
+    if (clientOpId) {
+      db.prepare('UPDATE idempotency_log SET result_payload = ? WHERE op_id = ?')
+        .run(JSON.stringify(result), clientOpId);
+    }
+    return result;
+  });
+
+  let result;
+  try {
+    result = tx();
+  } catch (e) {
+    console.error('[consume] tx failed:', e.message);
+    return res.status(500).json({ error: '扣减失败，请稍后重试' });
   }
 
-  if (quota.remaining_queries < consumeCount) {
-    return res.status(403).json({ error: '查询次数不足，请联系管理员充值' });
+  if (result.error) {
+    return res.status(403).json(result);
   }
-
-  db.prepare(
-    'UPDATE quotas SET remaining_queries = remaining_queries - ?, server_version = server_version + 1, updated_at = ? WHERE user_phone = ?'
-  ).run(consumeCount, now, phone);
-
-  db.prepare(
-    'INSERT INTO audit_log (admin_id, admin_username, action, target, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(null, 'system', 'QUERY_CONSUME', phone, `消耗${consumeCount}次查询`, now);
-
-  const updated = db.prepare('SELECT remaining_queries FROM quotas WHERE user_phone = ?').get(phone);
-  res.json({ success: true, remainingQueries: updated.remaining_queries });
+  res.json(result);
 });
 
 /**

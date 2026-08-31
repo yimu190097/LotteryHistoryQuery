@@ -125,7 +125,12 @@ abstract class LotteryDatabase : RoomDatabase() {
                     MIGRATION_12_13,
                     MIGRATION_13_14,
                     MIGRATION_14_15
-                ).fallbackToDestructiveMigration().build().also { instance = it }
+                )
+                // P0-4: 移除 fallbackToDestructiveMigration() —— 迁移失败时
+                // 应抛 IllegalStateException 让全局异常处理器捕获并提示，
+                // 而非静默删除整个数据库导致用户本地数据丢失。
+                // 若确需重置（极少数损坏场景），由用户主动「清除应用数据」处理。
+                .build().also { instance = it }
             }
         }
     }

@@ -78,11 +78,14 @@ class QuotaRepository(private val context: Context) {
     }
 
     /**
-     * 消耗一次查询：服务器优先（带 JWT 鉴权），失败时降级到本地扣减 + 入队待同步。
+     * 消耗一次查询：服务器优先（带 JWT 鉴权 + clientOpId 幂等），失败时降级到本地扣减 + 入队待同步。
      *
      * 流程：
-     * 1) 联网：调 server /api/users/client/consume → 成功则用返回的剩余次数更新本地缓存
-     * 2) 离线 / 服务器失败：本地扣减 + 入队 pending_sync，联网后 SyncWorker 推送
+     * 1) 联网：调 server /api/users/client/consume（携带 clientOpId）→ 成功则用返回的剩余次数更新本地缓存
+     * 2) 离线 / 服务器失败：本地扣减 + 入队 pending_sync（同 clientOpId），联网后 SyncWorker 推送
+     *
+     * 重复扣减防护：服务器基于 clientOpId 幂等去重。即使「服务器已扣减但响应丢失」导致
+     * 客户端走本地兜底，SyncWorker 重试时同一 clientOpId 也只会被服务器入账一次。
      *
      * @return true 扣减成功，false 无配额
      */
@@ -90,11 +93,15 @@ class QuotaRepository(private val context: Context) {
         val quota = quotaDao.getByUser(phone) ?: return@withContext false
         if (!quota.canQuery()) return@withContext false
 
+        // 提前生成幂等键，无论走服务器还是本地兜底都用同一个 clientOpId
+        val clientOpId = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+
         // 月租用户本地不扣次数（但需调 server 确认未过期）
         if (quota.planType == PlanType.PAY_PER_USE) {
             // 按次用户：先调服务器
             try {
-                val resp = com.lottery.history.network.ApiClient.consumeQuery(phone, 1)
+                val resp = com.lottery.history.network.ApiClient.consumeQuery(phone, 1, clientOpId)
                 // 服务器权威：用返回值覆盖本地
                 applyServerSnapshot(
                     phone = phone,
@@ -106,12 +113,11 @@ class QuotaRepository(private val context: Context) {
                 return@withContext true
             } catch (e: Exception) {
                 android.util.Log.w("QuotaRepository", "server consume failed, fallback to local: ${e.message}")
-                // 走本地兜底
+                // 走本地兜底（下方统一处理）
             }
         }
 
-        // 本地扣减（按次）+ 入队待同步
-        val now = System.currentTimeMillis()
+        // 本地扣减（按次）+ 入队待同步（同一 clientOpId，服务器幂等去重）
         val newRemaining = if (quota.planType == PlanType.PAY_PER_USE) {
             quota.remainingQueries - 1
         } else {
@@ -124,13 +130,12 @@ class QuotaRepository(private val context: Context) {
                 updatedAt = now
             )
         )
-        // 入队待同步（幂等键防止重试重复扣减）
         pendingDao.insert(
             PendingSyncEntity(
                 userPhone = phone,
                 actionType = SyncAction.QUERY_CONSUME,
                 payload = """{"consumedAt":$now}""",
-                clientOpId = UUID.randomUUID().toString(),
+                clientOpId = clientOpId,
                 status = SyncStatus.PENDING,
                 createdAt = now
             )

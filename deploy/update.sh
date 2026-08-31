@@ -4,7 +4,9 @@
 # 阶段A：优先下载新版 deploy.js 并立即重启，让服务加载最长超时的新版部署入口
 # 阶段B：下载其余代码 + npm install + 重启；APK 后台独立进程同步
 # ============================================================================
-set -uo pipefail
+# P0-5: 启用 set -e —— 任意未显式容错的失败立即终止脚本，
+# 避免半完成状态被误判为「部署成功」。预期失败的命令显式用 || true / || log 容错。
+set -euo pipefail
 PROJECT_DIR="/root/lottery"
 LOG_FILE="/var/log/lottery-update.log"
 
@@ -42,7 +44,8 @@ download_file() {
 # ============================================================================
 if [ "${STAGE_A_DONE:-0}" != "1" ]; then
   log "阶段 A: 升级部署入口 deploy.js"
-  STAGE_A_DONE=1 download_file "server/src/routes/deploy.js"
+  # download_file 失败不应终止整个部署（后续阶段 B 会再次下载）
+  STAGE_A_DONE=1 download_file "server/src/routes/deploy.js" || log "  阶段 A: deploy.js 下载失败，继续后续步骤"
   log "阶段 A 完成（暂不重启，继续下载其余代码）"
 fi
 
@@ -80,7 +83,7 @@ sync_apk() {
         if curl -fsSL --connect-timeout 8 --max-time 40 "$base/$apk" -o "$APK_DIR/$apk.tmp" 2>/dev/null; then
           size=$(stat -c%s "$APK_DIR/$apk.tmp" 2>/dev/null || echo 0)
           if [ "$size" -gt 1000000 ]; then
-            mv -f "$APK_DIR/$apk.tmp" "$APK_DIR/$apk"
+            mv -f "$APK_DIR/$apk.tmp" "$APK_DIR/$apk" || { log "  APK 移动失败: $apk"; rm -f "$APK_DIR/$apk.tmp"; continue 2; }
             log "  APK OK: $apk ($(($size/1024/1024)) MB)"
             ok=1
             break
@@ -138,7 +141,8 @@ for f in "${FILES[@]}"; do
     PIDS+=($!)
 done
 for pid in "${PIDS[@]}"; do
-    wait "$pid"
+    # 单文件下载失败不应阻断整个部署（download_file 内部已 log SKIP）
+    wait "$pid" || true
 done
 
 # ============================================================================

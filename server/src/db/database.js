@@ -48,7 +48,16 @@ function initTables() {
       last_error TEXT,
       created_at INTEGER NOT NULL,
       synced_at INTEGER
-    );    CREATE TABLE IF NOT EXISTS audit_log (
+    );
+    CREATE TABLE IF NOT EXISTS idempotency_log (
+      op_id TEXT PRIMARY KEY,
+      user_phone TEXT NOT NULL,
+      action TEXT NOT NULL,
+      result_payload TEXT,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_idempotency_log_user ON idempotency_log(user_phone, created_at DESC);
+    CREATE TABLE IF NOT EXISTS audit_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       admin_id INTEGER,
       admin_username TEXT,
@@ -122,6 +131,16 @@ function initTables() {
     }
   } catch (e) {
     console.error('[DB Cleanup] 审计日志清理失败:', e.message);
+  }
+  // 清理 7 天前的幂等日志（足够覆盖 WorkManager 重试窗口）
+  try {
+    const idemCutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const r = db.prepare('DELETE FROM idempotency_log WHERE created_at < ?').run(idemCutoff);
+    if (r.changes > 0) {
+      console.log(`[DB Cleanup] ${r.changes} 条过期幂等日志`);
+    }
+  } catch (e) {
+    console.error('[DB Cleanup] 幂等日志清理失败:', e.message);
   }
 }
 setTimeout(cleanAuditLog, 10000);

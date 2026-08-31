@@ -50,6 +50,13 @@ object ApiClient {
     )
 
     data class ConsumeResponse(val success: Boolean, val remainingQueries: Int)
+    data class QuotaResponse(
+        val phone: String,
+        val nickname: String?,
+        val planType: String,
+        val remainingQueries: Int,
+        val monthlyExpireAt: Long?
+    )
     data class UploadResponse(val url: String, val size: Long, val mimetype: String)
 
     class ApiException(val code: Int, override val message: String) : Exception(message)
@@ -75,12 +82,25 @@ object ApiClient {
 
     /**
      * 扣减查询次数：需用户 Token，phone 必须是当前登录用户。
+     *
+     * @param clientOpId 幂等键：服务器据此去重，防止「服务器已扣减但响应丢失 → 重试再扣」。
+     *                  同一 clientOpId 重复调用只扣一次，后续直接返回首次结果。
      * @return 剩余次数，失败抛 [ApiException]
      */
-    suspend fun consumeQuery(phone: String, count: Int = 1): ConsumeResponse = withContext(Dispatchers.IO) {
-        val body = gson.toJson(mapOf("phone" to phone, "count" to count))
+    suspend fun consumeQuery(phone: String, count: Int = 1, clientOpId: String? = null): ConsumeResponse = withContext(Dispatchers.IO) {
+        val params = mutableMapOf("phone" to phone, "count" to count)
+        if (clientOpId != null) params["clientOpId"] = clientOpId
+        val body = gson.toJson(params)
         val resp = post("/api/users/client/consume", body, requireAuth = true)
         gson.fromJson(resp, ConsumeResponse::class.java)
+    }
+
+    /**
+     * 拉取当前用户权威配额快照（用于离线后对账）。
+     */
+    suspend fun getQuota(): QuotaResponse = withContext(Dispatchers.IO) {
+        val resp = get("/api/users/client/quota", requireAuth = true)
+        gson.fromJson(resp, QuotaResponse::class.java)
     }
 
     /**
@@ -125,6 +145,24 @@ object ApiClient {
         val req = Request.Builder()
             .url(BASE_URL + path)
             .post(json.toRequestBody(JSON))
+            .apply {
+                if (requireAuth) {
+                    sessionStore.getToken()?.let { header("Authorization", "Bearer $it") }
+                }
+            }
+            .build()
+        val resp = client.newCall(req).execute()
+        val body = resp.body?.string() ?: "{}"
+        if (!resp.isSuccessful) {
+            throw ApiException(resp.code, parseError(body))
+        }
+        return body
+    }
+
+    private fun get(path: String, requireAuth: Boolean = false): String {
+        val req = Request.Builder()
+            .url(BASE_URL + path)
+            .get()
             .apply {
                 if (requireAuth) {
                     sessionStore.getToken()?.let { header("Authorization", "Bearer $it") }

@@ -13,6 +13,16 @@ warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; }
 step()  { echo -e "\n${BLUE}=== $1 ===${NC}"; }
 
+# P0-6: 终端摘要脱敏 —— 仅显示首尾各 2 字符，中间用 *** 代替。
+# 完整密钥仅写入 server/.env（chmod 600），不在终端/日志中明文出现。
+mask_secret() {
+  local s="$1"
+  if [ -z "$s" ]; then echo "(未设置)"; return; fi
+  local len=${#s}
+  if [ "$len" -le 4 ]; then echo "****"; return; fi
+  printf '%s***%s' "${s:0:2}" "${s: -2}"
+}
+
 # 当前目录（deploy/ 父目录）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -221,9 +231,9 @@ cat <<EOF
 
 ${GREEN}================ 部署信息 ================${NC}
 Web 后台：${BLUE}${TUNNEL_URL:-http://<虚拟机IP>:$SERVER_PORT}${NC}
-管理员账号：${YELLOW}$ADMIN_USER / $ADMIN_PASS${NC}（首次登录后立即改密！）
-JWT_SECRET：$JWT_SECRET
-TURN 服务器：$TURN_HOST:3478  用户/密码 $TURN_USER / $TURN_PASS
+管理员账号：${YELLOW}$ADMIN_USER / $(mask_secret "$ADMIN_PASS")${NC}（首次登录后立即改密！完整密码见 server/.env）
+JWT_SECRET：$(mask_secret "$JWT_SECRET")（完整值见 server/.env，已 chmod 600）
+TURN 服务器：$TURN_HOST:3478  用户 $TURN_USER / 密码 $(mask_secret "$TURN_PASS")（完整值见 server/.env）
 WebSocket：${TUNNEL_URL:-http://<虚拟机IP>:$SERVER_PORT}/ws
 
 ${YELLOW}下一步：${NC}

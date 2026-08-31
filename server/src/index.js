@@ -117,26 +117,116 @@ app.use('/downloads', express.static(DOWNLOADS_DIR));
 // 用户端网页版：开奖历史数据代理接口
 // APP 端直连 http://data.17500.cn/{code}_desc.txt，浏览器受同源限制无法直连，
 // 因此经后端转发原始文本返回（客户端自行解析）。
+//
+// P0-3 加固：内存缓存（60s 新鲜 + 5min stale 兜底）、整体响应超时、单次重试、
+// 简单熔断（连续 3 次失败熔断 30s 期间返回 stale 或 503）。
 // ============================================================================
 const LOTTERY_CODES = ['ssq', 'dlt2', '3d', 'pl3', 'pl5', '7xc', 'kl8', '7lc'];
-app.get('/api/lottery/:code', (req, res) => {
+const LOTTERY_CACHE_TTL = 60 * 1000;       // 新鲜缓存 60s
+const LOTTERY_STALE_TTL = 5 * 60 * 1000;   // 失败时允许使用 5min 内的 stale
+const LOTTERY_CB_THRESHOLD = 3;            // 连续失败 3 次触发熔断
+const LOTTERY_CB_OPEN_MS = 30 * 1000;      // 熔断时长 30s
+const LOTTERY_UPSTREAM_TIMEOUT = 8000;     // 单次请求整体超时（连接 + 响应接收）
+const LOTTERY_RETRY = 1;                   // 失败重试 1 次
+
+// code -> { data, fetchedAt }
+const lotteryCache = new Map();
+// code -> { failCount, openUntil }
+const lotteryCircuit = new Map();
+
+function fetchLotteryUpstream(code) {
+  return new Promise((resolve, reject) => {
+    const url = `http://data.17500.cn/${code}_desc.txt`;
+    let settled = false;
+    const req = http.get(url, (r) => {
+      if (r.statusCode !== 200) {
+        r.resume();
+        if (!settled) { settled = true; reject(new Error(`upstream status ${r.statusCode}`)); }
+        return;
+      }
+      let buf = '';
+      r.setEncoding('utf8');
+      r.on('data', (chunk) => { buf += chunk; });
+      r.on('end', () => {
+        if (!settled) { settled = true; resolve(buf); }
+      });
+      r.on('error', (e) => {
+        if (!settled) { settled = true; reject(e); }
+      });
+    });
+    // 整体超时：覆盖连接 + 响应接收（原版仅 outgoing 超时）
+    req.setTimeout(LOTTERY_UPSTREAM_TIMEOUT, () => {
+      req.destroy(new Error('数据源响应超时'));
+    });
+    req.on('error', (e) => {
+      if (!settled) { settled = true; reject(e); }
+    });
+    req.on('timeout', () => {
+      if (!settled) { settled = true; reject(new Error('数据源响应超时')); }
+    });
+  });
+}
+
+async function fetchLotteryWithRetry(code) {
+  let lastErr;
+  for (let i = 0; i <= LOTTERY_RETRY; i++) {
+    try {
+      return await fetchLotteryUpstream(code);
+    } catch (e) {
+      lastErr = e;
+      if (i < LOTTERY_RETRY) {
+        await new Promise(r => setTimeout(r, 200 * (i + 1)));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+app.get('/api/lottery/:code', async (req, res) => {
   const code = String(req.params.code || '').toLowerCase();
   if (!LOTTERY_CODES.includes(code)) {
     return res.status(400).json({ error: '不支持的彩种代码，可选: ' + LOTTERY_CODES.join('/') });
   }
-  const url = `http://data.17500.cn/${code}_desc.txt`;
-  const outgoing = http.get(url, (r) => {
-    if (r.statusCode !== 200) {
-      r.resume();
-      return res.status(r.statusCode).json({ error: `数据源返回状态 ${r.statusCode}` });
+
+  const now = Date.now();
+  const cached = lotteryCache.get(code);
+
+  // 1) 命中新鲜缓存
+  if (cached && (now - cached.fetchedAt) < LOTTERY_CACHE_TTL) {
+    return res.type('text/plain; charset=utf-8').send(cached.data);
+  }
+
+  // 2) 熔断中：返回 stale 或 503
+  const cb = lotteryCircuit.get(code);
+  if (cb && cb.openUntil && now < cb.openUntil) {
+    if (cached && (now - cached.fetchedAt) < LOTTERY_STALE_TTL) {
+      return res.type('text/plain; charset=utf-8').send(cached.data);
     }
-    let buf = '';
-    r.setEncoding('utf8');
-    r.on('data', (chunk) => { buf += chunk; });
-    r.on('end', () => res.type('text/plain; charset=utf-8').send(buf));
-  });
-  outgoing.on('error', (e) => res.status(502).json({ error: '数据源连接失败: ' + e.message }));
-  outgoing.setTimeout(20000, () => outgoing.destroy(new Error('数据源连接超时')));
+    return res.status(503).json({ error: '数据源暂时不可用（熔断中），稍后再试' });
+  }
+
+  // 3) 拉取上游（带重试）
+  try {
+    const data = await fetchLotteryWithRetry(code);
+    lotteryCache.set(code, { data, fetchedAt: now });
+    lotteryCircuit.delete(code); // 成功则重置熔断
+    return res.type('text/plain; charset=utf-8').send(data);
+  } catch (e) {
+    // 失败：更新熔断计数
+    const cur = lotteryCircuit.get(code) || { failCount: 0, openUntil: 0 };
+    cur.failCount = (cur.failCount || 0) + 1;
+    if (cur.failCount >= LOTTERY_CB_THRESHOLD) {
+      cur.openUntil = now + LOTTERY_CB_OPEN_MS;
+      cur.failCount = 0;
+    }
+    lotteryCircuit.set(code, cur);
+
+    // 返回 stale 或 502
+    if (cached && (now - cached.fetchedAt) < LOTTERY_STALE_TTL) {
+      return res.type('text/plain; charset=utf-8').send(cached.data);
+    }
+    return res.status(502).json({ error: '数据源不可用: ' + (e.message || e) });
+  }
 });
 
 // 上传文件目录（图片/语音）
