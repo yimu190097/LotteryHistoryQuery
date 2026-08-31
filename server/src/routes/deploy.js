@@ -1,5 +1,5 @@
 const express = require('express');
-const { exec } = require('child_process');
+const { exec, execSync } = require('child_process');
 const fs = require('fs');
 const router = express.Router();
 
@@ -40,13 +40,6 @@ router.post('/webhook', (req, res) => {
     `if [ "$SRC_OK" = "1" ]; then echo "下载脚本成功，开始执行部署"; bash "${UPDATE_SCRIPT_PATH}" 2>&1; else echo "所有下载源均失败"; exit 1; fi`;
   const deployId = Date.now().toString(36);
 
-  // 写入开始标记
-  try {
-    fs.writeFileSync(RESULT_LOG, `[${new Date().toISOString()}] deploy_id=${deployId} 开始部署...\n`, { flag: 'w' });
-  } catch (e) {
-    // ignore
-  }
-
   exec(deployCmd, { timeout: 900000 }, (err, stdout, stderr) => {
     const now = new Date().toISOString();
     let resultLog = `[${now}] deploy_id=${deployId}\n`;
@@ -79,7 +72,7 @@ router.post('/webhook', (req, res) => {
 
 // 查看部署结果
 router.get('/webhook/log', (req, res) => {
-  // 优先读取结果日志
+  // 优先读取结果日志（仅在部署结束后写入最终状态）
   try {
     const result = fs.readFileSync(RESULT_LOG, 'utf-8').trim();
     if (result) {
@@ -90,13 +83,13 @@ router.get('/webhook/log', (req, res) => {
     // ignore
   }
 
-  // 回退到更新日志
+  // 结果日志尚未生成 → 部署进行中（或进程被重启打断），回退展示 update.sh 实时日志尾部
   try {
-    const log = exec('tail -n 50 "' + LOG_PATH + '" 2>/dev/null || echo "(暂无日志)"', {
+    const tail = execSync(`tail -n 50 "${LOG_PATH}" 2>/dev/null || echo "(暂无日志)"`, {
       encoding: 'utf-8',
       timeout: 5000
-    });
-    res.json({ log: log.trim() });
+    }).trim();
+    res.json({ log: tail || '(暂无日志，部署刚开始请稍候)' });
   } catch (e) {
     res.json({ log: '读取日志失败: ' + e.message });
   }

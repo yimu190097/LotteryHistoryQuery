@@ -117,6 +117,10 @@ fi
 log "阶段 B: 下载其余代码（并行）"
 FILES=(
   deploy/update.sh
+  deploy/deploy.sh
+  deploy/build-apk.sh
+  deploy/health-check.sh
+  deploy/backup.sh
   server/package.json
   server/package-lock.json
   server/src/index.js
