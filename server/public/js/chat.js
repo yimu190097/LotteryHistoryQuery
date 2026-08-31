@@ -66,7 +66,9 @@ function ensureWsConnected() {
   };
 
   ws.onmessage = (evt) => {
-    const msg = JSON.parse(evt.data);
+    // P1-4: 非 JSON 数据（如代理/网关入站探测）会直接抛错并中断 handler，这里防御忽略
+    let msg;
+    try { msg = JSON.parse(evt.data); } catch (e) { console.warn('[chat] ignore non-JSON ws frame:', evt.data); return; }
     handleWsMessage(msg);
   };
 

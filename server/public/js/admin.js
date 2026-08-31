@@ -98,7 +98,7 @@ async function handleLogin(e) {
     // P0-3 安全加固：默认密码未修改 → 强制弹窗改密码，关闭前不能使用系统
     if (data.mustChangePassword || data.admin?.mustChangePassword) {
       setTimeout(() => {
-        showToast('出于安全原因，请立即修改默认密码（admin123）', 'info');
+        showToast('出于安全原因，请立即修改初始密码', 'info');
         showForceChangePasswordModal();
       }, 300);
     }
@@ -1023,13 +1023,12 @@ function showForceChangePasswordModal() {
   $('#modalContent').innerHTML = `
     <h3 style="color:var(--danger)">⚠️ 安全要求：必须修改默认密码</h3>
     <p style="color:var(--text-secondary);margin:12px 0">
-      当前密码仍为默认值 <code style="background:var(--danger);color:#fff;padding:2px 6px;border-radius:4px">admin123</code>，
-      首次登录后请立即修改。未修改前无法使用其他功能，且不能关闭此窗口。
+      当前仍在使用初始密码，首次登录后必须修改。未修改前无法使用其他功能，且不能关闭此窗口。
     </p>
     <form onsubmit="handleForceChangePassword(event)">
       <div class=\"form-group\">
         <label>原密码 <span style=\"color:red\">*</span></label>
-        <input type=\"password\" id=\"fc_old\" value=\"admin123\" required>
+        <input type=\"password\" id=\"fc_old\" required placeholder=\"请输入当前密码\">
       </div>
       <div class=\"form-group\">
         <label>新密码 <span style=\"color:red\">*</span>（至少8位，建议含大小写+数字）</label>

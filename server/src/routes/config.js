@@ -34,21 +34,24 @@ router.get('/', (req, res) => {
   cacheTime = Date.now();
   res.json(result);
 });
-router.put('/:key', (req, res) => {
+// P0 鉴权加固：以下会写配置 / 管理管理员的接口必须管理员登录。
+// （此前 PUT /:key 与 GET/POST /admins 完全无鉴权，任何人都能改配置/建管理员）
+router.put('/:key', authMiddleware, (req, res) => {
   const { key } = req.params;
   const { value } = req.body;
-  if (!value) { return res.status(400).json({ error: '值不能为空' }); }
+  if (value === undefined || value === null) { return res.status(400).json({ error: '值不能为空' }); }
   db.prepare('INSERT OR REPLACE INTO system_config (key, value, updated_at) VALUES (?, ?, ?)')
-    .run(key, value, Date.now());
+    .run(key, String(value), Date.now());
   configCache = null;
   db.prepare('INSERT INTO audit_log (admin_id, admin_username, action, target, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(req.admin.id, req.admin.username, 'UPDATE_CONFIG', key, value, Date.now());
+    .run(req.admin.id, req.admin.username, 'UPDATE_CONFIG', key, String(value), Date.now());
   res.json({ message: '配置更新成功' });
-});router.get('/admins', (req, res) => {
+});
+router.get('/admins', authMiddleware, (req, res) => {
   const admins = db.prepare('SELECT id, username, role, created_at, last_login FROM admins ORDER BY id').all();
   res.json(admins);
 });
-router.post('/admins', (req, res) => {
+router.post('/admins', authMiddleware, (req, res) => {
   const { username, password, role } = req.body;
   if (!username || !password) { return res.status(400).json({ error: '用户名和密码不能为空' }); }
   const existing = db.prepare('SELECT id FROM admins WHERE username = ?').get(username);
@@ -56,7 +59,8 @@ router.post('/admins', (req, res) => {
   const bcrypt = require('bcryptjs');
   const hash = bcrypt.hashSync(password, 10);
   db.prepare('INSERT INTO admins (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)')
-    .run(username, hash, role || 'admin', Date.now());  db.prepare('INSERT INTO audit_log (admin_id, admin_username, action, target, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(username, hash, role || 'admin', Date.now());
+  db.prepare('INSERT INTO audit_log (admin_id, admin_username, action, target, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)')
     .run(req.admin.id, req.admin.username, 'CREATE_ADMIN', username, '', Date.now());
   res.json({ message: '管理员创建成功' });
 });
