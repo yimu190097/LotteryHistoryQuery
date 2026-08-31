@@ -372,9 +372,14 @@ async function showUserDetail(phone) {
 
 async function showQuotaModal(phone) {
   let currentPlan = 'FREE';
+  let freeLimit = 2;
   try {
     const data = await api(`/api/users/${phone}`);
     currentPlan = data.user?.planType || 'FREE';
+  } catch (e) { /* 忽略 */ }
+  try {
+    const configs = await api('/api/config');
+    freeLimit = parseInt(configs.free_query_limit) || 2;
   } catch (e) { /* 忽略 */ }
 
   // 加载 VIP 套餐列表
@@ -399,10 +404,11 @@ async function showQuotaModal(phone) {
       <div class="form-group">
         <label>套餐类型</label>
         <select id="quotaPlanType">
-          <option value="FREE" ${currentPlan === 'FREE' ? 'selected' : ''}>免费用户（每日2次）</option>
+          <option value="FREE" ${currentPlan === 'FREE' ? 'selected' : ''}>免费用户（每日${freeLimit}次）</option>
           ${plansHtml}
         </select>
       </div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">当前规则：免费用户每日可查询 ${freeLimit} 次，VIP 不限次数</div>
       <div class="modal-actions">
         <button type="button" class="btn btn-outline" onclick="closeModal()">取消</button>
         <button type="submit" class="btn btn-primary">保存</button>
@@ -642,22 +648,32 @@ async function renderSettings() {
     const configs = await api('/api/config');
     const plans = await api('/api/users/vip/plans');
     const fields = [
-      { key: 'app_version', label: 'APP版本号' },
-      { key: 'free_query_limit', label: '免费用户每日查询次数' },
-      { key: 'audit_log_retention_days', label: '审计日志保留天数' },
+      { key: 'app_version', label: 'APP版本号', desc: '客户端检测到版本号变化时，会提示用户更新' },
+      { key: 'free_query_limit', label: '免费用户每日查询次数', desc: '修改后所有免费用户立即生效，VIP 用户不受此限制' },
+      { key: 'audit_log_retention_days', label: '审计日志保留天数', desc: '超过保留天数的日志将被自动清理' },
     ];
-    $('#configForm').innerHTML = fields.map(f => `
+    $('#configForm').innerHTML = `
+      <div style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;padding:8px;background:#F5F5F5;border-radius:4px">
+        修改以下配置后点击「保存」，将立即写入服务器数据库并全局生效。当前免费用户规则：每日 <b>${configs.free_query_limit || 2}</b> 次查询。
+      </div>
+      ${fields.map(f => `
       <div class="form-group" style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
-        <label style="min-width:160px;margin:0">${f.label}</label>
+        <div style="min-width:180px"><label style="margin:0;font-weight:bold">${f.label}</label><br><span style="font-size:11px;color:var(--text-secondary)">${f.desc}</span></div>
         <input type="text" id="cfg_${f.key}" value="${configs[f.key] || ''}" style="flex:1">
         <button class="btn btn-primary btn-sm" onclick="saveConfig('${f.key}')">保存</button>
       </div>
-    `).join('') + `
-      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
-        <h4 style="margin-bottom:10px">VIP 套餐价格</h4>
+    `).join('')} + `
+      <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">
+        <h4 style="margin-bottom:4px">VIP 套餐价格</h4>
+        <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">修改后，用户端看到的价格将同步更新。实际扣费需手动确认后生效。</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;font-weight:bold;font-size:13px;color:var(--text-primary);border-bottom:1px solid var(--border);padding-bottom:6px">
+          <span style="min-width:140px">套餐名称</span>
+          <span style="flex:1">价格</span>
+          <span style="min-width:50px">操作</span>
+        </div>
         ${(plans.plans || []).map(p => `
           <div class="form-group" style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
-            <label style="min-width:160px;margin:0">${p.name}（${p.duration_days}天）</label>
+            <label style="min-width:140px;margin:0">${p.name}（${p.duration_days}天）</label>
             <input type="number" id="vip_price_${p.plan_type}" value="${p.price}" min="0" step="0.01" style="flex:1">
             <span style="min-width:20px">元</span>
             <button class="btn btn-primary btn-sm" onclick="saveVipPrice('${p.plan_type}')">保存</button>
