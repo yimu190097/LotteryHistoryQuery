@@ -32,7 +32,7 @@ const callMgr = require('./callManager');
 const clients = new Map(); // identity → Set<WebSocket>
 
 function setupWebSocket(server) {
-  const wss = new WebSocketServer({ server, path: '/ws' });
+  const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 1024 * 1024 });
 
   wss.on('connection', (ws, req) => {
     let identity = null;
@@ -130,9 +130,34 @@ function setupWebSocket(server) {
 }
 
 // ============ 聊天消息处理 ============
+const CHAT_RATE_LIMIT = 20;        // 每窗口最多消息数
+const CHAT_RATE_WINDOW = 10 * 1000; // 窗口时长(ms)
+const MAX_CHAT_TEXT = 2000;         // 单条文本最大长度
+const chatRate = new Map(); // identity -> { count, start }
+
+// 简单速率限制：每连接每 10 秒最多 20 条聊天消息，防刷屏打爆 DB/轰炸管理员
+function checkChatRate(ws, identity) {
+  const now = Date.now();
+  let r = chatRate.get(identity);
+  if (!r || now - r.start > CHAT_RATE_WINDOW) {
+    chatRate.set(identity, { count: 1, start: now });
+    return true;
+  }
+  r.count++;
+  if (r.count > CHAT_RATE_LIMIT) {
+    try { ws.send(JSON.stringify({ type: 'error', error: '消息发送过于频繁，请稍后再试' })); } catch (_) {}
+    return false;
+  }
+  return true;
+}
+
 function handleChat(ws, fromIdentity, role, adminId, msg) {
   const { to, payload } = msg;
   if (!payload || !payload.type) return;
+
+  // 频率限制 + 文本长度上限
+  if (!checkChatRate(ws, fromIdentity)) return;
+  const text = String(payload.text || '').slice(0, MAX_CHAT_TEXT);
 
   const now = Date.now();
   let sessionPhone, messageRole;
@@ -170,7 +195,7 @@ function handleChat(ws, fromIdentity, role, adminId, msg) {
   `).run(
     sessionPhone,
     user.nickname,
-    payload.type === 'TEXT' ? (payload.text || '') :
+    payload.type === 'TEXT' ? text :
       (payload.type === 'IMAGE' ? '[图片]' : '[语音]'),
     now,
     payload.type,
@@ -188,7 +213,7 @@ function handleChat(ws, fromIdentity, role, adminId, msg) {
     sessionPhone,
     messageRole,
     payload.type,
-    payload.text || null,
+    text || null,
     payload.mediaPath || null,
     payload.duration || null,
     now
@@ -201,7 +226,7 @@ function handleChat(ws, fromIdentity, role, adminId, msg) {
     from: fromIdentity,
     sessionUserPhone: sessionPhone,
     role: messageRole,
-    payload: { type: payload.type, text: payload.text || null, mediaPath: payload.mediaPath || null, duration: payload.duration || null },
+    payload: { type: payload.type, text: payload.type === 'TEXT' ? (text || null) : null, mediaPath: payload.mediaPath || null, duration: payload.duration || null },
     createdAt: now
   };
 
