@@ -6,6 +6,8 @@ import com.lottery.history.AppContext
 import com.lottery.history.data.SessionStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.Cache
+import okhttp3.ConnectionPool
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
@@ -30,11 +32,16 @@ object ApiClient {
     private val gson = Gson()
     private val JSON = "application/json; charset=utf-8".toMediaType()
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
-        .writeTimeout(20, TimeUnit.SECONDS)
-        .build()
+    private val client by lazy {
+        val cacheDir = File(AppContext.get.cacheDir, "okhttp_cache")
+        OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .writeTimeout(20, TimeUnit.SECONDS)
+            .connectionPool(ConnectionPool(5, 1, TimeUnit.MINUTES))
+            .cache(Cache(cacheDir, 5 * 1024 * 1024)) // 5MB 响应缓存，登录/配额等重复请求可复用
+            .build()
+    }
 
     private val sessionStore by lazy { SessionStore(AppContext.get) }
 

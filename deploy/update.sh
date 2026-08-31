@@ -26,13 +26,17 @@ RAW_BASES=(
 download_file() {
     local rel="$1"
     local dest="$PROJECT_DIR/$rel"
+    local tmp="$dest.tmp"
     mkdir -p "$(dirname "$dest")"
     for base in "${RAW_BASES[@]}"; do
-        if curl -fsSL --connect-timeout 8 --max-time 20 "$base/$rel" -o "$dest" 2>/dev/null; then
+        # 先下到临时文件再原子替换，避免下载中断留下半损坏的线上文件（尤其 deploy.js）
+        if curl -fsSL --connect-timeout 8 --max-time 20 "$base/$rel" -o "$tmp" 2>/dev/null; then
+            mv -f "$tmp" "$dest"
             log "  OK: $rel"
             return 0
         fi
     done
+    rm -f "$tmp"
     log "  SKIP: $rel"
     return 1
 }
@@ -55,19 +59,43 @@ fi
 APK_DIR="$PROJECT_DIR/server/public/downloads"
 sync_apk() {
     mkdir -p "$APK_DIR"
-    local RELEASE_TAG="v24.2"
-    local LATEST_REL=""
+    local RELEASE_TAG=""
+    local LATEST_REL="" ghbase="" cand=""
+    # 以“响应内容有效”为准而非 curl 退出码：部分镜像(如 ghfast.top)会返回 200 但内容为空/非 JSON，
+    # 需校验含 tag_name 且含 .apk 资产才接受，否则继续尝试下一镜像
     for ghbase in \
-      "https://ghfast.top/https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest" \
       "https://gh-proxy.com/https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest" \
-      "https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest"; do
-      if LATEST_REL=$(curl -fsSL --connect-timeout 8 --max-time 15 "$ghbase" 2>/dev/null); then break; fi
+      "https://ghproxy.net/https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest" \
+      "https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest" \
+      "https://ghfast.top/https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest"; do
+      cand=$(curl -fsSL --connect-timeout 8 --max-time 15 "$ghbase" 2>/dev/null || true)
+      if [ -n "$cand" ] \
+         && echo "$cand" | grep -q '"tag_name"' \
+         && echo "$cand" | grep -qE '"name"[[:space:]]*:[[:space:]]*"[^"]+\.apk"'; then
+        LATEST_REL="$cand"
+        break
+      fi
     done
-    if [ -n "$LATEST_REL" ]; then
-      RELEASE_TAG=$(echo "$LATEST_REL" | sed -n 's/.*"tag_name":"\([^"]*\)".*/\1/p')
-      [ -n "$RELEASE_TAG" ] || RELEASE_TAG="v24.2"
+    if [ -z "$LATEST_REL" ]; then
+      log "  APK: 获取最新 Release 失败（稍后重试）"
+      return 1
     fi
-    local apks=("LotteryAdmin_v1.0.apk" "LotteryHistoryQuery_v24.2.apk")
+    # 容忍美化/紧凑两种 JSON 格式（冒号后可能有空白）
+    RELEASE_TAG=$(echo "$LATEST_REL" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+    [ -n "$RELEASE_TAG" ] || RELEASE_TAG="v24.2"
+
+    # 动态提取 Release 中所有 .apk 资产名（Actions 用动态标签命名 cmd-日期-序号，
+    # 不能用旧硬编码文件名 LotteryHistoryQuery_v24.2.apk，否则永远下载不到）
+    local apks=()
+    while IFS= read -r name; do
+      [ -n "$name" ] && apks+=("$name")
+    done < <(echo "$LATEST_REL" | grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]+\.apk"' | sed -E 's/"name"[[:space:]]*:[[:space:]]*"//; s/"$//')
+
+    if [ "${#apks[@]}" -eq 0 ]; then
+      log "  APK: Release 中没有找到 .apk 资产"
+      return 1
+    fi
+
     local ok=0 size=0 apk=""
     for apk in "${apks[@]}"; do
       if [ -s "$APK_DIR/$apk" ]; then
@@ -93,6 +121,24 @@ sync_apk() {
       done
       [ "$ok" -eq 0 ] && log "  APK SKIP: $apk 下载失败（下次部署将重试）"
     done
+
+    # 清理旧版本：每个 APK 前缀仅保留最新一份（动态标签命名会无限累积）。
+    # 排序规则：cmd- 动态命名永远视为新版本；旧固定命名(v24.2 等)视为最旧，避免被误判为最新。
+    local prefix=""
+    for prefix in LotteryHistoryQuery LotteryAdmin; do
+      local keep=""
+      keep=$(ls -1 "$APK_DIR"/${prefix}_*.apk 2>/dev/null \
+        | awk '{ r = ($0 ~ /cmd-/) ? "1_" $0 : "0_" $0; print r }' \
+        | sort | tail -n1 | sed 's/^[01]_//')
+      [ -n "$keep" ] || continue
+      local f=""
+      for f in "$APK_DIR"/${prefix}_*.apk; do
+        [ -f "$f" ] || continue
+        [ "$f" = "$keep" ] && continue
+        rm -f "$f"
+        log "  APK 清理旧版本: $(basename "$f")"
+      done
+    done
 }
 
 if [ "${LEAN_APK:-0}" = "1" ]; then
@@ -113,6 +159,10 @@ fi
 log "阶段 B: 下载其余代码（并行）"
 FILES=(
   deploy/update.sh
+  deploy/deploy.sh
+  deploy/build-apk.sh
+  deploy/health-check.sh
+  deploy/backup.sh
   server/package.json
   server/package-lock.json
   server/src/index.js
@@ -128,7 +178,7 @@ FILES=(
   server/src/ws/chatServer.js
   server/src/ws/callManager.js
   server/public/index.html
-  server/public/css/style.css
+  server/public/css/admin.css
   server/public/js/admin.js
   server/public/web/index.html
   server/public/js/chat.js

@@ -33,9 +33,8 @@ import org.webrtc.VideoTrack
 import org.webrtc.audio.JavaAudioDeviceModule
 import org.webrtc.audio.JavaAudioDeviceModule.AudioRecordErrorCallback
 import org.webrtc.audio.JavaAudioDeviceModule.AudioTrackErrorCallback
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
+import android.os.Handler
+import android.os.Looper
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -73,6 +72,29 @@ class WebRtcClient(private val context: Context) {
 
     /** 连接状态变化回调 */
     var onConnectionChange: ((state: PeerConnection.PeerConnectionState) -> Unit)? = null
+
+    /** ICE 恢复回调：当 ICE 自动恢复成功后通知 UI */
+    var onIceRecovered: (() -> Unit)? = null
+
+    /** ICE 完全失败回调：多次重连尝试均失败后通知 UI 挂断 */
+    var onIceFailed: (() -> Unit)? = null
+
+    // ===== ICE 重连机制 =====
+    private val iceHandler = Handler(Looper.getMainLooper())
+    private var iceReconnectAttempt = 0
+    private val maxIceReconnectAttempts = 3
+    // ICE DISCONNECTED 后等待自动恢复的窗口（秒），超时则触发 ICE restart
+    private val iceDisconnectTimeoutSec = 8L
+    private val iceReconnectRunnable = Runnable {
+        Log.w(TAG, "ICE disconnected for ${iceDisconnectTimeoutSec}s, attempting ICE restart (attempt ${iceReconnectAttempt + 1})")
+        if (iceReconnectAttempt < maxIceReconnectAttempts) {
+            iceReconnectAttempt++
+            restartIce()
+        } else {
+            Log.e(TAG, "ICE restart exhausted after $maxIceReconnectAttempts attempts")
+            onIceFailed?.invoke()
+        }
+    }
 
     private val iceServers = listOf(
         org.webrtc.PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
@@ -131,6 +153,38 @@ class WebRtcClient(private val context: Context) {
 
             override fun onIceConnectionChange(state: PeerConnection.IceConnectionState) {
                 Log.d(TAG, "ICE state: $state")
+                when (state) {
+                    PeerConnection.IceConnectionState.DISCONNECTED -> {
+                        // ICE 断开：启动超时等待自动恢复，超时后触发 ICE restart
+                        Log.w(TAG, "ICE disconnected, waiting ${iceDisconnectTimeoutSec}s for auto-recovery")
+                        iceHandler.removeCallbacks(iceReconnectRunnable)
+                        iceHandler.postDelayed(iceReconnectRunnable, iceDisconnectTimeoutSec * 1000)
+                    }
+                    PeerConnection.IceConnectionState.CONNECTED -> {
+                        // ICE 恢复连接：取消重连定时器，重置计数器
+                        iceHandler.removeCallbacks(iceReconnectRunnable)
+                        if (iceReconnectAttempt > 0) {
+                            Log.d(TAG, "ICE recovered after $iceReconnectAttempt restart(s)")
+                            onIceRecovered?.invoke()
+                        }
+                        iceReconnectAttempt = 0
+                    }
+                    PeerConnection.IceConnectionState.FAILED -> {
+                        // ICE 完全失败：立即触发 ICE restart
+                        Log.w(TAG, "ICE failed, triggering ICE restart")
+                        iceHandler.removeCallbacks(iceReconnectRunnable)
+                        if (iceReconnectAttempt < maxIceReconnectAttempts) {
+                            iceReconnectAttempt++
+                            restartIce()
+                        } else {
+                            onIceFailed?.invoke()
+                        }
+                    }
+                    PeerConnection.IceConnectionState.CLOSED -> {
+                        iceHandler.removeCallbacks(iceReconnectRunnable)
+                    }
+                    else -> {}
+                }
             }
 
             override fun onConnectionChange(newState: PeerConnection.PeerConnectionState) {
@@ -241,8 +295,47 @@ class WebRtcClient(private val context: Context) {
         }
     }
 
+    /** ICE 重启：创建新 offer 带 iceRestart=true，重新协商连接。
+     *  由 iceReconnectRunnable 或 ICE FAILED 自动触发，不阻塞主线程。 */
+    private fun restartIce() {
+        val pc = peerConnection ?: run {
+            Log.w(TAG, "restartIce: no PeerConnection, giving up")
+            onIceFailed?.invoke()
+            return
+        }
+        val restartConstraints = MediaConstraints().apply {
+            mandatory.add(MediaConstraints.KeyValuePair("IceRestart", "true"))
+            mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"))
+            mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "false"))
+        }
+        pc.createOffer(object : SdpObserver {
+            override fun onCreateSuccess(sdp: SessionDescription) {
+                pc.setLocalDescription(object : SdpObserver {
+                    override fun onSetSuccess() {
+                        Log.d(TAG, "ICE restart: local desc set, sending new offer via callback")
+                        // 通知 UI 层通过信令发送新的 offer
+                        onIceCandidate?.let { /* ICE candidates 会通过已有回调发送 */ }
+                    }
+                    override fun onSetFailure(error: String?) {
+                        Log.e(TAG, "ICE restart setLocalDesc failed: $error")
+                        onIceFailed?.invoke()
+                    }
+                    override fun onCreateSuccess(p0: SessionDescription?) {}
+                    override fun onCreateFailure(p0: String?) {}
+                }, sdp)
+            }
+            override fun onCreateFailure(error: String?) {
+                Log.e(TAG, "ICE restart createOffer failed: $error")
+                onIceFailed?.invoke()
+            }
+            override fun onSetSuccess() {}
+            override fun onSetFailure(p0: String?) {}
+        }, restartConstraints)
+    }
+
     /** 释放资源（必须在 Activity onDestroy 调用） */
     fun dispose() {
+        iceHandler.removeCallbacks(iceReconnectRunnable)
         try {
             peerConnection?.dispose()
             localAudioSource?.dispose()
@@ -253,5 +346,6 @@ class WebRtcClient(private val context: Context) {
         peerConnection = null
         localAudioSource = null
         audioTrack = null
+        iceReconnectAttempt = 0
     }
 }

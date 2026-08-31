@@ -30,17 +30,19 @@ class LotteryApp : Application() {
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             Log.e("LotteryApp", "未捕获异常", throwable)
             try {
-                Handler(Looper.getMainLooper()).post {
+                val main = Handler(Looper.getMainLooper())
+                main.post {
                     Toast.makeText(
                         this,
                         "应用遇到异常，请重启应用\n${throwable.message ?: "未知错误"}",
                         Toast.LENGTH_LONG
                     ).show()
                 }
-                // 短暂延迟让 Toast 显示出来
-                Thread.sleep(2000)
-            } catch (_: Exception) { }
-            defaultHandler?.uncaughtException(thread, throwable)
+                // 给 Toast 留出展示时间后再触发崩溃，避免阻塞当前线程
+                main.postDelayed({ defaultHandler?.uncaughtException(thread, throwable) }, 1500)
+            } catch (_: Exception) {
+                defaultHandler?.uncaughtException(thread, throwable)
+            }
         }
     }
 

@@ -18,7 +18,7 @@ R2_ACCESS_KEY=""
 R2_SECRET_KEY=""
 
 if [[ -f "$ENV_FILE" ]]; then
-    source <(grep -E '^(R2_BUCKET|R2_ENDPOINT|R2_ACCESS_KEY|R2_SECRET_KEY)=' "$ENV_FILE" || true)
+    source <(grep -E '^(R2_BUCKET|R2_ENDPOINT|R2_ACCESS_KEY|R2_SECRET_KEY|BACKUP_PASSPHRASE)=' "$ENV_FILE" || true)
 fi
 
 mkdir -p "$BACKUP_DIR"
@@ -72,14 +72,37 @@ if [[ -n "$R2_BUCKET" && -n "$R2_ENDPOINT" && -n "$R2_ACCESS_KEY" && -n "$R2_SEC
     COMPRESSED_SIZE=$(stat -c%s "$BACKUP_TAR" 2>/dev/null || echo 0)
     log "压缩后大小: ${COMPRESSED_SIZE} bytes"
 
+    # 完整性校验和，便于远程核对备份未被损坏
+    if command -v sha256sum &>/dev/null; then
+        SUM=$(sha256sum "$BACKUP_TAR" | awk '{print $1}')
+        echo "$SUM" > "${BACKUP_TAR}.sha256"
+        log "备份校验和 (sha256): $SUM"
+    fi
+
+    # 可选加密：设置 BACKUP_PASSPHRASE 后备份以 AES-256-CBC 加密后上传
+    if [[ -n "${BACKUP_PASSPHRASE:-}" ]]; then
+        openssl enc -aes-256-cbc -pbkdf2 -salt \
+            -pass pass:"$BACKUP_PASSPHRASE" -in "$BACKUP_TAR" -out "$BACKUP_TAR.enc" \
+            && mv -f "$BACKUP_TAR.enc" "$BACKUP_TAR"
+        log "备份已用 BACKUP_PASSPHRASE 加密（恢复: openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:\"...\"）"
+    fi
+
     if command -v aws &>/dev/null; then
         # 使用 awscli（S3 兼容）
         AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY" \
         AWS_SECRET_ACCESS_KEY="$R2_SECRET_KEY" \
         aws s3 cp "$BACKUP_TAR" "s3://${R2_BUCKET}/backups/$(basename "$BACKUP_TAR")" \
             --endpoint-url "https://${R2_ENDPOINT}" \
-            --region auto \
-            --no-verify-ssl 2>&1 | tee -a "$LOG_FILE"
+            --region auto 2>&1 | tee -a "$LOG_FILE"
+
+        # 一并上传校验和（如生成了）
+        if [[ -f "${BACKUP_TAR}.sha256" ]]; then
+            AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY" \
+            AWS_SECRET_ACCESS_KEY="$R2_SECRET_KEY" \
+            aws s3 cp "${BACKUP_TAR}.sha256" "s3://${R2_BUCKET}/backups/$(basename "${BACKUP_TAR}.sha256")" \
+                --endpoint-url "https://${R2_ENDPOINT}" \
+                --region auto >/dev/null 2>&1 || log "校验和上传失败"
+        fi
 
         # 清理 R2 上 7 天前的旧备份
         AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY" \

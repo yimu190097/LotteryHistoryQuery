@@ -15,7 +15,10 @@ enum class ChatType { TEXT, IMAGE, VOICE }
  * - mediaPath：图片或语音文件的本地路径（IMAGE/VOICE 用）
  * - duration：语音时长（秒），仅 VOICE 用
  */
-@Entity(tableName = "chat_messages")
+@Entity(
+    tableName = "chat_messages",
+    indices = [androidx.room.Index(value = ["createdAt"])]
+)
 data class ChatMessageEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val role: ChatRole,

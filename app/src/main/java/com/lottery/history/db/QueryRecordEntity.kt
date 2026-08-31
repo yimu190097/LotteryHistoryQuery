@@ -7,7 +7,10 @@ import androidx.room.PrimaryKey
  * 查询记录：保存用户选号查询历史，用于快速恢复之前的查询。
  * 超过 10 天的记录会被清理。
  */
-@Entity(tableName = "query_records")
+@Entity(
+    tableName = "query_records",
+    indices = [androidx.room.Index(value = ["type", "timestamp"])]
+)
 data class QueryRecordEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     /** "ssq" 或 "dlt" */

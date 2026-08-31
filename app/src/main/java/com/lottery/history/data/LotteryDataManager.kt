@@ -158,14 +158,36 @@ object LotteryDataManager {
     /** 获取指定彩种配置的缓存数据 → 永远返回空（见 getCached(code) 说明） */
     fun getCached(config: LotteryTypeConfig): List<LotteryDraw> = emptyList()
 
-    /** 直接从 DB 读取当前已落库的数据（不受 getCached 空缓存屏蔽影响）。
-     *  场景：IssueSearchDialog / LatestDrawsDialog / LotterFragment 在 refresh 完成后需要立即读取。
+    /**
+     * 直接从 DB 读取当前已落库的数据（不受 getCached 空缓存屏蔽影响）。
+     * 场景：IssueSearchDialog / LatestDrawsDialog / LotterFragment 在 refresh 完成后需要立即读取。
      *
-     *  说明：Room DAO getAllByType 是 suspend 函数（强制在后台线程），UI 调用方都在主线程，
-     *  这里用 runBlocking(Dispatchers.IO) 桥接——查询量仅数百~数千条，耗时几毫秒内，
-     *  不会阻塞 UI；比把所有 UI 调用方全改成 suspend 更干净。
+     * 【协程安全版本】优先使用此 suspend 版本，避免 runBlocking 阻塞主线程。
+     * 查询在 IO 线程执行，不阻塞 UI。
      *
-     *  【错误边界】：所有异常内部消化，返回空列表，绝不抛出让 UI 崩溃。
+     * 【错误边界】：所有异常内部消化，返回空列表，绝不抛出让 UI 崩溃。
+     */
+    suspend fun getAllFromDbSuspend(context: Context, code: String): List<LotteryDraw> {
+        return try {
+            val d = ensureDao(context) ?: return emptyList()
+            withContext(Dispatchers.IO) {
+                d.getAllByType(code).map { e -> e.toModel() }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("LotteryDataManager", "getAllFromDbSuspend($code) 失败", e)
+            emptyList()
+        }
+    }
+    suspend fun getAllFromDbSuspend(context: Context, config: LotteryTypeConfig): List<LotteryDraw> =
+        getAllFromDbSuspend(context, config.code)
+
+    /**
+     * 同步版 getAllFromDb（向后兼容，非协程环境使用）。
+     *
+     * 注意：内部使用 runBlocking(Dispatchers.IO) 桥接，会短暂阻塞调用线程。
+     * 仅用于 Dialog init / 非协程上下文等少数场景，新代码请优先使用 [getAllFromDbSuspend]。
+     *
+     * 【错误边界】：所有异常内部消化，返回空列表，绝不抛出让 UI 崩溃。
      */
     fun getAllFromDb(context: Context, code: String): List<LotteryDraw> {
         return try {

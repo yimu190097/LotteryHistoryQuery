@@ -1030,7 +1030,7 @@ class LotteryFragment : Fragment() {
                 LotteryDataManager.ensureInitialized(c)
                 // getCached 永远返回空 → 直接从 DB 读取（loadCache 把 DB 加载到内存 caches map，
                 // 对无副作用；核心 UI 展示都走 getAllFromDb 了）
-                if (LotteryDataManager.getAllFromDb(c, config).isNotEmpty()) {
+                if (LotteryDataManager.getAllFromDbSuspend(c, config).isNotEmpty()) {
                     LotteryDataManager.loadCache(c, config)
                 }
             }

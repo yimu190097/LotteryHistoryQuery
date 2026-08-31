@@ -104,13 +104,28 @@ class VoiceCallActivity : AppCompatActivity() {
                 runOnUiThread {
                     when (state) {
                         PeerConnection.PeerConnectionState.CONNECTED -> onCallConnected()
-                        PeerConnection.PeerConnectionState.FAILED,
                         PeerConnection.PeerConnectionState.DISCONNECTED -> {
-                            tvStatus.text = "连接失败"
-                            hangup()
+                            if (connected) tvStatus.text = "网络不稳定，正在重连..."
                         }
+                        PeerConnection.PeerConnectionState.FAILED -> {
+                            if (connected) tvStatus.text = "连接中断，尝试恢复..."
+                        }
+                        // ICE 重连耗尽后，onIceFailed 会被回调
                         else -> {}
                     }
+                }
+            }
+            onIceRecovered = {
+                runOnUiThread {
+                    tvStatus.text = "网络已恢复，通话继续..."
+                    // 恢复后短暂显示状态，然后回到"通话中"
+                    handler.postDelayed({ if (connected) tvStatus.text = "通话中..." }, 2000)
+                }
+            }
+            onIceFailed = {
+                runOnUiThread {
+                    tvStatus.text = "网络连接失败，通话结束"
+                    handler.postDelayed({ finish() }, 1500)
                 }
             }
         }

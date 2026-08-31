@@ -40,10 +40,12 @@ export PATH="$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform
 
 # 替换 baseUrl
 if [[ -n "$PUBLIC_URL" ]]; then
+  # 对特殊字符转义，避免破坏 Kotlin 字符串定界或造成 sed 注入
+  ESC=$(printf '%s' "$PUBLIC_URL" | sed 's/[\\"|&]/\\&/g')
   step "替换 ApiClient.BASE_URL = $PUBLIC_URL"
-  sed -i "s|const val BASE_URL = .*|const val BASE_URL = \"$PUBLIC_URL\"|" \
+  sed -i "s|const val BASE_URL = .*|const val BASE_URL = \"$ESC\"|" \
     "$PROJECT_DIR/app/src/main/java/com/lottery/history/network/ApiClient.kt"
-  sed -i "s|private const val BASE_URL = .*|private const val BASE_URL = \"$PUBLIC_URL\"|" \
+  sed -i "s|private const val BASE_URL = .*|private const val BASE_URL = \"$ESC\"|" \
     "$PROJECT_DIR/admin-app/src/main/java/com/lottery/admin/network/AdminApi.kt"
 fi
 

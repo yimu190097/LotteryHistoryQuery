@@ -14,7 +14,11 @@ import androidx.room.Entity
  *  与奖级对一起持久化。展示时直接用已保存的 ruleVersionKey 取对应规则版本展示，
  *  不依赖运行时的日期计算，保证任何时候展示的都是解析那一刻确定的正确版本。
  */
-@Entity(tableName = "lottery_draws", primaryKeys = ["issue", "type"])
+@Entity(
+    tableName = "lottery_draws",
+    primaryKeys = ["issue", "type"],
+    indices = [androidx.room.Index(value = ["type"])]
+)
 data class LotteryDrawEntity(
     val issue: String,
     val type: String,          // "ssq" or "dlt"

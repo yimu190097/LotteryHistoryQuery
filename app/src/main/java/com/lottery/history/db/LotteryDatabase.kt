@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ChatMessageEntity::class,
         PendingSyncEntity::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = true
 )
 abstract class LotteryDatabase : RoomDatabase() {
@@ -113,6 +113,16 @@ abstract class LotteryDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 为高频查询字段建立索引，避免全表扫描
+                runCatching { database.execSQL("CREATE INDEX IF NOT EXISTS `index_lottery_draws_type` ON `lottery_draws` (`type`)") }
+                runCatching { database.execSQL("CREATE INDEX IF NOT EXISTS `index_chat_messages_createdAt` ON `chat_messages` (`createdAt`)") }
+                runCatching { database.execSQL("CREATE INDEX IF NOT EXISTS `index_query_records_type_timestamp` ON `query_records` (`type`, `timestamp`)") }
+                runCatching { database.execSQL("CREATE INDEX IF NOT EXISTS `index_pending_sync_userPhone` ON `pending_sync` (`userPhone`)") }
+            }
+        }
+
         fun get(context: Context): LotteryDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -124,7 +134,8 @@ abstract class LotteryDatabase : RoomDatabase() {
                     MIGRATION_11_12,
                     MIGRATION_12_13,
                     MIGRATION_13_14,
-                    MIGRATION_14_15
+                    MIGRATION_14_15,
+                    MIGRATION_15_16
                 )
                 // P0-4: 移除 fallbackToDestructiveMigration() —— 迁移失败时
                 // 应抛 IllegalStateException 让全局异常处理器捕获并提示，

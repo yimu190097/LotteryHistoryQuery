@@ -483,9 +483,12 @@ class MainActivity : AppCompatActivity() {
         runOnUiThread { binding.tvDataStatus.text = text }
     }
 
-    private fun updateStatusTextFromMeta() {
+    private suspend fun updateStatusTextFromMeta() {
         val (lastMs, successN, failedN) = LotteryDataManager.readMeta(this)
-        val totalCached = LotteryType.ALL.sumOf { LotteryDataManager.getAllFromDb(this, it.code).size }
+        var totalCached = 0
+        for (cfg in LotteryType.ALL) {
+            totalCached += LotteryDataManager.getAllFromDbSuspend(this, cfg.code).size
+        }
         if (lastMs > 0 && totalCached > 0) {
             val fmt = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
             val failInfo = if (failedN > 0) " · ${failedN}个失败" else ""
@@ -496,14 +499,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ================== 最新开奖 ==================
-    private fun updateLatestInfo() {
+    private suspend fun updateLatestInfo() {
+        // 在协程 IO 线程查询 DB，避免 runBlocking 阻塞主线程
+        val items = LotteryType.ALL.map { cfg ->
+            val draw = LotteryDataManager.getAllFromDbSuspend(this@MainActivity, cfg.code).firstOrNull()
+            LatestDrawItem(cfg, draw)
+        }
         runOnUiThread {
-            // 面向40+客户优化：横向卡片每彩种一张，统一展示最新一期开奖号码（红球+蓝球）
-            // 从右到左循环轮播；点击卡片→弹窗列出该期所有奖项具体情况
-            val items = LotteryType.ALL.map { cfg ->
-                val draw = LotteryDataManager.getAllFromDb(this@MainActivity, cfg.code).firstOrNull()
-                LatestDrawItem(cfg, draw)
-            }
             latestDrawsAdapter.submitList(items)
         }
     }

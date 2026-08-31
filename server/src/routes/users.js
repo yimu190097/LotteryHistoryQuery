@@ -32,6 +32,12 @@ router.post('/client/register', (req, res) => {
   if (password.length < 6) {
     return res.status(400).json({ error: '密码至少6位' });
   }
+  if (password.length > 64) {
+    return res.status(400).json({ error: '密码过长（最多64位）' });
+  }
+  if (nickname && nickname.length > 50) {
+    return res.status(400).json({ error: '昵称过长（最多50字）' });
+  }
 
   const existing = db.prepare('SELECT phone FROM users WHERE phone = ?').get(phone);
   if (existing) {
@@ -268,6 +274,12 @@ router.post('/register', (req, res) => {
   }
   if (password.length < 6) {
     return res.status(400).json({ error: '密码至少6位' });
+  }
+  if (password.length > 64) {
+    return res.status(400).json({ error: '密码过长（最多64位）' });
+  }
+  if (nickname && nickname.length > 50) {
+    return res.status(400).json({ error: '昵称过长（最多50字）' });
   }
 
   const pt = planType || 'PAY_PER_USE';
@@ -509,6 +521,9 @@ router.post('/:phone/reset-password', (req, res) => {
 
   if (!newPassword || newPassword.length < 6) {
     return res.status(400).json({ error: '密码至少6位' });
+  }
+  if (newPassword.length > 64) {
+    return res.status(400).json({ error: '密码过长（最多64位）' });
   }
 
   const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(phone);

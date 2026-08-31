@@ -103,15 +103,15 @@ app.use('/api/auth/login', loginLimiter);
 app.use('/api/users/client/login', clientLoginLimiter);
 app.use('/api/users/client/register', registerLimiter);
 
-// 静态文件 - Web管理面板
-app.use(express.static(path.join(__dirname, '..', 'public')));
+// 静态文件 - Web管理面板（js/css/html 浏览器缓存 1h，配合 ETag 做增量校验）
+app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: 3600 * 1000 }));
 
 // APK 下载目录
 const DOWNLOADS_DIR = path.join(__dirname, '..', 'public', 'downloads');
 if (!fs.existsSync(DOWNLOADS_DIR)) fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
 
-// APK 下载静态文件服务
-app.use('/downloads', express.static(DOWNLOADS_DIR));
+// APK 下载静态文件服务（版本化产物，禁用缓存避免用户拿到旧包）
+app.use('/downloads', express.static(DOWNLOADS_DIR, { maxAge: 0 }));
 
 // ============================================================================
 // 用户端网页版：开奖历史数据代理接口
@@ -329,6 +329,30 @@ function downloadApk(assetId, filename, destPath, onProgress) {
   });
 }
 
+// 清理 downloads 目录：每个 APK 前缀仅保留最新一份（动态标签命名会无限累积，需定期清理）
+function cleanupOldApks(dir) {
+  const KNOWN_PREFIXES = ['LotteryHistoryQuery', 'LotteryAdmin'];
+  for (const prefix of KNOWN_PREFIXES) {
+    let files = [];
+    try {
+      files = fs.readdirSync(dir).filter(f => f.startsWith(`${prefix}_`) && f.endsWith('.apk'));
+    } catch (_) { continue; }
+    if (files.length <= 1) continue;
+    // 排序：cmd- 动态命名永远视为新版本，旧固定命名(v24.2 等)视为最旧，避免误判
+    files.sort((a, b) => {
+      const ra = a.includes('cmd-') ? 1 : 0;
+      const rb = b.includes('cmd-') ? 1 : 0;
+      if (ra !== rb) return ra - rb;
+      return a.localeCompare(b);
+    });
+    const keep = files[files.length - 1];
+    for (const f of files.slice(0, -1)) {
+      try { fs.unlinkSync(path.join(dir, f)); console.log('[APK 清理]', f); } catch (_) {}
+    }
+    console.log(`[APK 清理] ${prefix}: 保留 ${keep}，清理 ${files.length - 1} 个旧版本`);
+  }
+}
+
 async function syncApkFromGithub() {
   if (apkSync.running) {
     apkSync.message = '已有一个同步任务正在执行';
@@ -389,6 +413,8 @@ async function syncApkFromGithub() {
     apkSync.finishedAt = Date.now();
     apkSync.running = false;
     apkSync.message = 'APK 同步完成';
+    // 同步完成后清理同前缀旧版本，防止动态标签命名无限累积占满磁盘
+    cleanupOldApks(DOWNLOADS_DIR);
   } catch (err) {
     apkSync.error = err.message;
     apkSync.stage = 'error';

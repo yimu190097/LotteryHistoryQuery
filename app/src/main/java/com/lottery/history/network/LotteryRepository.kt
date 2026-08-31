@@ -3,6 +3,7 @@ package com.lottery.history.network
 import com.lottery.history.model.LotteryDraw
 import com.lottery.history.model.LotteryTypeConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -49,7 +50,7 @@ object LotteryRepository {
     private const val MAX_RETRIES = 2
     private const val RETRY_BASE_MS = 500L
 
-    private fun fetchBytes(url: String): ByteArray {
+    private suspend fun fetchBytes(url: String): ByteArray {
         var attempt = 0
         var lastErr: Exception? = null
         while (attempt <= MAX_RETRIES) {
@@ -61,7 +62,7 @@ object LotteryRepository {
                 lastErr = e
                 attempt++
                 if (attempt <= MAX_RETRIES) {
-                    Thread.sleep(RETRY_BASE_MS * attempt)
+                    delay(RETRY_BASE_MS * attempt) // 协程 delay，不阻塞 IO 线程
                 }
             }
         }

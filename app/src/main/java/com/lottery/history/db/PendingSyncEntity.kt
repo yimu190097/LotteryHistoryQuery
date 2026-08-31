@@ -15,7 +15,10 @@ enum class SyncStatus { PENDING, SYNCED, FAILED }
  * - 离线查询扣减、改密、套餐变更均入队，联网后由 SyncWorker 推送。
  * - clientOpId 为幂等键，防止 WorkManager 重试导致服务器重复入账。
  */
-@Entity(tableName = "pending_sync")
+@Entity(
+    tableName = "pending_sync",
+    indices = [androidx.room.Index(value = ["userPhone"])]
+)
 data class PendingSyncEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val userPhone: String,

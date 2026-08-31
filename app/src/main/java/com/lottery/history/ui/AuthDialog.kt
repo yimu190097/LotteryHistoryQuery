@@ -17,6 +17,8 @@ import androidx.lifecycle.LifecycleCoroutineScope
 import com.lottery.history.R
 import com.lottery.history.data.AuthRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -39,6 +41,7 @@ class AuthDialog(
 
     private val authRepo = AuthRepository(context)
     private var currentMode = initialMode
+    private var actionJob: Job? = null
 
     private lateinit var tvTitle: TextView
     private lateinit var tvHint: TextView
@@ -133,7 +136,7 @@ class AuthDialog(
         val newPassword = etNewPassword.text.toString()
 
         btnAction.isEnabled = false
-        scope.launch {
+        actionJob = scope.launch {
             val result = withContext(Dispatchers.IO) {
                 when (currentMode) {
                     Mode.LOGIN -> authRepo.login(phone, password)
@@ -141,6 +144,8 @@ class AuthDialog(
                     Mode.CHANGE_PASSWORD -> authRepo.changePassword(password, newPassword)
                 }
             }
+            // 协程完成时对话框可能已被关闭，检查状态避免操作已销毁的 UI
+            if (!isShowing) return@launch
             btnAction.isEnabled = true
             result.fold(
                 onSuccess = {
@@ -151,5 +156,10 @@ class AuthDialog(
                 onFailure = { e -> showError(e.message ?: "操作失败") }
             )
         }
+    }
+
+    override fun dismiss() {
+        actionJob?.cancel()
+        super.dismiss()
     }
 }
