@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -15,15 +17,25 @@ android {
         versionName = "1.0"
     }
 
+    // P1-1: 签名密码从项目根目录 signing.properties 读取（已被 .gitignore 排除），
+    //       不再硬编码到构建脚本，避免仓库持有任何签名凭据。
+    //       仅当 keystore 与密码均存在时才启用 release 签名，否则回退 AGP 内置 debug 签名。
+    val signingProps = Properties().apply {
+        val f = rootProject.file("signing.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
+    val storePass = signingProps.getProperty("STORE_PASSWORD")
+    val keyPass = signingProps.getProperty("KEY_PASSWORD")
+    val storedAlias = signingProps.getProperty("KEY_ALIAS", "lottery")
+
     signingConfigs {
-        // 存在正式 release.keystore 才启用正式签名；否则（如 CI）回退到 AGP 内置 debug 签名，保证可构建
         val keystoreFile = rootProject.file("app/release.keystore")
-        if (keystoreFile.exists()) {
+        if (keystoreFile.exists() && !storePass.isNullOrEmpty() && !keyPass.isNullOrEmpty()) {
             create("release") {
                 storeFile = keystoreFile
-                storePassword = "Lottery2026"
-                keyAlias = "lottery"
-                keyPassword = "Lottery2026"
+                storePassword = storePass
+                keyAlias = storedAlias
+                keyPassword = keyPass
             }
         }
     }

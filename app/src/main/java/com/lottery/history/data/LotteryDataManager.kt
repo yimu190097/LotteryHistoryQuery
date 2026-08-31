@@ -136,7 +136,9 @@ object LotteryDataManager {
                             ruleVersionKey = rvKey,
                             parseSource = ParseSource.SEED,
                             parseAt = null,
-                            parserVersion = 1,
+                            // P1-9: seed 虽是内置兜底数据，但统一标记为当前解析器版本，
+                            // 避免下游按 parserVersion 判断时把 seed 当成"废弃/不完整"数据。
+                            parserVersion = PARSER_VERSION_CURRENT,
                             conditionalFlagsJson = null
                         )
                     )

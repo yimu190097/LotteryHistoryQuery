@@ -5,6 +5,13 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.lottery.history.AppContext
 import com.lottery.history.data.SessionStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import okhttp3.OkHttpClient
@@ -48,6 +55,13 @@ object ChatClient {
     private var connected = false
     private var authed = false
 
+    // P1-7: 自动重连（网络抖动/服务重启后自动恢复）。仅当未手动 disconnect 且有登录态时重连。
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var shouldReconnect = false
+    private var reconnectAttempt = 0
+    private var connecting = false
+    private var reconnectJob: kotlinx.coroutines.Job? = null
+
     /** 入站消息流：UI 订阅，收到 server 推送的消息会 emit */
     private val _incoming = MutableSharedFlow<IncomingEvent>(extraBufferCapacity = 64)
     val incoming: SharedFlow<IncomingEvent> = _incoming
@@ -56,21 +70,31 @@ object ChatClient {
     private val _state = MutableSharedFlow<ConnState>(extraBufferCapacity = 4)
     val state: SharedFlow<ConnState> = _state
 
-    /** 连接（若已连接且已认证则跳过） */
+    /** 连接（若已连接且已认证则跳过；会启用断线自动重连） */
     fun connect() {
+        shouldReconnect = true
+        reconnectAttempt = 0
+        doConnect()
+    }
+
+    private fun doConnect() {
         val token = sessionStore.getToken() ?: run {
             Log.w(TAG, "connect: no token, skip")
             return
         }
+        if (connecting) { Log.d(TAG, "already connecting"); return }
         if (connected && authed) {
             Log.d(TAG, "already connected & authed")
             return
         }
+        connecting = true
         val url = ApiClient.BASE_URL.replaceFirst("^http".toRegex(), "ws") + "/ws"
         Log.d(TAG, "connecting to $url")
         val req = Request.Builder().url(url).build()
         ws = client.newWebSocket(req, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                connecting = false
+                reconnectAttempt = 0
                 connected = true
                 Log.d(TAG, "ws open, sending auth")
                 // 发送 auth 帧
@@ -83,24 +107,41 @@ object ChatClient {
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                connected = false; authed = false
+                connected = false; authed = false; connecting = false
                 Log.w(TAG, "ws closed: $code/$reason")
                 _state.tryEmit(ConnState.DISCONNECTED)
+                scheduleReconnect()
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                connected = false; authed = false
+                connected = false; authed = false; connecting = false
                 Log.e(TAG, "ws failure: ${t.message}")
                 _state.tryEmit(ConnState.ERROR)
+                scheduleReconnect()
             }
         })
     }
 
-    /** 主动断开 */
+    /** P1-7: 指数退避重连（1s,2s,4s…封顶 30s），仅当未手动断开且仍有登录态时执行 */
+    private fun scheduleReconnect() {
+        if (!shouldReconnect || sessionStore.getToken().isNullOrBlank()) return
+        reconnectJob?.cancel()
+        reconnectJob = scope.launch {
+            val attempts = reconnectAttempt
+            val delayMs = Math.min(1000L shl attempts, 30_000L)
+            reconnectAttempt = attempts + 1
+            delay(delayMs)
+            if (shouldReconnect && scope.isActive) doConnect()
+        }
+    }
+
+    /** 主动断开（会停止自动重连，直到下次 connect()） */
     fun disconnect() {
+        shouldReconnect = false
+        reconnectJob?.cancel()
         ws?.close(NORMAL_CLOSURE, "user disconnect")
         ws = null
-        connected = false; authed = false
+        connected = false; authed = false; connecting = false
     }
 
     /** 发送聊天消息（用户 → 管理员） */
