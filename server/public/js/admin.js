@@ -270,8 +270,8 @@ async function renderUsers() {
         </tr></thead>
         <tbody>${data.data.map(u => {
           const isVip = u.planType && u.planType !== 'FREE';
-          const vipActive = isVip && u.monthly_expire_at && u.monthly_expire_at > now;
-          const vipExpired = isVip && !vipActive;
+          const vipActive = u.vipActive !== undefined ? u.vipActive : (isVip && u.monthly_expire_at && u.monthly_expire_at > now);
+          const vipExpired = u.vipExpired || (isVip && !vipActive);
           const vipLabel = VIP_LABELS[u.planType] || '免费';
           const statusText = isVip ? (vipExpired ? '已过期' : '正常') : '免费';
           const statusBadge = isVip ? (vipExpired ? 'badge-danger' : vipBadge(u.planType)) : 'badge-info';
@@ -341,7 +341,8 @@ async function showUserDetail(phone) {
     const data = await api(`/api/users/${phone}`);
     const u = data.user;
     const isVip = u.planType && u.planType !== 'FREE';
-    const vipExpired = u.vipExpired || (isVip && u.monthly_expire_at && u.monthly_expire_at < Date.now());
+    const vipActive = u.vipActive !== undefined ? u.vipActive : (isVip && u.monthly_expire_at && u.monthly_expire_at > Date.now());
+    const vipExpired = u.vipExpired || (isVip && !vipActive);
     const vipLabel = isVip ? (VIP_LABELS[u.planType] || u.planType) : '免费';
     const freeUsed = u.freeUsed || 0;
     const freeLimit = u.freeLimit || 2;

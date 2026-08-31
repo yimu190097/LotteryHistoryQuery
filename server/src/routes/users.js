@@ -147,7 +147,8 @@ router.post('/client/register', (req, res) => {
     planType: 'FREE',
     freeUsed: 0,
     freeLimit,
-    monthlyExpireAt: null
+    monthlyExpireAt: null,
+    vipExpired: false
   };
   if (session.kicked) resp.notice = `已达到最大终端数限制（${MAX_SESSIONS_PER_USER}台），已自动踢掉最旧的终端`;
   res.json(resp);
@@ -245,7 +246,8 @@ router.post('/client/consume', userAuthMiddleware, (req, res) => {
     if (cached) {
       if (cached.result_payload) return res.json(JSON.parse(cached.result_payload));
       const q = checkCanQuery(phone);
-      return res.json({ success: true, canQuery: q.canQuery, freeUsed: q.freeUsed, freeLimit: q.freeLimit, planType: q.planType });
+      const quota = db.prepare('SELECT * FROM quotas WHERE user_phone = ?').get(phone);
+      return res.json({ success: true, canQuery: q.canQuery, freeUsed: q.freeUsed, freeLimit: q.freeLimit, planType: q.planType, monthlyExpireAt: quota?.monthly_expire_at || null });
     }
   }
 
@@ -265,7 +267,7 @@ router.post('/client/consume', userAuthMiddleware, (req, res) => {
       if (ins.changes === 0) {
         const c = db.prepare('SELECT result_payload FROM idempotency_log WHERE op_id = ?').get(clientOpId);
         if (c && c.result_payload) return JSON.parse(c.result_payload);
-        return { success: true, canQuery: true, freeUsed: 0, freeLimit, planType: quota.plan_type };
+        return { success: true, canQuery: true, freeUsed: 0, freeLimit, planType: quota.plan_type, monthlyExpireAt: quota.monthly_expire_at || null };
       }
     }
 
@@ -544,7 +546,8 @@ router.get('/', (req, res) => {
     const freeUsed = (u.free_query_date === today) ? u.remaining_queries : 0;
     return {
       ...u,
-      planType: vipActive ? u.plan_type : (vipExpired ? 'FREE' : (u.plan_type || 'FREE')),
+      planType: u.plan_type || 'FREE',
+      vipActive,
       vipExpired,
       freeUsed,
       freeLimit,
@@ -610,7 +613,8 @@ router.get('/:phone', (req, res) => {
   res.json({
     user: {
       ...user,
-      planType: vipActive ? user.plan_type : 'FREE',
+      planType: user.plan_type || 'FREE',
+      vipActive,
       vipExpired: isVip && !vipActive,
       freeUsed,
       freeLimit: getFreeQueryLimit()
