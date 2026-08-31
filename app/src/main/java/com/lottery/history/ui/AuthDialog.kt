@@ -149,9 +149,10 @@ class AuthDialog(
             btnAction.isEnabled = true
         result.fold(
             onSuccess = { notice ->
-                // 展示终端踢除等提示
-                if (!notice.isNullOrBlank()) {
-                    Toast.makeText(context, notice, Toast.LENGTH_LONG).show()
+                // 展示终端踢除等提示（changePassword 返回 Unit，login/register 返回 String?）
+                val msg = (notice as? String)?.takeIf { it.isNotBlank() }
+                if (msg != null) {
+                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                 }
                 Toast.makeText(context, "操作成功", Toast.LENGTH_SHORT).show()
                 onSuccess()
