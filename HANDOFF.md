@@ -26,7 +26,7 @@
 | 部署 Webhook | `https://showbiz-unbridle-decent.ngrok-free.dev/api/deploy/webhook` |
 | Webhook Secret | （私密，向持有者索要） |
 | GitHub Token | （私密，向持有者索要或自建） |
-| 管理员账号 | `admin / admin123`（首次登录强制改密，见 database.js） |
+| 管理员账号 | `admin`（首次登录强制改密；密码已轮换，当前值见交接记录，历史 `admin123` 已失效） |
 | 健康检查 | `GET /api/health` |
 | 服务器部署日志 | VM 上 `/var/log/lottery-update.log` |
 
@@ -56,21 +56,26 @@ curl -s -X POST https://showbiz-unbridle-decent.ngrok-free.dev/api/deploy/webhoo
 5. GitHub Release APK 同步：`POST /api/apk/sync`、`GET /api/apk/sync-status`、`GET /api/apk-list`、`POST /api/upload-apk`。
 6. 后端路由骨架完整：`auth/users/stats/config/chat/deploy` + `ws/chatServer` + `middleware/auth`。
 7. 数据库表：`admins/users/quotas/pending_sync/audit_log/system_config/chat_sessions/chat_messages`，默认 free_quota=10、query_price=1。
+8. （2026-08-31）网页版真实登录 + 配额兑扣：`users.js` 新增 client/config|quota|login|register|consume，前端 JWT 登录 + 查询扣减。
+9. （2026-08-31）P0 修复：查该期按钮、双色球福运奖匹配、仪表盘 quotaStats 字段对齐、WebSocket reject 权限校验。
+10. （2026-08-31）修复部署脚本 FILES 列表遗漏（stats/chatServer/callManager/init.js），后端改动现可正常同步上线。
 
-## 5. 未完成（接手后继续）
+## 5. 待办优化清单（2026-08-31 全量审查）
 
-### 5.1【核心】用户端网页版真实登录 + 配额兑扣
-- 现状：`server/public/web/index.html` 的 `submitAuth()` 是前端假登录（仅脱敏 + toast + 硬编码「月租用户·剩余30天」），未调后端、无真实鉴权、无查询扣减。
-- 做法：接 `POST /api/users/client/login` / `register`，token 存 localStorage；查询时按 `system_config` 的 `free_quota/query_price` 扣减 `quotas.remaining_queries`；`quotaInfo` 显示真实剩余次数。
+> 完整分级清单见随附《LotteryHistoryQuery_最新交接_20260831.md》。核心待办：
 
-### 5.2 条件性奖级边界（可选）
-- 福运奖开关、大乐透奖池上浮等，网页版 `matchAll` 已用 `vers`+`r[4]` 预留，需与 App `LotteryMatcher` 边界对齐。
+### P0（严重）
+- App 硬编码管理员账号密码（LotteryApp.kt `13440113882`/`hy190097`）
+- SyncWorker 服务器同步空实现 + 配额重复扣减风险
+- `/api/lottery/:code` 无缓存/无 response 超时/无重试
+- Room `fallbackToDestructiveMigration()` 删库风险
+- `deploy.sh` 明文打印 JWT_SECRET/TURN 密码
 
-### 5.3 本地↔云端同步（接手前先做）
-- 本地工作目录若缺失 `ws/`、`middleware/`、`routes/{auth,users,stats,chat}.js`、`utils/`、`public/js/{call,chat}.js` 等，**以 GitHub 云端为准**，切勿把「本地没有」误当「云端没有」。
+### P1（高）
+- keystore 密码硬编码、Token 过期校验缺失、后端路由无 try/catch、网页版静默吞错、依赖已知 CVE
 
-### 5.4 可选功能对齐（App 有、网页版无）
-- 客服聊天（CustomerServiceActivity）、语音通话（WebRtcClient/VoiceCallActivity）。
+### P2/P3
+- 详见随附交接文档，含部署脚本加固、CI Release、缓存策略等
 
 ## 6. 关键坑
 
@@ -79,6 +84,7 @@ curl -s -X POST https://showbiz-unbridle-decent.ngrok-free.dev/api/deploy/webhoo
 3. `koa-connect` 包 Express 中间件会漏 ctx，用原生 Express 中间件。
 4. `update.sh` 中途 `systemctl restart` 会杀掉部署进程自身（同 cgroup），重启放到最后一次性执行。
 5. 数据源 code 曾错用 `qlc/qx/dlt`，正确为 `7lc/7xc/dlt2`。
+6. 部署脚本 `update.sh` 的 FILES 列表必须与 `server/src` 实际文件一致（曾遗漏 stats/chatServer/callManager/init.js 导致后端改动不生效）。
 
 ## 7. 接口速查
 
