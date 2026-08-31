@@ -30,7 +30,7 @@ function initTables() {
     CREATE TABLE IF NOT EXISTS quotas (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_phone TEXT NOT NULL UNIQUE,
-      plan_type TEXT NOT NULL DEFAULT 'PAY_PER_USE',
+      plan_type TEXT NOT NULL DEFAULT 'FREE',
       remaining_queries INTEGER NOT NULL DEFAULT 0,
       monthly_expire_at INTEGER,
       server_version INTEGER NOT NULL DEFAULT 0,
@@ -99,9 +99,20 @@ function initTables() {
       FOREIGN KEY (user_phone) REFERENCES users(phone)
     );
     CREATE INDEX IF NOT EXISTS idx_user_sessions_phone ON user_sessions(user_phone);
+    CREATE TABLE IF NOT EXISTS vip_plans (
+      plan_type TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      price REAL NOT NULL DEFAULT 0,
+      duration_days INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
   `);  try {
     db.prepare('ALTER TABLE admins ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0').run();
     console.log('[DB Migration] 已补列: admins.must_change_password');
+  } catch (_) {}
+  try {
+    db.prepare('ALTER TABLE quotas ADD COLUMN free_query_date INTEGER NOT NULL DEFAULT 0').run();
+    console.log('[DB Migration] 已补列: quotas.free_query_date');
   } catch (_) {}
   try {
     const col = db.prepare("PRAGMA table_info('admins')").all();
@@ -124,14 +135,28 @@ function initTables() {
       console.log('[DB] 默认密码仍为 admin123，已强制标记 must_change_password=1');
     }
   }  const defaultConfigs = {
-    'app_version': '23.5', 'free_quota': '10', 'query_price': '1',
-    'monthly_price': '30', 'annual_price': '300', 'audit_log_retention_days': '30'
+    'app_version': '23.5', 'free_query_limit': '2',
+    'audit_log_retention_days': '30'
   };
   const insertConfig = db.prepare(
     'INSERT OR IGNORE INTO system_config (key, value, updated_at) VALUES (?, ?, ?)'
   );
   for (const [key, value] of Object.entries(defaultConfigs)) {
     insertConfig.run(key, value, Date.now());
+  }
+
+  // 种子 VIP 套餐（如不存在）
+  const vipPlans = [
+    { type: 'MONTHLY_VIP', name: '月VIP', price: 30, days: 30 },
+    { type: 'QUARTERLY_VIP', name: '季VIP', price: 80, days: 90 },
+    { type: 'SEMI_ANNUAL_VIP', name: '半年VIP', price: 150, days: 180 },
+    { type: 'ANNUAL_VIP', name: '年VIP', price: 280, days: 365 }
+  ];
+  const insertVip = db.prepare(
+    'INSERT OR IGNORE INTO vip_plans (plan_type, name, price, duration_days, updated_at) VALUES (?, ?, ?, ?, ?)'
+  );
+  for (const p of vipPlans) {
+    insertVip.run(p.type, p.name, p.price, p.days, Date.now());
   }
 
   // 创建测试账号（如不存在）
@@ -143,12 +168,9 @@ function initTables() {
     db.prepare(
       'INSERT INTO users (phone, password_hash, nickname, is_admin, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)'
     ).run(testPhone, testHash, '测试用户', now, now);
-    const freeQuota = parseInt(
-      (db.prepare("SELECT value FROM system_config WHERE key = 'free_quota'").get()?.value) || '10'
-    );
     db.prepare(
       'INSERT INTO quotas (user_phone, plan_type, remaining_queries, monthly_expire_at, server_version, local_version, updated_at) VALUES (?, ?, ?, NULL, 1, 0, ?)'
-    ).run(testPhone, 'PAY_PER_USE', freeQuota, now);
+    ).run(testPhone, 'FREE', 0, now);
     console.log(`[DB] 测试账号已创建: ${testPhone} / test123456`);
   }
   console.log('[DB] 数据库初始化完成');

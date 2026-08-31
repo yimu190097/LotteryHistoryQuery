@@ -6,7 +6,7 @@ const JWT_SECRET = process.env.JWT_SECRET || DEFAULT_JWT_SECRET;
 const JWT_EXPIRES = '24h';
 
 // 单用户最大终端数
-const MAX_SESSIONS_PER_USER = 3;
+const MAX_SESSIONS_PER_USER = 2;
 
 // P0-2 安全加固：JWT_SECRET 仍是默认值 → 直接拒绝启动
 if (JWT_SECRET === DEFAULT_JWT_SECRET) {

@@ -52,17 +52,28 @@ object ApiClient {
         val phone: String,
         val nickname: String?,
         val planType: String,
-        val remainingQueries: Int,
-        val monthlyExpireAt: Long?
+        val freeUsed: Int,
+        val freeLimit: Int,
+        val monthlyExpireAt: Long?,
+        val vipExpired: Boolean,
+        val notice: String?
     )
 
-    data class ConsumeResponse(val success: Boolean, val remainingQueries: Int)
+    data class ConsumeResponse(
+        val success: Boolean,
+        val freeUsed: Int,
+        val freeLimit: Int,
+        val planType: String,
+        val canQuery: Boolean
+    )
     data class QuotaResponse(
         val phone: String,
         val nickname: String?,
         val planType: String,
-        val remainingQueries: Int,
-        val monthlyExpireAt: Long?
+        val freeUsed: Int,
+        val freeLimit: Int,
+        val monthlyExpireAt: Long?,
+        val vipExpired: Boolean
     )
     data class SessionInfo(
         val id: Long,

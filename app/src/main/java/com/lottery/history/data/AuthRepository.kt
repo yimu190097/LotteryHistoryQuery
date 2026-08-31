@@ -48,9 +48,10 @@ class AuthRepository(private val context: Context) {
             // 3) 用 server 返回的配额初始化本地缓存
             QuotaRepository(context).applyServerSnapshot(
                 phone = resp.phone,
-                remainingQueries = resp.remainingQueries,
+                freeUsed = resp.freeUsed,
+                freeQueryLimit = resp.freeLimit,
+                planTypeStr = resp.planType,
                 monthlyExpireAt = resp.monthlyExpireAt,
-                planType = if (resp.planType == "MONTHLY") PlanType.MONTHLY else PlanType.PAY_PER_USE,
                 serverVersion = 1
             )
             // sessionStore.saveLogin 已在 ApiClient.register 内部完成
@@ -70,9 +71,10 @@ class AuthRepository(private val context: Context) {
                 // 同步配额到本地缓存
                 QuotaRepository(context).applyServerSnapshot(
                     phone = resp.phone,
-                    remainingQueries = resp.remainingQueries,
+                    freeUsed = resp.freeUsed,
+                    freeQueryLimit = resp.freeLimit,
+                    planTypeStr = resp.planType,
                     monthlyExpireAt = resp.monthlyExpireAt,
-                    planType = if (resp.planType == "MONTHLY") PlanType.MONTHLY else PlanType.PAY_PER_USE,
                     serverVersion = 1
                 )
                 return@withContext Result.success(Unit)

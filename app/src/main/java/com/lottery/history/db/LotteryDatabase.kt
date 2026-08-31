@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ChatMessageEntity::class,
         PendingSyncEntity::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = true
 )
 abstract class LotteryDatabase : RoomDatabase() {
@@ -123,6 +123,29 @@ abstract class LotteryDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Migration(16, 17)：配额表重构 —— 从按次计费改为 VIP+免费每日2次。
+         * 旧表 rebuild：DROP → CREATE 新 schema（freeUsed/freeQueryLimit/freeQueryDate 替代 remainingQueries）。
+         */
+        private val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                runCatching { database.execSQL("DROP TABLE IF EXISTS `quotas`") }
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `quotas` (
+                        `userPhone` TEXT PRIMARY KEY NOT NULL,
+                        `planType` TEXT NOT NULL,
+                        `freeUsed` INTEGER NOT NULL,
+                        `freeQueryLimit` INTEGER NOT NULL,
+                        `freeQueryDate` INTEGER NOT NULL,
+                        `monthlyExpireAt` INTEGER,
+                        `serverVersion` INTEGER NOT NULL,
+                        `localVersion` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL
+                    )
+                """)
+            }
+        }
+
         fun get(context: Context): LotteryDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -135,7 +158,8 @@ abstract class LotteryDatabase : RoomDatabase() {
                     MIGRATION_12_13,
                     MIGRATION_13_14,
                     MIGRATION_14_15,
-                    MIGRATION_15_16
+                    MIGRATION_15_16,
+                    MIGRATION_16_17
                 )
                 // P0-4: 移除 fallbackToDestructiveMigration() —— 迁移失败时
                 // 应抛 IllegalStateException 让全局异常处理器捕获并提示，

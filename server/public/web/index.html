@@ -404,9 +404,10 @@ var authState = {
   phone: null,
   nickname: null,
   planType: null,
-  remainingQueries: 0,
+  freeUsed: 0,
+  freeLimit: 2,
   monthlyExpireAt: null,
-  freeQuotaLimit: 10
+  vipExpired: false
 };
 
 function authHeaders(extra) {
@@ -415,41 +416,31 @@ function authHeaders(extra) {
   return h;
 }
 
-function getLocalFreeUsed() {
-  try { return parseInt(localStorage.getItem('freeUsed') || '0'); } catch(e) { return 0; }
-}
-function getLocalFreeRemaining() {
-  return Math.max(0, authState.freeQuotaLimit - getLocalFreeUsed());
-}
-function consumeLocalFree() {
-  var used = getLocalFreeUsed();
-  localStorage.setItem('freeUsed', String(used + 1));
-}
-
 function maskedPhone(ph) {
   return ph ? ph.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2') : '';
 }
 
-function fmtQuota(planType, remaining, monthlyExpireAt) {
-  if (planType === 'MONTHLY') {
+function fmtQuota(planType, freeUsed, freeLimit, monthlyExpireAt, vipExpired) {
+  var VIP_LABELS = { 'MONTHLY_VIP': '月VIP', 'QUARTERLY_VIP': '季VIP', 'SEMI_ANNUAL_VIP': '半年VIP', 'ANNUAL_VIP': '年VIP' };
+  if (planType && planType !== 'FREE') {
     if (monthlyExpireAt) {
       var days = Math.ceil((monthlyExpireAt - Date.now()) / 86400000);
-      if (days > 0) return '月租用户·剩余 ' + days + ' 天';
-      return '月租已过期';
+      if (days > 0) return '🟡 ' + (VIP_LABELS[planType] || planType) + '·剩余 ' + days + ' 天';
+      return 'VIP已过期';
     }
-    return '月租用户';
+    return '🟡 ' + (VIP_LABELS[planType] || planType);
   }
-  return '剩余 ' + remaining + ' 次查询';
+  if (vipExpired) return 'VIP已过期·今日免费 ' + freeUsed + '/' + freeLimit + ' 次';
+  return '免费 ' + freeUsed + '/' + freeLimit + ' 次';
 }
 
 function updateUserBar() {
   if (authState.token) {
     $('userPhone').textContent = maskedPhone(authState.phone);
-    $('quotaInfo').textContent = fmtQuota(authState.planType, authState.remainingQueries, authState.monthlyExpireAt);
+    $('quotaInfo').textContent = fmtQuota(authState.planType, authState.freeUsed, authState.freeLimit, authState.monthlyExpireAt, authState.vipExpired);
   } else {
-    var rem = getLocalFreeRemaining();
     $('userPhone').textContent = '点击登录';
-    $('quotaInfo').textContent = '未登录·免费 ' + rem + '/' + authState.freeQuotaLimit + ' 次';
+    $('quotaInfo').textContent = '未登录·每日免费 ' + authState.freeLimit + ' 次';
   }
 }
 
@@ -458,7 +449,7 @@ async function fetchFreeQuotaLimit() {
     var res = await fetch('/api/users/client/config');
     if (res.ok) {
       var data = await res.json();
-      authState.freeQuotaLimit = data.free_quota || 10;
+      authState.freeLimit = data.free_query_limit || 2;
     }
   } catch(e) {}
 }
@@ -471,8 +462,10 @@ async function fetchQuota() {
     if (res.ok) {
       var data = await res.json();
       authState.planType = data.planType;
-      authState.remainingQueries = data.remainingQueries;
+      authState.freeUsed = data.freeUsed || 0;
+      authState.freeLimit = data.freeLimit || 2;
       authState.monthlyExpireAt = data.monthlyExpireAt;
+      authState.vipExpired = data.vipExpired || false;
     }
   } catch(e) {}
   updateUserBar();
@@ -483,12 +476,16 @@ function saveAuthSession(loginResp) {
   authState.phone = loginResp.phone;
   authState.nickname = loginResp.nickname;
   authState.planType = loginResp.planType;
-  authState.remainingQueries = loginResp.remainingQueries;
+  authState.freeUsed = loginResp.freeUsed || 0;
+  authState.freeLimit = loginResp.freeLimit || 2;
   authState.monthlyExpireAt = loginResp.monthlyExpireAt;
+  authState.vipExpired = loginResp.vipExpired || false;
   try {
     localStorage.setItem('authToken', loginResp.token);
     localStorage.setItem('authPhone', loginResp.phone);
   } catch(e) {}
+  // 显示终端提示
+  if (loginResp.notice) toast(loginResp.notice);
   updateUserBar();
 }
 
@@ -497,8 +494,10 @@ function logout() {
   authState.phone = null;
   authState.nickname = null;
   authState.planType = null;
-  authState.remainingQueries = 0;
+  authState.freeUsed = 0;
+  authState.freeLimit = 2;
   authState.monthlyExpireAt = null;
+  authState.vipExpired = false;
   try {
     localStorage.removeItem('authToken');
     localStorage.removeItem('authPhone');
@@ -524,37 +523,37 @@ async function checkAuthOnLoad() {
 }
 
 async function consumeOneQuery() {
-  if (authState.token) {
-    // 已登录：调服务器扣减
-    try {
-      var res = await fetch('/api/users/client/consume', {
-        method: 'POST',
-        headers: authHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ phone: authState.phone, count: 1 })
-      });
-      if (res.status === 401) { logout(); return { ok: false, msg: '登录已过期，请重新登录' }; }
-      if (res.status === 403) {
-        var err = await res.json();
-        return { ok: false, msg: err.error || '查询次数不足' };
-      }
-      if (res.ok) {
-        var data = await res.json();
-        authState.remainingQueries = data.remainingQueries;
-        updateUserBar();
-        return { ok: true };
-      }
-      return { ok: false, msg: '扣减失败，请重试' };
-    } catch(e) {
-      return { ok: false, msg: '网络错误：' + e.message };
+  if (!authState.token) {
+    // 未登录不允许查询（必须先登录）
+    return { ok: false, msg: '请先登录后查询' };
+  }
+  // 已登录：调服务器扣减
+  try {
+    var res = await fetch('/api/users/client/consume', {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ phone: authState.phone, count: 1 })
+    });
+    if (res.status === 401) { logout(); return { ok: false, msg: '登录已过期，请重新登录' }; }
+    if (res.status === 403) {
+      var err = await res.json();
+      // 更新本地状态
+      if (err.freeUsed !== undefined) authState.freeUsed = err.freeUsed;
+      if (err.freeLimit !== undefined) authState.freeLimit = err.freeLimit;
+      updateUserBar();
+      return { ok: false, msg: err.error || '今日免费查询次数已用完，请开通VIP获取不限次数' };
     }
-  } else {
-    // 未登录：用本地免费次数
-    if (getLocalFreeRemaining() <= 0) {
-      return { ok: false, msg: '免费查询次数已用完，请登录后继续' };
+    if (res.ok) {
+      var data = await res.json();
+      authState.freeUsed = data.freeUsed;
+      authState.freeLimit = data.freeLimit;
+      authState.planType = data.planType;
+      updateUserBar();
+      return { ok: true };
     }
-    consumeLocalFree();
-    updateUserBar();
-    return { ok: true };
+    return { ok: false, msg: '扣减失败，请重试' };
+  } catch(e) {
+    return { ok: false, msg: '网络错误：' + e.message };
   }
 }
 
@@ -1177,7 +1176,7 @@ async function downloadUserApk(){
 var authMode='login';
 function openAuthDialog(){
   if(authState.token){
-    var info='当前登录：'+maskedPhone(authState.phone)+'\n'+fmtQuota(authState.planType,authState.remainingQueries,authState.monthlyExpireAt)+'\n\n[确定] 退出登录\n[取消] 管理终端';
+    var info='当前登录：'+maskedPhone(authState.phone)+'\n'+fmtQuota(authState.planType,authState.freeUsed,authState.freeLimit,authState.monthlyExpireAt,authState.vipExpired)+'\n\n[确定] 退出登录\n[取消] 管理终端';
     var r=confirm(info);
     if(r){logout();}else{showSessionManager();}
   }else{

@@ -23,14 +23,11 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 /**
- * 配额 Repository：本地优先（离线可查可扣），操作入队待同步。
+ * 配额 Repository：VIP 不限次数 + 免费用户每日 2 次，服务器权威。
  *
  * - 读：直接观察本地 quotas 表 Flow，UI 秒开
- * - 写（扣减）：本地扣减 + 入队 pending_sync（同一事务），离线也能完成
+ * - 写（扣减）：调服务器 /consume，失败时本地兜底 + 入队待同步
  * - 同步：联网后 SyncWorker 推送，服务器权威快照覆盖本地
- *
- * 服务器接入后：仅需替换 consumeOneQuery 中的"入队"为"调服务器 + 入队兜底"，
- * UI 层（观察 Flow）零改动。
  */
 class QuotaRepository(private val context: Context) {
 
@@ -40,15 +37,18 @@ class QuotaRepository(private val context: Context) {
     /** 观察当前用户配额，UI 订阅 */
     fun observe(phone: String): Flow<QuotaEntity?> = quotaDao.observeByUser(phone)
 
-    /** 新用户初始化配额：按次用户，赠送10次体验 */
+    /** 新用户初始化配额：免费用户，每日 2 次 */
     suspend fun initForNewUser(phone: String) = withContext(Dispatchers.IO) {
         if (quotaDao.getByUser(phone) == null) {
             val now = System.currentTimeMillis()
+            val today = (now / 86400000).toInt()
             quotaDao.upsert(
                 QuotaEntity(
                     userPhone = phone,
-                    planType = PlanType.PAY_PER_USE,
-                    remainingQueries = 10,
+                    planType = PlanType.FREE,
+                    freeUsed = 0,
+                    freeQueryLimit = 2,
+                    freeQueryDate = today,
                     monthlyExpireAt = null,
                     serverVersion = 0,
                     localVersion = 0,
@@ -58,7 +58,7 @@ class QuotaRepository(private val context: Context) {
         }
     }
 
-    /** 管理员初始化配额：月租用户，有效期一年 */
+    /** 管理员初始化配额：年VIP，有效期一年 */
     suspend fun initForAdmin(phone: String) = withContext(Dispatchers.IO) {
         if (quotaDao.getByUser(phone) == null) {
             val now = System.currentTimeMillis()
@@ -66,8 +66,10 @@ class QuotaRepository(private val context: Context) {
             quotaDao.upsert(
                 QuotaEntity(
                     userPhone = phone,
-                    planType = PlanType.MONTHLY,
-                    remainingQueries = 99999,
+                    planType = PlanType.ANNUAL_VIP,
+                    freeUsed = 0,
+                    freeQueryLimit = 2,
+                    freeQueryDate = (now / 86400000).toInt(),
                     monthlyExpireAt = now + oneYear,
                     serverVersion = 0,
                     localVersion = 0,
@@ -80,52 +82,66 @@ class QuotaRepository(private val context: Context) {
     /**
      * 消耗一次查询：服务器优先（带 JWT 鉴权 + clientOpId 幂等），失败时降级到本地扣减 + 入队待同步。
      *
-     * 流程：
-     * 1) 联网：调 server /api/users/client/consume（携带 clientOpId）→ 成功则用返回的剩余次数更新本地缓存
-     * 2) 离线 / 服务器失败：本地扣减 + 入队 pending_sync（同 clientOpId），联网后 SyncWorker 推送
-     *
-     * 重复扣减防护：服务器基于 clientOpId 幂等去重。即使「服务器已扣减但响应丢失」导致
-     * 客户端走本地兜底，SyncWorker 重试时同一 clientOpId 也只会被服务器入账一次。
-     *
      * @return true 扣减成功，false 无配额
      */
     suspend fun consumeOneQuery(phone: String): Boolean = withContext(Dispatchers.IO) {
         val quota = quotaDao.getByUser(phone) ?: return@withContext false
         if (!quota.canQuery()) return@withContext false
 
-        // 提前生成幂等键，无论走服务器还是本地兜底都用同一个 clientOpId
         val clientOpId = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
 
-        // 月租用户本地不扣次数（但需调 server 确认未过期）
-        if (quota.planType == PlanType.PAY_PER_USE) {
-            // 按次用户：先调服务器
+        // VIP 用户：调服务器确认未过期
+        if (PlanType.isVip(quota.planType)) {
             try {
                 val resp = com.lottery.history.network.ApiClient.consumeQuery(phone, 1, clientOpId)
-                // 服务器权威：用返回值覆盖本地
                 applyServerSnapshot(
                     phone = phone,
-                    remainingQueries = resp.remainingQueries,
+                    freeUsed = resp.freeUsed,
+                    freeQueryLimit = resp.freeLimit,
+                    planTypeStr = resp.planType,
                     monthlyExpireAt = quota.monthlyExpireAt,
-                    planType = quota.planType,
                     serverVersion = quota.serverVersion + 1
                 )
                 return@withContext true
             } catch (e: Exception) {
-                android.util.Log.w("QuotaRepository", "server consume failed, fallback to local: ${e.message}")
-                // 走本地兜底（下方统一处理）
+                android.util.Log.w("QuotaRepository", "server consume failed, fallback local: ${e.message}")
             }
         }
 
-        // 本地扣减（按次）+ 入队待同步（同一 clientOpId，服务器幂等去重）
-        val newRemaining = if (quota.planType == PlanType.PAY_PER_USE) {
-            quota.remainingQueries - 1
-        } else {
-            quota.remainingQueries
+        // 免费用户：调服务器扣减
+        try {
+            val resp = com.lottery.history.network.ApiClient.consumeQuery(phone, 1, clientOpId)
+            applyServerSnapshot(
+                phone = phone,
+                freeUsed = resp.freeUsed,
+                freeQueryLimit = resp.freeLimit,
+                planTypeStr = resp.planType,
+                monthlyExpireAt = quota.monthlyExpireAt,
+                serverVersion = quota.serverVersion + 1
+            )
+            return@withContext true
+        } catch (e: com.lottery.history.network.ApiClient.ApiException) {
+            if (e.code == 403) {
+                // 配额不足，更新本地状态
+                android.util.Log.w("QuotaRepository", "quota exhausted: ${e.message}")
+                return@withContext false
+            }
+            // 其他错误走本地兜底
+            android.util.Log.w("QuotaRepository", "server consume failed, fallback to local: ${e.message}")
+        } catch (e: Exception) {
+            android.util.Log.w("QuotaRepository", "server consume failed, fallback to local: ${e.message}")
         }
+
+        // 本地兜底：免费用户扣减
+        val today = (now / 86400000).toInt()
+        val todayUsed = if (quota.freeQueryDate == today) quota.freeUsed else 0
+        if (todayUsed >= quota.freeQueryLimit) return@withContext false
+
         quotaDao.update(
             quota.copy(
-                remainingQueries = newRemaining,
+                freeUsed = todayUsed + 1,
+                freeQueryDate = today,
                 localVersion = quota.localVersion + 1,
                 updatedAt = now
             )
@@ -140,7 +156,6 @@ class QuotaRepository(private val context: Context) {
                 createdAt = now
             )
         )
-        // 触发后台同步（联网则立即跑，离线则排队）
         triggerSync()
         true
     }
@@ -164,17 +179,26 @@ class QuotaRepository(private val context: Context) {
     /** 服务器权威快照覆盖本地（SyncWorker 调用） */
     suspend fun applyServerSnapshot(
         phone: String,
-        remainingQueries: Int,
+        freeUsed: Int,
+        freeQueryLimit: Int,
+        planTypeStr: String,
         monthlyExpireAt: Long?,
-        planType: PlanType,
         serverVersion: Long
     ) = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
+        val today = (now / 86400000).toInt()
+        val planType = try {
+            PlanType.valueOf(planTypeStr)
+        } catch (_: IllegalArgumentException) {
+            PlanType.FREE
+        }
         quotaDao.upsert(
             QuotaEntity(
                 userPhone = phone,
                 planType = planType,
-                remainingQueries = remainingQueries,
+                freeUsed = freeUsed,
+                freeQueryLimit = freeQueryLimit,
+                freeQueryDate = today,
                 monthlyExpireAt = monthlyExpireAt,
                 serverVersion = serverVersion,
                 localVersion = serverVersion,

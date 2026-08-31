@@ -55,6 +55,13 @@ async function api(path, options = {}) {
   return data;
 }
 
+const VIP_LABELS = { 'MONTHLY_VIP': '月VIP', 'QUARTERLY_VIP': '季VIP', 'SEMI_ANNUAL_VIP': '半年VIP', 'ANNUAL_VIP': '年VIP', 'FREE': '免费' };
+
+function vipBadge(type) {
+  const map = { 'MONTHLY_VIP': 'badge-info', 'QUARTERLY_VIP': 'badge-success', 'SEMI_ANNUAL_VIP': 'badge-warning', 'ANNUAL_VIP': 'badge-danger' };
+  return map[type] || 'badge-info';
+}
+
 function showToast(message, type = 'info') {
   const container = $('#toastContainer');
   const toast = document.createElement('div');
@@ -158,41 +165,29 @@ async function renderDashboard() {
 
   try {
     const data = await api('/api/stats/dashboard');
-    const s = data.stats;
-    const qs = s.quotaStats || {};
+    const qs = data.stats?.quotaStats || {};
+    const s = data.stats || {};
 
     $('#statsGrid').innerHTML = `
       <div class="stat-card" style="border-left:4px solid var(--primary)">
-        <div class="stat-value">${s.totalUsers}</div>
+        <div class="stat-value">${s.totalUsers || 0}</div>
         <div class="stat-label">总用户数</div>
       </div>
       <div class="stat-card" style="border-left:4px solid var(--info)">
-        <div class="stat-value">${s.todayNewUsers}</div>
+        <div class="stat-value">${s.todayNewUsers || 0}</div>
         <div class="stat-label">今日新增</div>
       </div>
-      <div class="stat-card" style="border-left:4px solid var(--warning)">
-        <div class="stat-value">${s.totalQueries}</div>
-        <div class="stat-label">总查询次数</div>
-      </div>
-      <div class="stat-card" style="border-left:4px solid var(--info)">
-        <div class="stat-value">${s.todayQueries}</div>
-        <div class="stat-label">今日查询</div>
-      </div>
       <div class="stat-card" style="border-left:4px solid var(--success)">
-        <div class="stat-value">${qs.monthly || 0}</div>
-        <div class="stat-label">月租用户</div>
+        <div class="stat-value">${qs.active_vip || 0}</div>
+        <div class="stat-label">VIP 会员</div>
       </div>
-      <div class="stat-card" style="border-left:4px solid var(--info)">
-        <div class="stat-value">${qs.pay_per_use || 0}</div>
-        <div class="stat-label">按次用户</div>
+      <div class="stat-card" style="border-left:4px solid var(--warning)">
+        <div class="stat-value">${qs.free_users || 0}</div>
+        <div class="stat-label">免费用户</div>
       </div>
       <div class="stat-card" style="border-left:4px solid var(--danger)">
-        <div class="stat-value">${qs.expired_monthly || 0}</div>
-        <div class="stat-label">已过期月租</div>
-      </div>
-      <div class="stat-card" style="border-left:4px solid var(--success)">
-        <div class="stat-value">${qs.total_remaining || 0}</div>
-        <div class="stat-label">剩余总次数</div>
+        <div class="stat-value">${qs.expired_vip || 0}</div>
+        <div class="stat-label">已过期VIP</div>
       </div>
     `;
 
@@ -243,8 +238,11 @@ async function renderUsers() {
         </div>
         <select id="userPlanFilter" onchange="userPlanFilter=this.value;userPage=1;renderUsers()" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;min-width:120px">
           <option value="" ${userPlanFilter === '' ? 'selected' : ''}>全部套餐</option>
-          <option value="PAY_PER_USE" ${userPlanFilter === 'PAY_PER_USE' ? 'selected' : ''}>按次用户</option>
-          <option value="MONTHLY" ${userPlanFilter === 'MONTHLY' ? 'selected' : ''}>月租用户</option>
+          <option value="FREE" ${userPlanFilter === 'FREE' ? 'selected' : ''}>免费用户</option>
+          <option value="MONTHLY_VIP" ${userPlanFilter === 'MONTHLY_VIP' ? 'selected' : ''}>月VIP</option>
+          <option value="QUARTERLY_VIP" ${userPlanFilter === 'QUARTERLY_VIP' ? 'selected' : ''}>季VIP</option>
+          <option value="SEMI_ANNUAL_VIP" ${userPlanFilter === 'SEMI_ANNUAL_VIP' ? 'selected' : ''}>半年VIP</option>
+          <option value="ANNUAL_VIP" ${userPlanFilter === 'ANNUAL_VIP' ? 'selected' : ''}>年VIP</option>
         </select>
       </div>
       <div class="table-container" id="userTable"><div class="empty-state">加载中...</div></div>
@@ -267,30 +265,34 @@ async function renderUsers() {
     $('#userTable').innerHTML = `
       <table>
         <thead><tr>
-          <th>手机号</th><th>昵称</th><th>套餐类型</th><th>状态</th><th>剩余次数</th>
+          <th>手机号</th><th>昵称</th><th>套餐</th><th>状态</th><th>今日免费</th>
           <th>到期时间</th><th>终端</th><th>注册时间</th><th>操作</th>
         </tr></thead>
         <tbody>${data.data.map(u => {
-          const isMonthly = u.plan_type === 'MONTHLY';
-          const isExpired = isMonthly && u.monthly_expire_at && u.monthly_expire_at < now;
-          const statusText = isMonthly ? (isExpired ? '已过期' : '正常') : '—';
-          const statusBadge = isMonthly ? (isExpired ? 'badge-danger' : 'badge-success') : 'badge-info';
-          const quotaColor = (u.remaining_queries ?? 0) > 0 ? '#2E7D32' : '#C62828';
+          const isVip = u.planType && u.planType !== 'FREE';
+          const vipActive = isVip && u.monthly_expire_at && u.monthly_expire_at > now;
+          const vipExpired = isVip && !vipActive;
+          const vipLabel = VIP_LABELS[u.planType] || '免费';
+          const statusText = isVip ? (vipExpired ? '已过期' : '正常') : '免费';
+          const statusBadge = isVip ? (vipExpired ? 'badge-danger' : vipBadge(u.planType)) : 'badge-info';
+          const freeUsed = u.freeUsed || 0;
+          const freeLimit = u.freeLimit || 2;
+          const freeColor = freeUsed >= freeLimit ? '#C62828' : freeUsed > 0 ? '#E65100' : '#2E7D32';
           const sc = u.session_count || 0;
-          const sessionColor = sc >= 3 ? '#C62828' : sc > 0 ? '#2E7D32' : '#9E9E9E';
+          const sessionColor = sc >= 2 ? '#C62828' : sc > 0 ? '#2E7D32' : '#9E9E9E';
           return `
           <tr>
             <td><strong>${u.phone}</strong></td>
             <td>${u.nickname || '—'}</td>
-            <td><span class="badge ${isMonthly ? 'badge-success' : 'badge-info'}">${isMonthly ? '月租' : '按次'}</span></td>
+            <td><span class="badge ${isVip ? vipBadge(u.planType) : 'badge-info'}">${vipLabel}</span></td>
             <td><span class="badge ${statusBadge}">${statusText}</span></td>
-            <td style="font-weight:600;color:${quotaColor}">${u.remaining_queries ?? 0}</td>
+            <td style="font-weight:600;color:${freeColor}">${freeUsed}/${freeLimit}</td>
             <td>${u.monthly_expire_at ? formatDateShort(u.monthly_expire_at) : '—'}</td>
             <td><span style="font-weight:600;color:${sessionColor};cursor:pointer" onclick="showUserSessions('${u.phone}')" title="点击管理终端">${sc} 台</span></td>
             <td>${formatDateShort(u.created_at)}</td>
             <td style="white-space:nowrap">
               <button class="btn btn-outline btn-sm" onclick="showUserDetail('${u.phone}')">详情</button>
-              <button class="btn btn-primary btn-sm" onclick="showQuotaModal('${u.phone}')">配额</button>
+              <button class="btn btn-primary btn-sm" onclick="showQuotaModal('${u.phone}')">套餐</button>
               <button class="btn btn-warning btn-sm" onclick="showResetPasswordModal('${u.phone}')">重置密码</button>
               <button class="btn btn-danger btn-sm" onclick="confirmDeleteUser('${u.phone}')">删除</button>
             </td>
@@ -338,23 +340,26 @@ async function showUserDetail(phone) {
   try {
     const data = await api(`/api/users/${phone}`);
     const u = data.user;
-    const isMonthly = u.plan_type === 'MONTHLY';
-    const isExpired = isMonthly && u.monthly_expire_at && u.monthly_expire_at < Date.now();
+    const isVip = u.planType && u.planType !== 'FREE';
+    const vipExpired = u.vipExpired || (isVip && u.monthly_expire_at && u.monthly_expire_at < Date.now());
+    const vipLabel = isVip ? (VIP_LABELS[u.planType] || u.planType) : '免费';
+    const freeUsed = u.freeUsed || 0;
+    const freeLimit = u.freeLimit || 2;
     $('#modalContent').innerHTML = `
       <h3>用户详情 - ${u.phone}</h3>
       <div class="detail-grid">
         <div class="detail-item"><label>手机号</label><span>${u.phone}</span></div>
         <div class="detail-item"><label>昵称</label><span>${u.nickname || '—'}</span></div>
-        <div class="detail-item"><label>套餐类型</label><span class="badge ${isMonthly ? 'badge-success' : 'badge-info'}">${isMonthly ? '月租用户' : '按次用户'}</span></div>
-        <div class="detail-item"><label>状态</label><span class="badge ${isMonthly ? (isExpired ? 'badge-danger' : 'badge-success') : 'badge-info'}">${isMonthly ? (isExpired ? '已过期' : '正常') : '—'}</span></div>
-        <div class="detail-item"><label>剩余查询次数</label><span style="font-weight:600;color:${(u.remaining_queries ?? 0) > 0 ? '#2E7D32' : '#C62828'}">${u.remaining_queries ?? 0}</span></div>
-        <div class="detail-item"><label>月租到期</label><span>${u.monthly_expire_at ? formatDate(u.monthly_expire_at) : '—'}</span></div>
+        <div class="detail-item"><label>套餐</label><span class="badge ${isVip ? vipBadge(u.planType) : 'badge-info'}">${vipLabel}</span></div>
+        <div class="detail-item"><label>状态</label><span class="badge ${isVip ? (vipExpired ? 'badge-danger' : vipBadge(u.planType)) : 'badge-info'}">${isVip ? (vipExpired ? '已过期' : '正常') : '免费'}</span></div>
+        <div class="detail-item"><label>今日免费</label><span style="font-weight:600;color:${freeUsed >= freeLimit ? '#C62828' : '#2E7D32'}">${freeUsed}/${freeLimit}</span></div>
+        <div class="detail-item"><label>VIP到期</label><span>${u.monthly_expire_at ? formatDate(u.monthly_expire_at) : '—'}</span></div>
         <div class="detail-item"><label>注册时间</label><span>${formatDate(u.created_at)}</span></div>
         <div class="detail-item"><label>最后更新</label><span>${formatDate(u.updated_at)}</span></div>
       </div>
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="closeModal()">关闭</button>
-        <button class="btn btn-primary" onclick="closeModal();showQuotaModal('${u.phone}')">修改配额</button>
+        <button class="btn btn-primary" onclick="closeModal();showQuotaModal('${u.phone}')">修改套餐</button>
         <button class="btn btn-warning" onclick="closeModal();showResetPasswordModal('${u.phone}')">重置密码</button>
       </div>
     `;
@@ -365,34 +370,37 @@ async function showUserDetail(phone) {
 }
 
 async function showQuotaModal(phone) {
-  // 先获取用户当前配额信息
-  let currentQuota = null;
+  let currentPlan = 'FREE';
   try {
     const data = await api(`/api/users/${phone}`);
-    currentQuota = data.user;
+    currentPlan = data.user?.planType || 'FREE';
   } catch (e) { /* 忽略 */ }
 
-  const planType = currentQuota?.plan_type || 'PAY_PER_USE';
-  const remaining = currentQuota?.remaining_queries ?? 10;
-  const expireAt = currentQuota?.monthly_expire_at || '';
+  // 加载 VIP 套餐列表
+  let plansHtml = '';
+  try {
+    const plans = await api('/api/users/vip/plans');
+    plansHtml = plans.plans.map(p => `
+      <option value="${p.plan_type}" ${currentPlan === p.plan_type ? 'selected' : ''}>${p.name} (${p.price}元/${p.duration_days}天)</option>
+    `).join('');
+  } catch (e) {
+    plansHtml = `
+      <option value="MONTHLY_VIP" ${currentPlan === 'MONTHLY_VIP' ? 'selected' : ''}>月VIP</option>
+      <option value="QUARTERLY_VIP" ${currentPlan === 'QUARTERLY_VIP' ? 'selected' : ''}>季VIP</option>
+      <option value="SEMI_ANNUAL_VIP" ${currentPlan === 'SEMI_ANNUAL_VIP' ? 'selected' : ''}>半年VIP</option>
+      <option value="ANNUAL_VIP" ${currentPlan === 'ANNUAL_VIP' ? 'selected' : ''}>年VIP</option>
+    `;
+  }
 
   $('#modalContent').innerHTML = `
-    <h3>设置配额 - ${phone}</h3>
+    <h3>设置套餐 - ${phone}</h3>
     <form onsubmit="handleSetQuota(event, '${phone}')">
       <div class="form-group">
         <label>套餐类型</label>
-        <select id="quotaPlanType" onchange="onQuotaPlanChange()">
-          <option value="PAY_PER_USE" ${planType === 'PAY_PER_USE' ? 'selected' : ''}>按次付费</option>
-          <option value="MONTHLY" ${planType === 'MONTHLY' ? 'selected' : ''}>月租用户</option>
+        <select id="quotaPlanType">
+          <option value="FREE" ${currentPlan === 'FREE' ? 'selected' : ''}>免费用户（每日2次）</option>
+          ${plansHtml}
         </select>
-      </div>
-      <div class="form-group" id="quotaRemainingGroup" style="display:${planType === 'MONTHLY' ? 'none' : 'block'}">
-        <label>剩余查询次数</label>
-        <input type="number" id="quotaRemaining" value="${remaining}" min="0" required>
-      </div>
-      <div class="form-group" id="quotaExpireGroup" style="display:${planType === 'MONTHLY' ? 'block' : 'none'}">
-        <label>月租到期时间</label>
-        <input type="date" id="quotaExpireDate" value="${expireAt ? new Date(expireAt).toISOString().split('T')[0] : new Date(Date.now() + 365*24*60*60*1000).toISOString().split('T')[0]}">
       </div>
       <div class="modal-actions">
         <button type="button" class="btn btn-outline" onclick="closeModal()">取消</button>
@@ -403,27 +411,15 @@ async function showQuotaModal(phone) {
   openModal();
 }
 
-function onQuotaPlanChange() {
-  const planType = $('#quotaPlanType').value;
-  $('#quotaRemainingGroup').style.display = planType === 'MONTHLY' ? 'none' : 'block';
-  $('#quotaExpireGroup').style.display = planType === 'MONTHLY' ? 'block' : 'none';
-}
-
 async function handleSetQuota(e, phone) {
   e.preventDefault();
   const planType = $('#quotaPlanType').value;
-  const remainingQueries = planType === 'MONTHLY' ? 99999 : parseInt($('#quotaRemaining').value) || 10;
-  let monthlyExpireAt = null;
-  if (planType === 'MONTHLY') {
-    monthlyExpireAt = new Date($('#quotaExpireDate').value).getTime();
-  }
-
   try {
     await api(`/api/users/${phone}/quota`, {
       method: 'PUT',
-      body: JSON.stringify({ planType, remainingQueries, monthlyExpireAt })
+      body: JSON.stringify({ planType })
     });
-    showToast('配额设置成功', 'success');
+    showToast('套餐设置成功', 'success');
     closeModal();
     renderUsers();
   } catch (err) {
@@ -497,18 +493,13 @@ function showRegisterUserModal() {
       </div>
       <div class="form-group">
         <label>套餐类型</label>
-        <select id="regPlanType" onchange="onRegPlanChange()">
-          <option value="PAY_PER_USE">按次付费</option>
-          <option value="MONTHLY">月租用户</option>
+        <select id="regPlanType">
+          <option value="FREE">免费用户（每日2次）</option>
+          <option value="MONTHLY_VIP">月VIP</option>
+          <option value="QUARTERLY_VIP">季VIP</option>
+          <option value="SEMI_ANNUAL_VIP">半年VIP</option>
+          <option value="ANNUAL_VIP">年VIP</option>
         </select>
-      </div>
-      <div class="form-group" id="regQuotaGroup">
-        <label>初始查询次数</label>
-        <input type="number" id="regQuota" value="10" min="0" required>
-      </div>
-      <div class="form-group" id="regExpireGroup" style="display:none">
-        <label>月租到期时间</label>
-        <input type="date" id="regExpireDate" value="${new Date(Date.now() + 365*24*60*60*1000).toISOString().split('T')[0]}">
       </div>
       <div class="modal-actions">
         <button type="button" class="btn btn-outline" onclick="closeModal()">取消</button>
@@ -519,30 +510,19 @@ function showRegisterUserModal() {
   openModal();
 }
 
-function onRegPlanChange() {
-  const planType = $('#regPlanType').value;
-  $('#regQuotaGroup').style.display = planType === 'MONTHLY' ? 'none' : 'block';
-  $('#regExpireGroup').style.display = planType === 'MONTHLY' ? 'block' : 'none';
-}
-
 async function handleRegisterUser(e) {
   e.preventDefault();
   const phone = $('#regPhone').value.trim();
   const password = $('#regPassword').value;
   const nickname = $('#regNickname').value.trim();
   const planType = $('#regPlanType').value;
-  const remainingQueries = planType === 'MONTHLY' ? 99999 : parseInt($('#regQuota').value) || 10;
-  let monthlyExpireAt = null;
-  if (planType === 'MONTHLY') {
-    monthlyExpireAt = new Date($('#regExpireDate').value).getTime();
-  }
 
   try {
     await api('/api/users/register', {
       method: 'POST',
-      body: JSON.stringify({ phone, password, nickname: nickname || undefined, planType, remainingQueries, monthlyExpireAt })
+      body: JSON.stringify({ phone, password, nickname: nickname || undefined, planType })
     });
-    showToast(`用户 ${phone} 注册成功（${planType === 'MONTHLY' ? '月租' : '按次'}）`, 'success');
+    showToast(`用户 ${phone} 注册成功（${VIP_LABELS[planType] || planType}）`, 'success');
     closeModal();
     renderUsers();
   } catch (err) {
@@ -659,20 +639,31 @@ async function renderSettings() {
 
   try {
     const configs = await api('/api/config');
+    const plans = await api('/api/users/vip/plans');
     const fields = [
       { key: 'app_version', label: 'APP版本号' },
-      { key: 'free_quota', label: '新用户免费次数' },
-      { key: 'query_price', label: '单次查询价格(元)' },
-      { key: 'monthly_price', label: '月租价格(元)' },
-      { key: 'annual_price', label: '年费价格(元)' },
+      { key: 'free_query_limit', label: '免费用户每日查询次数' },
+      { key: 'audit_log_retention_days', label: '审计日志保留天数' },
     ];
     $('#configForm').innerHTML = fields.map(f => `
       <div class="form-group" style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
-        <label style="min-width:140px;margin:0">${f.label}</label>
+        <label style="min-width:160px;margin:0">${f.label}</label>
         <input type="text" id="cfg_${f.key}" value="${configs[f.key] || ''}" style="flex:1">
         <button class="btn btn-primary btn-sm" onclick="saveConfig('${f.key}')">保存</button>
       </div>
-    `).join('');
+    `).join('') + `
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+        <h4 style="margin-bottom:10px">VIP 套餐价格</h4>
+        ${(plans.plans || []).map(p => `
+          <div class="form-group" style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+            <label style="min-width:160px;margin:0">${p.name}（${p.duration_days}天）</label>
+            <input type="number" id="vip_price_${p.plan_type}" value="${p.price}" min="0" step="0.01" style="flex:1">
+            <span style="min-width:20px">元</span>
+            <button class="btn btn-primary btn-sm" onclick="saveVipPrice('${p.plan_type}')">保存</button>
+          </div>
+        `).join('')}
+      </div>
+    `;
   } catch (err) {
     $('#configForm').innerHTML = `<div class="empty-state">加载失败: ${err.message}</div>`;
   }
@@ -701,6 +692,16 @@ async function saveConfig(key) {
   try {
     await api(`/api/config/${key}`, { method: 'PUT', body: JSON.stringify({ value }) });
     showToast('配置已保存', 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function saveVipPrice(planType) {
+  const price = $(`#vip_price_${planType}`).value;
+  try {
+    await api(`/api/users/vip/plans/${planType}`, { method: 'PUT', body: JSON.stringify({ price }) });
+    showToast('套餐价格已更新', 'success');
   } catch (err) {
     showToast(err.message, 'error');
   }

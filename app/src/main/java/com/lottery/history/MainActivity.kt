@@ -336,9 +336,11 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     val days = quota.remainingDays()
                     if (days != null) {
-                        getString(R.string.quota_monthly, days)
+                        val label = com.lottery.history.db.PlanType.label(quota.planType)
+                        getString(R.string.quota_vip, label, days)
                     } else {
-                        getString(R.string.quota_pay_per_use, quota.remainingQueries)
+                        val used = quota.todayFreeUsed()
+                        getString(R.string.quota_free, used, quota.freeQueryLimit)
                     }
                 }
                 binding.tvQuotaInfo.text = text

@@ -39,10 +39,11 @@
     <string name="switch_to_login">已有账号？去登录</string>
     <string name="not_logged_in">未登录</string>
     <string name="tap_to_login">点击登录</string>
-    <string name="quota_pay_per_use">剩余 %1$d 次查询</string>
-    <string name="quota_monthly">月租用户·剩余 %1$d 天</string>
+    <string name="quota_free">免费 %1$d/%2$d 次</string>
+    <string name="quota_vip">%1$s·剩余 %2$d 天</string>
+    <string name="quota_vip_expired">VIP已过期·免费 %1$d/%2$d 次</string>
     <string name="quota_expired">配额已用尽</string>
-    <string name="quota_insufficient">查询次数不足，请充值</string>
+    <string name="quota_insufficient">今日免费查询次数已用完，请开通VIP</string>
     <string name="logout">退出登录</string>
     <string name="change_password">修改密码</string>
 </resources>

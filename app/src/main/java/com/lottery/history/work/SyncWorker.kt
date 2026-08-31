@@ -63,20 +63,13 @@ class SyncWorker(
                 }
 
                 // 拉取权威快照并覆盖本地（纠正本地兜底可能多扣的次数）
-                // serverVersion 传 0：applyServerSnapshot 会把 localVersion 也同步为 0，
-                // 下次 consumeOneQuery 调用时会以 quota.serverVersion + 1 递增，无累积影响。
                 val q = ApiClient.getQuota()
-                val planType = try {
-                    com.lottery.history.db.PlanType.valueOf(q.planType)
-                } catch (_: IllegalArgumentException) {
-                    // 服务器返回未知 planType 时降级为按次，避免崩溃
-                    com.lottery.history.db.PlanType.PAY_PER_USE
-                }
                 quotaRepo.applyServerSnapshot(
                     phone = item.userPhone,
-                    remainingQueries = q.remainingQueries,
+                    freeUsed = q.freeUsed,
+                    freeQueryLimit = q.freeLimit,
+                    planTypeStr = q.planType,
                     monthlyExpireAt = q.monthlyExpireAt,
-                    planType = planType,
                     serverVersion = 0L
                 )
 
