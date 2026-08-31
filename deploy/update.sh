@@ -111,6 +111,24 @@ sync_apk() {
       done
       [ "$ok" -eq 0 ] && log "  APK SKIP: $apk 下载失败（下次部署将重试）"
     done
+
+    # 清理旧版本：每个 APK 前缀仅保留最新一份（动态标签命名会无限累积）。
+    # 排序规则：cmd- 动态命名永远视为新版本；旧固定命名(v24.2 等)视为最旧，避免被误判为最新。
+    local prefix=""
+    for prefix in LotteryHistoryQuery LotteryAdmin; do
+      local keep=""
+      keep=$(ls -1 "$APK_DIR"/${prefix}_*.apk 2>/dev/null \
+        | awk '{ r = ($0 ~ /cmd-/) ? "1_" $0 : "0_" $0; print r }' \
+        | sort | tail -n1 | sed 's/^[01]_//')
+      [ -n "$keep" ] || continue
+      local f=""
+      for f in "$APK_DIR"/${prefix}_*.apk; do
+        [ -f "$f" ] || continue
+        [ "$f" = "$keep" ] && continue
+        rm -f "$f"
+        log "  APK 清理旧版本: $(basename "$f")"
+      done
+    done
 }
 
 if [ "${LEAN_APK:-0}" = "1" ]; then
