@@ -98,11 +98,14 @@ function initTables() {
   } catch (_) {}
   const bcrypt = require('bcryptjs');
   const existing = db.prepare('SELECT id FROM admins WHERE username = ?').get('admin');
+  // 初始管理员密码：优先取 .env 的 ADMIN_PASS（deploy.sh 已随机化），否则回退 admin123 并强制首登改密
+  const envPass = process.env.ADMIN_PASS;
+  const seedPass = (envPass && envPass !== 'admin123' && envPass !== 'changeme') ? envPass : 'admin123';
   if (!existing) {
-    const hash = bcrypt.hashSync('admin123', 10);
+    const hash = bcrypt.hashSync(seedPass, 10);
     db.prepare('INSERT INTO admins (username, password_hash, role, must_change_password, created_at) VALUES (?, ?, ?, 1, ?)')
       .run('admin', hash, 'super_admin', Date.now());
-    console.log('[DB] 默认管理员已创建: admin / admin123 — 首次登录后必须修改密码');
+    console.log(`[DB] 默认管理员已创建: admin / ${envPass ? '来自 .env 的 ADMIN_PASS' : 'admin123'} — 首次登录后必须修改密码`);
   } else {
     const admin = db.prepare('SELECT password_hash FROM admins WHERE username = ?').get('admin');
     if (admin && bcrypt.compareSync('admin123', admin.password_hash)) {

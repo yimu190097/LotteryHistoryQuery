@@ -59,7 +59,7 @@ fi
 APK_DIR="$PROJECT_DIR/server/public/downloads"
 sync_apk() {
     mkdir -p "$APK_DIR"
-    local RELEASE_TAG="v24.2"
+    local RELEASE_TAG=""
     local LATEST_REL=""
     for ghbase in \
       "https://ghfast.top/https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest" \
@@ -67,11 +67,25 @@ sync_apk() {
       "https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest"; do
       if LATEST_REL=$(curl -fsSL --connect-timeout 8 --max-time 15 "$ghbase" 2>/dev/null); then break; fi
     done
-    if [ -n "$LATEST_REL" ]; then
-      RELEASE_TAG=$(echo "$LATEST_REL" | sed -n 's/.*"tag_name":"\([^"]*\)".*/\1/p')
-      [ -n "$RELEASE_TAG" ] || RELEASE_TAG="v24.2"
+    if [ -z "$LATEST_REL" ]; then
+      log "  APK: 获取最新 Release 失败（稍后重试）"
+      return 1
     fi
-    local apks=("LotteryAdmin_v1.0.apk" "LotteryHistoryQuery_v24.2.apk")
+    RELEASE_TAG=$(echo "$LATEST_REL" | sed -n 's/.*"tag_name":"\([^"]*\)".*/\1/p')
+    [ -n "$RELEASE_TAG" ] || RELEASE_TAG="v24.2"
+
+    # 动态提取 Release 中所有 .apk 资产名（Actions 用动态标签命名 cmd-日期-序号，
+    # 不能用旧硬编码文件名 LotteryHistoryQuery_v24.2.apk，否则永远下载不到）
+    local apks=()
+    while IFS= read -r name; do
+      [ -n "$name" ] && apks+=("$name")
+    done < <(echo "$LATEST_REL" | grep -oE '"name":"[^"]+\.apk"' | sed 's/"name":"//; s/"$//')
+
+    if [ "${#apks[@]}" -eq 0 ]; then
+      log "  APK: Release 中没有找到 .apk 资产"
+      return 1
+    fi
+
     local ok=0 size=0 apk=""
     for apk in "${apks[@]}"; do
       if [ -s "$APK_DIR/$apk" ]; then
