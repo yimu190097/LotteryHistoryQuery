@@ -103,15 +103,15 @@ app.use('/api/auth/login', loginLimiter);
 app.use('/api/users/client/login', clientLoginLimiter);
 app.use('/api/users/client/register', registerLimiter);
 
-// 静态文件 - Web管理面板
-app.use(express.static(path.join(__dirname, '..', 'public')));
+// 静态文件 - Web管理面板（js/css/html 浏览器缓存 1h，配合 ETag 做增量校验）
+app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: 3600 * 1000 }));
 
 // APK 下载目录
 const DOWNLOADS_DIR = path.join(__dirname, '..', 'public', 'downloads');
 if (!fs.existsSync(DOWNLOADS_DIR)) fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
 
-// APK 下载静态文件服务
-app.use('/downloads', express.static(DOWNLOADS_DIR));
+// APK 下载静态文件服务（版本化产物，禁用缓存避免用户拿到旧包）
+app.use('/downloads', express.static(DOWNLOADS_DIR, { maxAge: 0 }));
 
 // ============================================================================
 // 用户端网页版：开奖历史数据代理接口
