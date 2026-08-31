@@ -456,6 +456,72 @@ app.get('/api/apk-list', (req, res) => {
   }
 });
 
+// ============================================================================
+// APK 下载加速：GitHub Release 镜像链接
+// ngrok 隧道分发下载慢（免费版带宽小、节点在海外），而每版 APK 已自动发布
+// 到 GitHub Releases。这里返回最新 Release 的每个 APK 在国内 CDN/镜像上的
+// 下载地址，前端优先使用，走不通再回落 GitHub 原站或本机 /downloads。
+// ============================================================================
+const GH_MIRRORS = [
+  'https://ghfast.top/',
+  'https://gh-proxy.com/',
+  'https://ghproxy.net/',
+];
+const APK_RELEASE_TTL = 5 * 60 * 1000; // 5 分钟缓存，避免打爆 GitHub API 限流
+let apkReleaseCache = { at: 0, assets: [], error: null };
+
+// browser_download_url 形如 https://github.com/{owner}/{repo}/releases/download/{tag}/xxx.apk
+// 镜像地址 = 镜像前缀 + 去掉 https://github.com/ 的剩余路径
+function buildMirrorUrls(browserUrl) {
+  const raw = browserUrl.replace(/^https:\/\/github\.com\//, '');
+  return GH_MIRRORS.map(m => m + raw);
+}
+
+async function fetchApkReleaseAssets() {
+  // 缓存命中直接返回
+  if (Date.now() - apkReleaseCache.at < APK_RELEASE_TTL) {
+    return apkReleaseCache;
+  }
+  try {
+    const rel = await ghApiGet(`${GH_API}/releases/latest`);
+    if (rel.status === 200) {
+      const release = JSON.parse(rel.data);
+      const assets = (release.assets || [])
+        .filter(a => a.name.endsWith('.apk'))
+        .map(a => ({
+          name: a.name,
+          size: a.size,
+          tag: release.tag_name,
+          githubUrl: a.browser_download_url,
+          mirrors: buildMirrorUrls(a.browser_download_url),
+        }));
+      // 优先把用户端 APK 排在前面（命名命中外层；否则按 release 顺序）
+      assets.sort((x, y) => {
+        const xu = x.name.toLowerCase().includes('history') ? 0 : 1;
+        const yu = y.name.toLowerCase().includes('history') ? 0 : 1;
+        return xu - yu;
+      });
+      apkReleaseCache = { at: Date.now(), assets, error: null };
+    } else {
+      apkReleaseCache = { at: Date.now(), assets: [], error: `GitHub API HTTP ${rel.status}` };
+    }
+  } catch (e) {
+    apkReleaseCache = { at: Date.now(), assets: [], error: e.message };
+  }
+  return apkReleaseCache;
+}
+
+// GET /api/apk/releases — 最新 Release 各 APK 的镜像/原站下载地址（无需管理员鉴权）
+app.get('/api/apk/releases', (req, res) => {
+  fetchApkReleaseAssets().then(c => {
+    if (c.assets.length) {
+      res.json({ success: true, tag: c.assets[0].tag, assets: c.assets });
+    } else {
+      res.status(502).json({ success: false, error: c.error || '暂无可用 Release' });
+    }
+  });
+});
+
 // SPA fallback
 app.get('*', (req, res) => {
   if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads') && !req.path.startsWith('/downloads')) {

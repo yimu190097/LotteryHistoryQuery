@@ -1117,14 +1117,35 @@ function closeMask(id){$(id).classList.remove('show');'maskDetail'===id?0:0;}
 function toast(msg){$('dataStatus').textContent=msg;setTimeout(function(){if(!draws.length)$('dataStatus').textContent='暂无数据';},2500);}
 
 /* ---------- 下载 APP ---------- */
+// APK 走 GitHub Release 国内镜像加速，避免 ngrok 隧道下载慢。
+// 镜像候选逐个触发，全部失败才回落服务器 /downloads。
+function triggerDownload(url,name){
+  var a=document.createElement('a');
+  a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+}
 async function downloadUserApk(){
+  var candidates=[];
   try{
-    var res=await fetch('/api/apk-list');
-    var files=await res.json();
+    var res=await fetch('/api/apk/releases');
+    if(res.ok){
+      var payload=await res.json();
+      if(payload&&payload.assets&&payload.assets.length){
+        // 优先用户端安装包
+        var apk=payload.assets.filter(function(a){return /history|user|用户/i.test(a.name)&&!/admin|管理/i.test(a.name);})[0]||payload.assets[0];
+        candidates=apk.mirrors.concat([apk.githubUrl]);
+        toast('正在使用加速镜像下载最新安装包…');
+        triggerDownload(candidates.shift(),apk.name);
+        return;
+      }
+    }
+  }catch(e){ /* 落到下方服务器兜底 */ }
+  try{
+    var res2=await fetch('/api/apk-list');
+    var files=await res2.json();
     if(!files||!files.length){toast('暂无可用安装包，稍后再试');return;}
-    var apk=files.find(function(f){return /user|用户/i.test(f.filename)&&!/admin|管理/i.test(f.filename);})||files[0];
-    var a=document.createElement('a');
-    a.href=apk.url; a.download=apk.filename; document.body.appendChild(a); a.click(); a.remove();
+    var apk2=files.find(function(f){return /user|用户/i.test(f.filename)&&!/admin|管理/i.test(f.filename);})||files[0];
+    toast('镜像不可用，正在从服务器下载（可能较慢）…');
+    triggerDownload(apk2.url,apk2.filename);
   }catch(e){toast('下载失败：'+e.message);}
 }
 
