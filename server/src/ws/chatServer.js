@@ -310,8 +310,16 @@ function handleCallSignal(ws, fromIdentity, role, msg) {
   // 拒绝
   if (type === 'reject') {
     const callId = payload?.callId;
-    const c = callMgr.endCall(callId, 'rejected');
-    if (c) {
+    const c = callMgr.getCall(callId);
+    if (!c) return ws.send(JSON.stringify({ type: 'error', error: '通话不存在或已结束' }));
+    // 权限校验（防越权）：仅通话发起方本人，或目标管理员（含 admin:* 广播目标）可拒绝
+    const isCaller = c.from === fromIdentity;
+    const isTargetAdmin = c.to === 'admin:*' ? role === 'admin' : c.to === fromIdentity;
+    if (!isCaller && !isTargetAdmin) {
+      return ws.send(JSON.stringify({ type: 'error', error: '无权拒绝该通话' }));
+    }
+    const ended = callMgr.endCall(callId, 'rejected');
+    if (ended) {
       sendTo(c.from, { type: 'reject', callId: c.callId, from: fromIdentity });
     }
     return;

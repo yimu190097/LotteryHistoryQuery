@@ -248,7 +248,7 @@ body{
         <div id="issueHint"></div>
         <div id="issueRow">
           <input id="issueInput" inputmode="numeric" placeholder="">
-          <div id="btnByIssue">查该期</div>
+          <div id="btnByIssue" onclick="doIssueQuery()">查该期</div>
         </div>
       </div>
 
@@ -741,6 +741,46 @@ async function doQuery(){
   renderResults(results, selPri);
   saveRecord(selPri, selSec);
 }
+/* 按期号查询：后缀模糊匹配单期，用当期规则版本判定是否命中 */
+async function doIssueQuery(){
+  var inp=($('issueInput').value||'').trim();
+  if(!inp){setIssueHint();$('issueInput').focus();toast('请输入期号');return;}
+  if(draws.length===0){toast('请先刷新获取开奖数据');return;}
+  var hit=null;
+  for(var i=0;i<draws.length;i++){var is=draws[i].issue;if(is===inp||is.endsWith(inp)){hit=draws[i];break;}}
+  if(!hit){toast('未找到期号 '+inp+'（支持后几位模糊匹配）');return;}
+  var hasSel=cur.pos?posVals.every(function(v){return v>=0;}):(selMain.size>0&&(!cur.hasSec||selSec.size>0));
+  if(!hasSel){toast(cur.pos?'请先选满百位+十位+个位（3个号码）':'请先选择号码再查该期');return;}
+  var ccb=await consumeOneQuery();if(!ccb.ok){toast(ccb.msg);return;}
+  var selPri=cur.pos?posVals.slice():Array.from(selMain);
+  var selPSet=new Set(selPri);
+  var seSec=cur.hasSec?selSec:new Set();
+  var ver=verForDate(cur,hit.date)||cur.vers[cur.vers.length-1];
+  var matched=null;
+  for(var k=0;k<ver.r.length;k++){
+    var rl=ver.r[k];
+    if(rl[4]==='fuyun'&&hit.fuyun!==true)continue;
+    var hc=hitCount(cur,selPri,selPSet,seSec,hit);
+    if(hc.pc===rl[0]&&hc.sc===rl[1]){matched={name:rl[2],amt:rl[3],pc:hc.pc,sc:hc.sc};break;}
+  }
+  $('selText').textContent='期号 '+hit.issue+'（'+hit.date+'）：'+(matched?'命中【'+matched.name+'】'+(matched.amt?'，单注奖金 '+matched.amt+' 元':''):'未命中任何奖项');
+  $('selText').style.color=matched?'#C62828':'#546E7A';
+  $('selText').style.fontWeight='bold';
+  $('rRedBalls').innerHTML=hit.dmain.map(function(n){return '<span class="ball on" style="width:28px;height:28px;margin:2px;font-size:10px;">'+n+'</span>';}).join('');
+  if(cur.hasSec&&hit.dsec.length){
+    $('rBlueBalls').innerHTML=hit.dsec.map(function(n){return '<span class="ball sec on" style="width:28px;height:28px;margin:2px;font-size:10px;">'+n+'</span>';}).join('');
+    $('rBlueRow').style.display='';
+  }else{$('rBlueBalls').innerHTML='';$('rBlueRow').style.display='none';}
+  var c=$('resultContainer');c.innerHTML='';
+  var row=document.createElement('div');row.className='row';
+  row.innerHTML='<div class="cPrize" style="color:'+prizeColor(matched?matched.name:'未命中')+';">'+(matched?matched.name:'未命中')+'</div>'
+    +(cur.hasSec?'<div class="cSec" style="color:#78909C;">'+(matched?matched.sc+'个':'—')+'</div>':'')
+    +'<div class="cPri" style="color:'+(matched&&matched.pc>=3?'#C62828':'#546E7A')+';">'+(matched?matched.pc+'个':'—')+'</div>'
+    +'<div class="cCnt" style="color:'+(matched?'#C62828':'#9E9E9E')+';">'+(matched?'中1次':'未中')+'</div>'
+    +'<div class="cAct"><span class="actbtn no">—</span></div>';
+  c.appendChild(row);
+  saveRecord(selPri,cur.hasSec?Array.from(selSec):[]);
+}
 /* 最新版规则 → 展示列（[奖项名, [[主中,后中],...], 单注奖金] 数组） */
 function latestPr(t){
   var rules=t.vers[0].r, order=[], map={};
@@ -787,6 +827,8 @@ function matchAll(selPri,selSec){
     var ver=verForDate(t,d.date)||t.vers[t.vers.length-1];
     for(var i=0;i<ver.r.length;i++){
       var r=ver.r[i];
+      // 条件性奖级：福运奖(3+0)仅在当期开关开启时计入（对齐 App conditionalFlags）
+      if(r[4]==='fuyun' && d.fuyun!==true) continue;
       var hc=hitCount(t,selPri,selPSet,selSec,d);
       if(hc.pc===r[0]&&hc.sc===r[1]){
         var key=ver.d+'|'+r[0]+'|'+r[1]+'|'+r[2];
@@ -1002,6 +1044,16 @@ function selectTabTo(cd){
 }
 
 /* ---------- 数据加载 ---------- */
+/* 福运奖开关判定（对齐 App LotteryXlsParser，数据驱动优先 + 奖池兜底）：
+   双色球数据源布局(0-based): 0期号 1日期 2-7红 8蓝 9-14出球顺序 15销售额 16奖池 17-28前6对奖级 29,30第7对(福运奖)
+   官方公布第7对福运奖数据 → ON；否则奖池>=15亿 ON；<3亿 OFF；[3亿,15亿)迟滞区间保守 OFF */
+function isFuyunOn(t){
+  var hasData=t.length>30&&t[29]!==undefined&&t[30]!==undefined&&t[29]!=='-'&&t[30]!=='-';
+  if(hasData)return true;
+  var jackpot=t.length>16?parseInt(t[16],10):0;
+  if(!jackpot)return false;
+  return jackpot>=1500000000;
+}
 function parseDraws(text){
   var lines=text.split(/\r?\n/),out=[];
   for(var i=0;i<lines.length;i++){
@@ -1020,7 +1072,8 @@ function parseDraws(text){
     out.push({issue:t[0],date:t[1],main:main,sec:sec,
       ballHtml:bmain.map(function(n){return '<span class="bt" style="background:var(--red_ball)">'+n+'</span>';}).join('')
       +(cur.hasSec&&bsec.length?('<span class="plus">+</span>'+bsec.map(function(n){return '<span class="bt" style="background:var(--blue_ball)">'+n+'</span>';}).join('')):''),
-      dmain:bmain, dsec:bsec});
+      dmain:bmain, dsec:bsec,
+      fuyun:cur.code==='ssq'&&isFuyunOn(t)});
   }
   return out;
 }
@@ -1123,6 +1176,9 @@ async function submitAuth(){
 }
 
 /* ---------- init ---------- */
+$('issueInput').addEventListener('keydown',function(e){
+  if(e.key==='Enter'||e.keyCode===13){doIssueQuery();}
+});
 buildTabs();
 buildPicker();
 loadAllLatest();

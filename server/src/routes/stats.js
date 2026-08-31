@@ -30,11 +30,12 @@ router.get('/dashboard', (req, res) => {
   const quotaStats = db.prepare(`
     SELECT
       COUNT(*) as total,
-      SUM(CASE WHEN plan_type = 'PAY_PER_USE' THEN 1 ELSE 0 END) as pay_per_use_count,
-      SUM(CASE WHEN plan_type = 'MONTHLY' THEN 1 ELSE 0 END) as monthly_count,
+      SUM(CASE WHEN plan_type = 'PAY_PER_USE' THEN 1 ELSE 0 END) as pay_per_use,
+      SUM(CASE WHEN plan_type = 'MONTHLY' THEN 1 ELSE 0 END) as monthly,
+      SUM(CASE WHEN plan_type = 'MONTHLY' AND monthly_expire_at < ? THEN 1 ELSE 0 END) as expired_monthly,
       SUM(remaining_queries) as total_remaining
     FROM quotas
-  `).get();
+  `).get(now);
 
   // 最近操作日志
   const recentLogs = db.prepare(
