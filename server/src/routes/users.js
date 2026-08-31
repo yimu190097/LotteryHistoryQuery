@@ -145,6 +145,46 @@ router.post('/client/consume', userAuthMiddleware, (req, res) => {
   res.json({ success: true, remainingQueries: updated.remaining_queries });
 });
 
+/**
+ * GET /api/users/client/config - 客户端公开配置（免登录）
+ * 返回: { free_quota }
+ */
+router.get('/client/config', (req, res) => {
+  const row = db.prepare("SELECT value FROM system_config WHERE key = 'free_quota'").get();
+  const freeQuota = parseInt(row?.value) || 10;
+  res.json({ free_quota: freeQuota });
+});
+
+/**
+ * GET /api/users/client/quota - 获取当前用户配额（需要用户 Token）
+ * 返回: { phone, nickname, planType, remainingQueries, monthlyExpireAt }
+ */
+router.get('/client/quota', userAuthMiddleware, (req, res) => {
+  const quota = db.prepare('SELECT * FROM quotas WHERE user_phone = ?').get(req.user.phone);
+  const user = db.prepare('SELECT phone, nickname FROM users WHERE phone = ?').get(req.user.phone);
+  const now = Date.now();
+
+  // 月租用户检查是否过期
+  let planType = quota?.plan_type || 'PAY_PER_USE';
+  let remainingQueries = quota?.remaining_queries || 0;
+  let monthlyExpireAt = quota?.monthly_expire_at || null;
+
+  if (planType === 'MONTHLY' && monthlyExpireAt && monthlyExpireAt < now) {
+    // 月租已过期，降级为按次用户
+    planType = 'PAY_PER_USE';
+    remainingQueries = 0;
+    monthlyExpireAt = null;
+  }
+
+  res.json({
+    phone: user?.phone || req.user.phone,
+    nickname: user?.nickname || req.user.nickname,
+    planType,
+    remainingQueries,
+    monthlyExpireAt
+  });
+});
+
 // ==================== 管理端接口（需要登录） ====================
 router.use(authMiddleware);
 

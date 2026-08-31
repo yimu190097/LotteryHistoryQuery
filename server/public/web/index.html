@@ -374,6 +374,166 @@ var historyRecs = {}; // code -> [record]
 function $(id){return document.getElementById(id);}
 function pad2(n){return (n<10?'0':'')+n;}
 
+/* ---------- 认证状态管理 ---------- */
+var authState = {
+  token: null,
+  phone: null,
+  nickname: null,
+  planType: null,
+  remainingQueries: 0,
+  monthlyExpireAt: null,
+  freeQuotaLimit: 10
+};
+
+function authHeaders(extra) {
+  var h = extra || {};
+  if (authState.token) h['Authorization'] = 'Bearer ' + authState.token;
+  return h;
+}
+
+function getLocalFreeUsed() {
+  try { return parseInt(localStorage.getItem('freeUsed') || '0'); } catch(e) { return 0; }
+}
+function getLocalFreeRemaining() {
+  return Math.max(0, authState.freeQuotaLimit - getLocalFreeUsed());
+}
+function consumeLocalFree() {
+  var used = getLocalFreeUsed();
+  localStorage.setItem('freeUsed', String(used + 1));
+}
+
+function maskedPhone(ph) {
+  return ph ? ph.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2') : '';
+}
+
+function fmtQuota(planType, remaining, monthlyExpireAt) {
+  if (planType === 'MONTHLY') {
+    if (monthlyExpireAt) {
+      var days = Math.ceil((monthlyExpireAt - Date.now()) / 86400000);
+      if (days > 0) return '月租用户·剩余 ' + days + ' 天';
+      return '月租已过期';
+    }
+    return '月租用户';
+  }
+  return '剩余 ' + remaining + ' 次查询';
+}
+
+function updateUserBar() {
+  if (authState.token) {
+    $('userPhone').textContent = maskedPhone(authState.phone);
+    $('quotaInfo').textContent = fmtQuota(authState.planType, authState.remainingQueries, authState.monthlyExpireAt);
+  } else {
+    var rem = getLocalFreeRemaining();
+    $('userPhone').textContent = '点击登录';
+    $('quotaInfo').textContent = '未登录·免费 ' + rem + '/' + authState.freeQuotaLimit + ' 次';
+  }
+}
+
+async function fetchFreeQuotaLimit() {
+  try {
+    var res = await fetch('/api/users/client/config');
+    if (res.ok) {
+      var data = await res.json();
+      authState.freeQuotaLimit = data.free_quota || 10;
+    }
+  } catch(e) {}
+}
+
+async function fetchQuota() {
+  if (!authState.token) return;
+  try {
+    var res = await fetch('/api/users/client/quota', { headers: authHeaders() });
+    if (res.status === 401) { logout(); return; }
+    if (res.ok) {
+      var data = await res.json();
+      authState.planType = data.planType;
+      authState.remainingQueries = data.remainingQueries;
+      authState.monthlyExpireAt = data.monthlyExpireAt;
+    }
+  } catch(e) {}
+  updateUserBar();
+}
+
+function saveAuthSession(loginResp) {
+  authState.token = loginResp.token;
+  authState.phone = loginResp.phone;
+  authState.nickname = loginResp.nickname;
+  authState.planType = loginResp.planType;
+  authState.remainingQueries = loginResp.remainingQueries;
+  authState.monthlyExpireAt = loginResp.monthlyExpireAt;
+  try {
+    localStorage.setItem('authToken', loginResp.token);
+    localStorage.setItem('authPhone', loginResp.phone);
+  } catch(e) {}
+  updateUserBar();
+}
+
+function logout() {
+  authState.token = null;
+  authState.phone = null;
+  authState.nickname = null;
+  authState.planType = null;
+  authState.remainingQueries = 0;
+  authState.monthlyExpireAt = null;
+  try {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('authPhone');
+  } catch(e) {}
+  updateUserBar();
+  toast('已退出登录');
+}
+
+async function checkAuthOnLoad() {
+  await fetchFreeQuotaLimit();
+  var token = null, phone = null;
+  try {
+    token = localStorage.getItem('authToken');
+    phone = localStorage.getItem('authPhone');
+  } catch(e) {}
+  if (token && phone) {
+    authState.token = token;
+    authState.phone = phone;
+    await fetchQuota();
+  } else {
+    updateUserBar();
+  }
+}
+
+async function consumeOneQuery() {
+  if (authState.token) {
+    // 已登录：调服务器扣减
+    try {
+      var res = await fetch('/api/users/client/consume', {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ phone: authState.phone, count: 1 })
+      });
+      if (res.status === 401) { logout(); return { ok: false, msg: '登录已过期，请重新登录' }; }
+      if (res.status === 403) {
+        var err = await res.json();
+        return { ok: false, msg: err.error || '查询次数不足' };
+      }
+      if (res.ok) {
+        var data = await res.json();
+        authState.remainingQueries = data.remainingQueries;
+        updateUserBar();
+        return { ok: true };
+      }
+      return { ok: false, msg: '扣减失败，请重试' };
+    } catch(e) {
+      return { ok: false, msg: '网络错误：' + e.message };
+    }
+  } else {
+    // 未登录：用本地免费次数
+    if (getLocalFreeRemaining() <= 0) {
+      return { ok: false, msg: '免费查询次数已用完，请登录后继续' };
+    }
+    consumeLocalFree();
+    updateUserBar();
+    return { ok: true };
+  }
+}
+
 /* ---------- 球尺寸 / 列数（computeBallLayout 原样） ---------- */
 function ballLayout(){
   var totalPad = 20*2, avail = 360 - totalPad, margin = 3;
@@ -569,11 +729,13 @@ function issuePattern(c){
 function focusIssueInput(){$('issueInput').focus();}
 
 /* ---------- 查询 ---------- */
-function doQuery(){
+async function doQuery(){
   if(draws.length===0){toast('请先刷新获取开奖数据');return;}
   var hasSel = cur.pos ? posVals.every(function(v){return v>=0;})
     : (selMain.size>0 && (!cur.hasSec || selSec.size>0));
   if(!hasSel){toast(cur.pos?'请先选满百位+十位+个位（3个号码）':'请选择号码后点击查询');showEmptyResult();return;}
+  var result=await consumeOneQuery();
+  if(!result.ok){toast(result.msg);return;}
   var selPri = cur.pos?posVals.slice():(Array.from(selMain));
   var results=matchAll(selPri, selSec);
   renderResults(results, selPri);
@@ -915,20 +1077,49 @@ async function downloadUserApk(){
 
 /* ---------- 登录 ---------- */
 var authMode='login';
-function openAuthDialog(){authMode='login';renderAuth();showMask('maskAuth');}
+function openAuthDialog(){
+  if(authState.token){
+    var info='当前登录：'+maskedPhone(authState.phone)+'\n'+fmtQuota(authState.planType,authState.remainingQueries,authState.monthlyExpireAt)+'\n\n确定退出登录？';
+    if(confirm(info)){logout();}
+  }else{
+    authMode='login';renderAuth();showMask('maskAuth');
+  }
+}
 function toggleAuthMode(){authMode=authMode==='login'?'register':'login';renderAuth();}
 function renderAuth(){
   $('authTitle').textContent=authMode==='login'?'登录':'注册';
   $('authBtn').textContent=authMode==='login'?'登录':'注册并登录';
   $('authSwitch').textContent=authMode==='login'?'没有账号？去注册':'已有账号？去登录';
 }
-function submitAuth(){
+async function submitAuth(){
   var ph=$('authPhone').value.trim();var pw=$('authPass').value;
   if(!ph||pw.length<6){toast('请输入手机号及至少6位密码');return;}
-  var masked=ph.replace(/^(\d{3})\d{4}/,'$1****');
-  $('userPhone').textContent=masked;
-  $('quotaInfo').textContent='月租用户·剩余 30 天';
-  closeMask('maskAuth');toast('登录成功');
+  $('authBtn').disabled=true;
+  $('authBtn').textContent='请稍候...';
+  var endpoint=authMode==='login'?'client/login':'client/register';
+  var body={phone:ph,password:pw};
+  if(authMode==='register'){body.nickname=ph;}
+  try{
+    var res=await fetch('/api/users/'+endpoint,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body)
+    });
+    var data=await res.json();
+    if(!res.ok){
+      toast(data.error||'操作失败');
+      return;
+    }
+    saveAuthSession(data);
+    closeMask('maskAuth');
+    toast(authMode==='login'?'登录成功':'注册成功，已自动登录');
+    $('authPass').value='';
+  }catch(e){
+    toast('网络错误：'+e.message);
+  }finally{
+    $('authBtn').disabled=false;
+    renderAuth();
+  }
 }
 
 /* ---------- init ---------- */
@@ -936,6 +1127,7 @@ buildTabs();
 buildPicker();
 loadAllLatest();
 loadHistory();
+checkAuthOnLoad();
 </script>
 </body>
 </html>
