@@ -104,7 +104,7 @@ class AuthDialog(
             }
             Mode.REGISTER -> {
                 tvTitle.text = context.getString(R.string.register_title)
-                tvHint.text = "注册即创建本地账号，赠送10次查询"
+                tvHint.text = "注册即享每日2次免费查询，开通VIP不限次数"
                 etPhone.visibility = View.VISIBLE
                 etPassword.visibility = View.VISIBLE
                 etNewPassword.visibility = View.GONE

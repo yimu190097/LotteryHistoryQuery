@@ -331,16 +331,32 @@ class MainActivity : AppCompatActivity() {
             quotaRepo.observe(phone).collect { quota ->
                 val text = if (quota == null) {
                     ""
-                } else if (!quota.canQuery()) {
-                    getString(R.string.quota_expired)
                 } else {
                     val days = quota.remainingDays()
-                    if (days != null) {
-                        val label = com.lottery.history.db.PlanType.label(quota.planType)
-                        getString(R.string.quota_vip, label, days)
-                    } else {
-                        val used = quota.todayFreeUsed()
-                        getString(R.string.quota_free, used, quota.freeQueryLimit)
+                    val isVip = com.lottery.history.db.PlanType.isVip(quota.planType)
+                    val canQuery = quota.canQuery()
+                    when {
+                        // VIP 未过期
+                        isVip && days != null && days > 0 -> {
+                            val label = com.lottery.history.db.PlanType.label(quota.planType)
+                            getString(R.string.quota_vip, label, days)
+                        }
+                        // VIP 已过期 → 降级为免费用户
+                        isVip -> {
+                            val used = quota.todayFreeUsed()
+                            if (canQuery) {
+                                getString(R.string.quota_vip_expired, used, quota.freeQueryLimit)
+                            } else {
+                                getString(R.string.quota_insufficient)
+                            }
+                        }
+                        // 免费用户有剩余次数
+                        canQuery -> {
+                            val used = quota.todayFreeUsed()
+                            getString(R.string.quota_free, used, quota.freeQueryLimit)
+                        }
+                        // 免费用户次数用尽
+                        else -> getString(R.string.quota_insufficient)
                     }
                 }
                 binding.tvQuotaInfo.text = text
