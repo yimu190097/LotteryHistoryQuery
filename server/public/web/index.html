@@ -348,25 +348,25 @@ body{
 </div>
 
 <!-- 最新开奖全部 弹窗 -->
-<div class="mask" id="maskLatest"><div class="dialog" style="height:440px">
+<div class="mask" id="maskLatest" onclick="if(event.target===this)closeMask('maskLatest')"><div class="dialog" style="height:440px">
   <div class="dhead">最新开奖（8彩种）<span class="close" onclick="closeMask('maskLatest')">关闭</span></div>
   <div class="dbody" id="latestAllBody"></div>
 </div></div>
 
 <!-- 查询历史 弹窗 -->
-<div class="mask" id="maskHistory"><div class="dialog">
+<div class="mask" id="maskHistory" onclick="if(event.target===this)closeMask('maskHistory')"><div class="dialog">
   <div class="dhead">查询历史<span class="close" onclick="closeMask('maskHistory')">关闭</span></div>
   <div class="dbody" id="historyBody"></div>
 </div></div>
 
 <!-- 开奖详情 弹窗 -->
-<div class="mask" id="maskDetail"><div class="dialog">
+<div class="mask" id="maskDetail" onclick="if(event.target===this)closeMask('maskDetail')"><div class="dialog">
   <div class="dhead" id="detailTitle">开奖详情<span class="close" onclick="closeMask('maskDetail')">关闭</span></div>
   <div class="dbody" id="detailBody"></div>
 </div></div>
 
 <!-- 登录/注册 弹窗 -->
-<div class="mask" id="maskAuth"><div class="dialog" style="width:360px">
+<div class="mask" id="maskAuth" onclick="if(event.target===this)closeMask('maskAuth')"><div class="dialog" style="width:360px">
   <div class="dhead auth-title" id="authTitle">登录<span class="close" onclick="closeMask('maskAuth')">关闭</span></div>
   <div class="dbody">
     <input class="auth-field" id="authPhone" placeholder="请输入手机号" inputmode="numeric">
@@ -377,7 +377,7 @@ body{
 </div></div>
 
 <!-- 终端管理 弹窗 -->
-<div class="mask" id="maskSessions"><div class="dialog" style="width:340px">
+<div class="mask" id="maskSessions" onclick="if(event.target===this)closeMask('maskSessions')"><div class="dialog" style="width:340px">
   <div id="sessionBody"></div>
 </div></div>
 
