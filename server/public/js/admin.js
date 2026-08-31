@@ -783,7 +783,11 @@ async function renderDownloads() {
 
 async function loadApkList() {
   try {
-    const files = await api('/api/apk-list');
+    // 并行拉取本地上传列表 + 最新 GitHub Release 的镜像映射
+    const [files, mirrorMap] = await Promise.all([
+      api('/api/apk-list'),
+      loadApkMirrorMap()
+    ]);
     const base = window.location.origin;
 
     if (!files.length) {
@@ -792,17 +796,25 @@ async function loadApkList() {
       return;
     }
 
+    // 每个文件的下载候选：优先镜像（GitHub 加速），依次回落原站与服务器本地
+    const dlOf = (f) => {
+      const m = mirrorMap[f.filename];
+      if (m) return m.mirrors.concat([m.github, base + f.url]);
+      return [base + f.url];
+    };
+    const firstDlOf = (f) => dlOf(f)[0];
+
     $('#apkTable').innerHTML = `
       <table>
         <thead><tr><th>文件名</th><th>大小</th><th>更新时间</th><th>下载链接</th><th>操作</th></tr></thead>
         <tbody>${files.map(f => `
           <tr>
-            <td><strong>${f.filename}</strong></td>
+            <td><strong>${f.filename}</strong>${mirrorMap[f.filename] ? ' <span class="badge badge-ok" style="font-size:11px">⚡加速</span>' : ''}</td>
             <td>${formatFileSize(f.size)}</td>
             <td>${formatDate(f.updatedAt)}</td>
-            <td><a href="${base}${f.url}" target="_blank" style="color:var(--primary)">${base}${f.url}</a></td>
+            <td><a href="${firstDlOf(f)}" target="_blank" rel="noopener" style="color:var(--primary);word-break:break-all">${firstDlOf(f)}</a></td>
             <td>
-              <button class="btn btn-sm btn-outline" onclick="copyLink('${base}${f.url}')">复制链接</button>
+              <button class="btn btn-sm btn-outline" onclick="copyLink('${firstDlOf(f)}')">复制链接</button>
               <button class="btn btn-sm btn-danger" onclick="deleteApk('${f.filename}')">删除</button>
             </td>
           </tr>
@@ -812,10 +824,10 @@ async function loadApkList() {
 
     $('#apkLinks').innerHTML = files.map(f => `
       <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
-        <span style="font-weight:600;min-width:200px">${f.filename}</span>
+        <span style="font-weight:600;min-width:200px">${f.filename}${mirrorMap[f.filename] ? ' ⚡' : ''}</span>
         <span style="color:var(--text-secondary);font-size:12px">${formatFileSize(f.size)}</span>
-        <code style="font-size:12px;word-break:break-all;flex:1">${base}${f.url}</code>
-        <button class="btn btn-sm btn-outline" onclick="copyLink('${base}${f.url}')">📋</button>
+        <code style="font-size:12px;word-break:break-all;flex:1">${firstDlOf(f)}</code>
+        <button class="btn btn-sm btn-outline" onclick="copyLink('${firstDlOf(f)}')">📋</button>
       </div>
     `).join('');
 
@@ -826,21 +838,35 @@ async function loadApkList() {
     if (adminApk) {
       $('#adminApkInfo').textContent = `${adminApk.filename} (${formatFileSize(adminApk.size)})`;
       $('#adminApkBtn').innerHTML = `
-        <button class="btn btn-primary btn-sm" onclick="copyLink('${base}${adminApk.url}')">复制链接</button>
-        <a href="${base}${adminApk.url}" class="btn btn-outline btn-sm" style="margin-left:8px">下载</a>
+        <button class="btn btn-primary btn-sm" onclick="copyLink('${firstDlOf(adminApk)}')">复制链接</button>
+        <a href="${firstDlOf(adminApk)}" target="_blank" rel="noopener" class="btn btn-outline btn-sm" style="margin-left:8px">${mirrorMap[adminApk.filename] ? '⚡ 镜像下载' : '下载'}</a>
       `;
     }
 
     if (userApk) {
       $('#userApkInfo').textContent = `${userApk.filename} (${formatFileSize(userApk.size)})`;
       $('#userApkBtn').innerHTML = `
-        <button class="btn btn-primary btn-sm" onclick="copyLink('${base}${userApk.url}')">复制链接</button>
-        <a href="${base}${userApk.url}" class="btn btn-outline btn-sm" style="margin-left:8px">下载</a>
+        <button class="btn btn-primary btn-sm" onclick="copyLink('${firstDlOf(userApk)}')">复制链接</button>
+        <a href="${firstDlOf(userApk)}" target="_blank" rel="noopener" class="btn btn-outline btn-sm" style="margin-left:8px">${mirrorMap[userApk.filename] ? '⚡ 镜像下载' : '下载'}</a>
       `;
     }
   } catch (err) {
     $('#apkTable').innerHTML = `<div class="empty-state">加载失败: ${err.message}</div>`;
   }
+}
+
+// 拉取最新 GitHub Release 的镜像映射：filename -> {mirrors, github}
+// 镜像不可达时静默返回空 map，下载链接自然回落到服务器本地 /downloads。
+async function loadApkMirrorMap() {
+  const map = {};
+  try {
+    const r = await fetch('/api/apk/releases');
+    if (r.ok) {
+      const p = await r.json();
+      (p.assets || []).forEach(a => { map[a.name] = { mirrors: a.mirrors || [], github: a.githubUrl }; });
+    }
+  } catch (e) { /* 忽略，回落服务器本地下载 */ }
+  return map;
 }
 
 function formatFileSize(bytes) {
