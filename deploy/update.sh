@@ -114,12 +114,16 @@ FILES=(
   server/package-lock.json
   server/src/index.js
   server/src/db/database.js
+  server/src/utils/init.js
+  server/src/middleware/auth.js
   server/src/routes/auth.js
   server/src/routes/config.js
   server/src/routes/users.js
   server/src/routes/chat.js
+  server/src/routes/stats.js
   server/src/routes/deploy.js
-  server/src/middleware/auth.js
+  server/src/ws/chatServer.js
+  server/src/ws/callManager.js
   server/public/index.html
   server/public/css/style.css
   server/public/js/admin.js
