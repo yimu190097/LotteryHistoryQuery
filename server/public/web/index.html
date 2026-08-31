@@ -212,9 +212,13 @@ body{
 .tierRow{display:flex;align-items:center;border-bottom:0.5px solid var(--divider);padding:10px 2px;font-size:15px;}
 .tierRow .nm{flex:1;}
 .tierRow .nm .pr{font-weight:bold;}
-.tierRow .nm .dsc{font-size:12px;color:var(--text_secondary);}
-.tierRow .nm .mc{font-size:12px;color:#1565C0;margin-top:1px;}
-.tierRow .amt{text-align:right;font-weight:bold;color:var(--primary_red);}
+.tierRow .nm .pr.off{color:#9E9E9E;}
+.tierRow .nm .mc{font-size:12px;color:#546E7A;margin-top:1px;line-height:1.4;}
+.tierRow .cnt{text-align:right;font-size:13px;color:var(--text_secondary);min-width:60px;line-height:1.4;}
+.tierRow .cnt .apn{font-size:11px;color:#1565C0;}
+.tierRow .amt{text-align:right;font-weight:bold;color:var(--primary_red);margin-left:6px;min-width:80px;line-height:1.4;}
+.tierRow .amt .apa{font-size:11px;color:#1565C0;font-weight:normal;}
+.tierOff{background:#F5F5F5;}
 .empty{text-align:center;color:var(--text_secondary);padding:30px;font-size:var(--small);}
 
 /* ============ 响应式适配 ============ */
@@ -382,14 +386,14 @@ body{
 var TYPES=[
  {code:'ssq',api:'ssq',name:'双色球',mainN:6,mainMin:1,mainMax:33,mainLabel:'红球',
   hasSec:true,secN:1,secMin:1,secMax:16,secLabel:'蓝球',parseMain:6,parseSec:1,pos:false,
-  extraCount:2, tierCount:7,
+  primaryUnit:'个红球',secondaryUnit:'个蓝球',extraCount:2, tierCount:7,
   vers:[
    {d:'2026-02-01',tc:7,r:[[6,1,'一等奖',null],[6,0,'二等奖',null],[5,1,'三等奖',3000],[5,0,'四等奖',200],[4,1,'四等奖',200],[4,0,'五等奖',10],[3,1,'五等奖',10],[2,1,'六等奖',5],[1,1,'六等奖',5],[0,1,'六等奖',5],[3,0,'福运奖',5,'fuyun']]},
    {d:'2003-02-16',tc:6,r:[[6,1,'一等奖',null],[6,0,'二等奖',null],[5,1,'三等奖',3000],[5,0,'四等奖',200],[4,1,'四等奖',200],[4,0,'五等奖',10],[3,1,'五等奖',10],[2,1,'六等奖',5],[1,1,'六等奖',5],[0,1,'六等奖',5]]}
   ]},
  {code:'dlt',api:'dlt2',name:'大乐透',mainN:5,mainMin:1,mainMax:35,mainLabel:'前区',
   hasSec:true,secN:2,secMin:1,secMax:12,secLabel:'后区',parseMain:5,parseSec:2,pos:false,
-  extraCount:2, tierCount:7,
+  primaryUnit:'个前区',secondaryUnit:'个后区',extraCount:2, tierCount:7,
   vers:[
    {d:'2026-01-31',tc:7,apc:7,r:[[5,2,'一等奖',null],[5,1,'二等奖',null],[5,0,'三等奖',5000],[4,2,'三等奖',5000],[4,1,'四等奖',300],[4,0,'五等奖',150],[3,2,'五等奖',150],[3,1,'六等奖',15],[2,2,'六等奖',15],[3,0,'七等奖',5],[2,1,'七等奖',5],[1,2,'七等奖',5],[0,2,'七等奖',5]]},
    {d:'2019-02-18',tc:9,apc:7,r:[[5,2,'一等奖',null],[5,1,'二等奖',null],[5,0,'三等奖',10000],[4,2,'四等奖',3000],[4,1,'五等奖',300],[4,0,'六等奖',200],[3,2,'六等奖',200],[3,1,'七等奖',100],[2,2,'七等奖',100],[3,0,'八等奖',15],[2,1,'八等奖',15],[1,2,'八等奖',15],[0,2,'八等奖',15],[2,0,'九等奖',5],[1,1,'九等奖',5],[1,0,'九等奖',5],[0,1,'九等奖',5]]},
@@ -399,30 +403,30 @@ var TYPES=[
   ]},
  {code:'3d',api:'3d',name:'福彩3D',mainN:3,mainMin:0,mainMax:9,mainLabel:'号码',
   hasSec:false,secN:0,secMin:0,secMax:0,secLabel:'',parseMain:3,parseSec:0,pos:true,
-  extraCount:1, tierCount:3,
+  primaryUnit:'个号码',secondaryUnit:'',extraCount:1, tierCount:3,
   vers:[{d:'2004-10-18',tc:3,r:[[3,0,'直选奖',1040],[3,0,'组选3',346],[3,0,'组选6',173]]}]},
  {code:'7lc',api:'7lc',name:'七乐彩',mainN:7,mainMin:1,mainMax:30,mainLabel:'基本号',
   hasSec:true,secN:1,secMin:1,secMax:30,secLabel:'特别号',parseMain:7,parseSec:1,pos:false,
-  extraCount:2, tierCount:7,
+  primaryUnit:'个基本号',secondaryUnit:'个特别号',extraCount:2, tierCount:7,
   vers:[{d:'2000-01-01',tc:7,r:[[7,0,'一等奖',null],[6,1,'二等奖',null],[6,0,'三等奖',null],[5,1,'四等奖',200],[5,0,'五等奖',50],[4,1,'六等奖',10],[4,0,'七等奖',5]]}]},
  {code:'p3',api:'pl3',name:'排列三',mainN:3,mainMin:0,mainMax:9,mainLabel:'号码',
   hasSec:false,secN:0,secMin:0,secMax:0,secLabel:'',parseMain:3,parseSec:0,pos:true,
-  extraCount:1, tierCount:3,
+  primaryUnit:'个号码',secondaryUnit:'',extraCount:1, tierCount:3,
   vers:[{d:'2004-12-18',tc:3,r:[[3,0,'直选奖',1040],[3,0,'组选3',346],[3,0,'组选6',173]]}]},
  {code:'p5',api:'pl5',name:'排列五',mainN:5,mainMin:0,mainMax:9,mainLabel:'号码',
   hasSec:false,secN:0,secMin:0,secMax:0,secLabel:'',parseMain:5,parseSec:0,pos:false,
-  extraCount:1, tierCount:1,
+  primaryUnit:'个号码',secondaryUnit:'',extraCount:1, tierCount:1,
   vers:[{d:'2004-12-18',tc:1,r:[[5,0,'一等奖',100000]]}]},
  {code:'7xc',api:'7xc',name:'七星彩',mainN:6,mainMin:0,mainMax:9,mainLabel:'前6位',
   hasSec:true,secN:1,secMin:0,secMax:14,secLabel:'后1位',parseMain:6,parseSec:1,pos:false,
-  extraCount:2, tierCount:6,
+  primaryUnit:'位前区',secondaryUnit:'位后区',extraCount:2, tierCount:6,
   vers:[
    {d:'2020-10-11',tc:6,r:[[6,1,'一等奖',null],[6,0,'二等奖',null],[5,1,'三等奖',3000],[5,0,'四等奖',500],[4,1,'四等奖',500],[4,0,'五等奖',30],[3,1,'五等奖',30],[3,0,'六等奖',5],[2,1,'六等奖',5],[1,1,'六等奖',5],[0,1,'六等奖',5]]},
    {d:'2004-05-18',tc:6,r:[[6,1,'一等奖',null],[6,0,'二等奖',null],[5,1,'三等奖',1800],[5,0,'四等奖',300],[4,1,'四等奖',300],[4,0,'五等奖',20],[3,1,'五等奖',20],[3,0,'六等奖',5],[2,1,'六等奖',5],[1,1,'六等奖',5],[0,1,'六等奖',5]]}
   ]},
  {code:'kl8',api:'kl8',name:'快乐8',mainN:10,mainMin:1,mainMax:80,mainLabel:'号码',
   hasSec:false,secN:0,secMin:0,secMax:0,secLabel:'',parseMain:20,parseSec:0,pos:false,
-  extraCount:2, tierCount:7,
+  primaryUnit:'个号码',secondaryUnit:'',extraCount:2, tierCount:7,
   vers:[{d:'2020-10-28',tc:7,r:[[10,0,'一等奖',null],[9,0,'二等奖',8000],[8,0,'三等奖',800],[7,0,'四等奖',80],[6,0,'五等奖',5],[5,0,'六等奖',3],[0,0,'七等奖',2]]}]}
 ];
 var POSITIONAL = ['3d','p3'];
@@ -1088,92 +1092,20 @@ function openDetailDraw(k){
 }
 
 /* ---------- 开奖详情弹窗 ---------- */
-function showTierRows(cfg,draw,ver){
-  var html='';
-  // 使用传入的规则版本，若无则用最新版（兼容旧调用）
-  var rules=ver?prForVersion(ver):latestPr(cfg);
-  // 用实际开奖数据填充奖级（按索引顺序映射，同名奖级保留首次出现的数据）
-  var tierByName={};
-  var allTiers=draw.allTiers||draw.tiers||[];
-  if(allTiers.length){
-    for(var i=0;i<Math.min(rules.length,allTiers.length);i++){
-      if(!tierByName[rules[i][0]])tierByName[rules[i][0]]=allTiers[i];
-    }
+/* 金额格式化：对齐 APK formatAmount，>=1万 用"万元" */
+function fmtAmt(n){
+  if(n===null||n===undefined)return '—';
+  if(n>=10000){
+    var wan=n/10000;
+    var s=wan.toFixed(1);
+    if(s.indexOf('.0')===s.length-2)return wan+'万元';
+    return s+'万元';
   }
-  // 条件性奖级信息（仅在适用版本且规则中包含条件性奖级时显示）
-  var fuyunNote='';
-  if(cfg.code==='ssq'){
-    // 检查当前版本是否包含福运奖规则
-    var hasFuyunRule=rules.some(function(p){return p[0]==='福运奖';});
-    if(hasFuyunRule){
-      fuyunNote=draw.fuyun?'<div style="font-size:12px;color:#2E7D32;margin:4px 0;">本期开启福运奖</div>':'<div style="font-size:12px;color:#9E9E9E;margin:4px 0;">本期福运奖未触发（奖池<15亿）</div>';
-    }
-  }
-  // 收集去重后的奖级名称列表（保持规则顺序），并汇总命中规则
-  var seenNames={},uniqNames=[],nameConds={};
-  rules.forEach(function(p){
-    if(!seenNames[p[0]]){seenNames[p[0]]=true;uniqNames.push(p[0]);nameConds[p[0]]=[];}
-    // p[1] 是 [[mainHit,secHit],...] 数组，收集所有条件
-    if(p[1]&&p[1].length)nameConds[p[0]]=nameConds[p[0]].concat(p[1]);
-  });
-  uniqNames.forEach(function(name){
-    var td=tierByName[name];
-    var ruleAmt=null;
-    for(var ri=0;ri<rules.length;ri++){if(rules[ri][0]===name){ruleAmt=rules[ri][2];break;}}
-    var cntStr='—', amtStr='—';
-    if(td){
-      cntStr=td.count.toLocaleString()+' 注';
-      amtStr=td.amount>0?td.amount.toLocaleString()+' 元':'—';
-    }
-    // 命中规则描述（对齐 APK "命中规则"列）
-    var conds=nameConds[name]||[];
-    var matchLines=[];
-    conds.forEach(function(c){
-      var desc=matchDesc(cfg,c[0],c[1]);
-      if(desc)matchLines.push(desc);
-    });
-    var matchStr=matchLines.length?matchLines.join(' / '):'';
-    html+='<div class="tierRow"><div class="nm"><div class="pr">'+name+'</div>'
-      +(matchStr?'<div class="mc">'+matchStr+'</div>':'')
-      +'<div class="dsc">'+amountDesc(ruleAmt,td?td.amount:null)+'</div></div>'
-      +'<div style="text-align:right;font-size:13px;color:var(--text_secondary);">'+cntStr+'</div>'
-      +'<div class="amt" style="margin-left:6px;">'+amtStr+'</div></div>';
-  });
-  // DLT 追加投注数据展示（对齐 APK DrawDetailDialog）
-  if(cfg.code==='dlt'&&draw.appendTiers&&draw.appendTiers.length){
-    var appendTiers=draw.appendTiers;
-    var hasAppendData=appendTiers.some(function(x){return x&&x.count>0;});
-    html+='<div class="hline" style="margin:8px 0;"></div>';
-    html+='<div style="font-size:14px;font-weight:bold;color:#1565C0;margin-bottom:6px;">追加投注</div>';
-    if(!hasAppendData){
-      html+='<div style="font-size:12px;color:var(--text_secondary);padding:4px 0;">本期追加投注无人中奖（空开）</div>';
-    }
-    for(var ai=0;ai<Math.min(uniqNames.length,appendTiers.length);ai++){
-      var atd=appendTiers[ai];
-      var aname='追加'+uniqNames[ai];
-      var acntStr='—', aamtStr='—';
-      if(atd){
-        acntStr=(atd.count||0).toLocaleString()+' 注';
-        aamtStr=atd.amount>0?atd.amount.toLocaleString()+' 元':'—';
-      }
-      html+='<div class="tierRow" style="background:#F5F8FF;">'
-        +'<div class="nm"><div class="pr">'+aname+'</div>'
-        +'<div class="dsc" style="font-size:11px;color:#666;">追加比例 80%</div></div>'
-        +'<div style="text-align:right;font-size:13px;color:var(--text_secondary);">'+acntStr+'</div>'
-        +'<div class="amt" style="margin-left:6px;">'+aamtStr+'</div></div>';
-    }
-  }
-  return fuyunNote+html;
+  return n+'元';
 }
-function amountDesc(ruleAmt,actualAmt){
-  if(ruleAmt===null||ruleAmt===undefined)return '奖金浮动，以当期开奖为准';
-  if(actualAmt&&actualAmt>0&&actualAmt!==ruleAmt)return '本期实发 '+actualAmt.toLocaleString()+' 元（基础 '+ruleAmt.toLocaleString()+' 元）';
-  return '规则固定 '+ruleAmt.toLocaleString()+' 元/注';
-}
+/* 命中规则描述：对齐 APK buildMatchText */
 function matchDesc(cfg,mp,ms){
-  // 生成命中规则描述，如 "中5红+1蓝"、"中5前区+2后区" 等
   if(cfg.pos){
-    // 3D/P3 等定位彩种
     if(mp===3&&ms===0)return '顺序一致';
     return '中'+mp+'位';
   }
@@ -1181,19 +1113,128 @@ function matchDesc(cfg,mp,ms){
     if(cfg.code==='kl8')return '中'+mp+'个号';
     return '中'+mp+'位';
   }
-  // 使用简短标签（对齐 APK buildMatchText）
-  var pl,sl;
-  switch(cfg.code){
-    case 'ssq':pl='红';sl='蓝';break;
-    case 'dlt':pl='前区';sl='后区';break;
-    case '7xc':pl='位';sl='位';break;
-    case '7lc':pl='基本';sl='特别';break;
-    default:pl=cfg.mainLabel||'前区';sl=cfg.secLabel||'后区';
-  }
-  if(mp>0&&ms>0)return '中'+mp+pl+'+'+ms+sl;
+  var pl=cfg.primaryUnit||cfg.mainLabel||'前区',sl=cfg.secondaryUnit||cfg.secLabel||'后区';
+  if(mp>0&&ms>0)return '中'+mp+pl+' + '+ms+sl;
   if(mp>0&&ms===0)return '中'+mp+pl;
   if(mp===0&&ms>0)return '中'+ms+sl;
   return '';
+}
+/* DLT 2026 新规浮动力度映射（对齐 APK dltFloatOverrideMap） */
+var DLT_FLOAT_MAP={5000:6666,300:380,150:200,15:18,5:7};
+function showTierRows(cfg,draw,ver){
+  var html='';
+  var rules=(ver?prForVersion(ver):latestPr(cfg));
+  var allTiers=draw.allTiers||draw.tiers||[];
+  var tierByName={};
+  if(allTiers.length){
+    for(var i=0;i<Math.min(rules.length,allTiers.length);i++){
+      if(!tierByName[rules[i][0]])tierByName[rules[i][0]]=allTiers[i];
+    }
+  }
+  // 收集去重奖级名称，汇总命中规则
+  var seenNames={},uniqNames=[],nameConds={},nameAmt={};
+  rules.forEach(function(p){
+    if(!seenNames[p[0]]){seenNames[p[0]]=true;uniqNames.push(p[0]);nameConds[p[0]]=[];nameAmt[p[0]]=p[2];}
+    if(p[1]&&p[1].length)nameConds[p[0]]=nameConds[p[0]].concat(p[1]);
+  });
+  // 福运奖 & DLT 浮动状态（对齐 APK conditionalFlags）
+  var fuyunState=null;
+  if(cfg.code==='ssq'){
+    var hasFuyunRule=rules.some(function(p){return p[0]==='福运奖';});
+    if(hasFuyunRule){
+      fuyunState=draw.fuyun?'ON':'OFF';
+    }
+  }
+  // DLT 奖池浮动：对齐 APK DLT_2026_FLOAT 判定（UP/NORMAL/HOLD）
+  var dltFloat=null;
+  if(cfg.code==='dlt'){
+    var jp=draw.jackpot?parseNumberSafe(draw.jackpot):null;
+    if(jp!==null&&jp>=800000000)dltFloat='UP';
+    else if(jp!==null)dltFloat='NORMAL';
+    // jp===null → dltFloat stays null (HOLD: 奖池未知)
+  }
+  // DLT 追加数据
+  var appendTiers=draw.appendTiers||[];
+  var hasAppend=cfg.code==='dlt'&&appendTiers.length>0;
+  // 逐奖级展示（合并基本+追加到一行，对齐 APK mergePrizeTiersWithRules）
+  uniqNames.forEach(function(name){
+    var td=tierByName[name];
+    var ruleAmt=nameAmt[name];
+    var conds=nameConds[name]||[];
+    var isFuyunOff=(fuyunState==='OFF'&&name==='福运奖');
+    // 命中规则文本（含 DLT 浮动信息，对齐 APK buildMatchText + 条件性奖级）
+    var matchLines=[];
+    conds.forEach(function(c){
+      var desc=matchDesc(cfg,c[0],c[1]);
+      if(!desc)return;
+      // DLT 浮动金额判定（对齐 APK: UP/NORMAL/HOLD 三种状态都有前缀）
+      if(dltFloat!==null&&ruleAmt!==null&&DLT_FLOAT_MAP[ruleAmt]){
+        var actual=dltFloat==='UP'?DLT_FLOAT_MAP[ruleAmt]:ruleAmt;
+        var prefix=dltFloat==='UP'?'本期奖池≥8亿已上浮':(dltFloat==='NORMAL'?'规则固定':'奖池未知，暂按规则固定');
+        desc+='（'+prefix+'¥'+actual+'）';
+      }else if(dltFloat===null&&ruleAmt!==null&&DLT_FLOAT_MAP[ruleAmt]){
+        // HOLD: 奖池未知，仍显示提示
+        desc+='（奖池未知，暂按规则固定¥'+ruleAmt+'）';
+      }
+      matchLines.push(desc);
+    });
+    var matchStr=matchLines.join(' / ');
+    // DLT 追加数据（对齐 APK: 合并基本+追加注数，金额分行带标签）
+    var atd=hasAppend?appendTiers[uniqNames.indexOf(name)]||null:null;
+    var appCnt=atd?atd.count:null;
+    var baseCnt=td?td.count:null;
+    var baseAmt=td?td.amount:null;
+    var appAmt=atd?atd.amount:null;
+    // 注数（对齐 APK: 合并基本+追加为总注数，追加另起一行）
+    var cntStr='—';
+    if(isFuyunOff){
+      cntStr='—（奖池未达门槛，本奖项停发）';
+    }else if(baseCnt!==null){
+      if(hasAppend&&atd){
+        var mergedCnt=baseCnt+(appCnt>0?appCnt:0);
+        if(mergedCnt>0){
+          cntStr=mergedCnt.toLocaleString()+'注';
+          if(appCnt>0)cntStr+='<br><span class="apn">（追加'+appCnt.toLocaleString()+'注）</span>';
+          else cntStr+='<br><span class="apn">（追加空开）</span>';
+        }else{
+          cntStr='空开<br><span class="apn">（追加空开）</span>';
+        }
+      }else{
+        if(baseCnt>0)cntStr=baseCnt.toLocaleString()+'注';
+        else cntStr='空开';
+      }
+    }
+    // 金额（对齐 APK: 基本投注/追加投注 分行，带标签）
+    var amtStr='—';
+    if(isFuyunOff){
+      amtStr='—（奖池未达门槛，本奖项停发）';
+    }else if(baseCnt!==null){
+      if(hasAppend&&atd){
+        var parts=[];
+        if(baseCnt>0&&baseAmt>0)parts.push('基本投注 '+fmtAmt(baseAmt));
+        else if(baseCnt===0)parts.push('空开无奖金');
+        else parts.push('基本投注 —');
+        if(appCnt>0&&appAmt>0)parts.push('<span class="apa">追加投注 '+fmtAmt(appAmt)+'</span>');
+        else parts.push('<span class="apa">追加投注 —</span>');
+        amtStr=parts.join('<br>');
+      }else{
+        if(baseAmt>0)amtStr=fmtAmt(baseAmt);
+        else if(baseCnt>0)amtStr='—';
+        else amtStr='空开无奖金';
+      }
+    }
+    // 构建行
+    var rowClass='tierRow';
+    if(isFuyunOff)rowClass+=' tierOff';
+    html+='<div class="'+rowClass+'">'
+      +'<div class="nm"><div class="pr'+(isFuyunOff?' off':'')+'">'+(isFuyunOff?name+'（本期不开放）':name)+'</div>'
+      +(matchStr?'<div class="mc">'+matchStr+'</div>':'')
+      +'</div>'
+      +'<div class="cnt">'+cntStr+'</div>'
+      +'<div class="amt">'+amtStr+'</div>'
+      +'</div>';
+  });
+  return html;
 }
 function openDrawDetail(d){
   $('detailTitle').textContent='第'+d.issue+'期 · '+cur.name;
@@ -1201,8 +1242,8 @@ function openDrawDetail(d){
   var infoBar='';
   if(d.sales||d.jackpot){
     infoBar='<div style="display:flex;justify-content:center;gap:20px;margin:6px 0 10px;font-size:13px;color:var(--text_secondary);">';
-    if(d.sales)infoBar+='<span>销售额：'+parseNumberSafe(d.sales).toLocaleString()+' 元</span>';
-    if(d.jackpot)infoBar+='<span>奖池：'+parseNumberSafe(d.jackpot).toLocaleString()+' 元</span>';
+    if(d.sales)infoBar+='<span>销售额：'+fmtAmt(parseNumberSafe(d.sales))+'</span>';
+    if(d.jackpot)infoBar+='<span>奖池：'+fmtAmt(parseNumberSafe(d.jackpot))+'</span>';
     infoBar+='</div>';
   }
   // 确定适用规则版本（按开奖日期定位）
