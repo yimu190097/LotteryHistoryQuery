@@ -60,18 +60,28 @@ APK_DIR="$PROJECT_DIR/server/public/downloads"
 sync_apk() {
     mkdir -p "$APK_DIR"
     local RELEASE_TAG=""
-    local LATEST_REL=""
+    local LATEST_REL="" ghbase="" cand=""
+    # 以“响应内容有效”为准而非 curl 退出码：部分镜像(如 ghfast.top)会返回 200 但内容为空/非 JSON，
+    # 需校验含 tag_name 且含 .apk 资产才接受，否则继续尝试下一镜像
     for ghbase in \
-      "https://ghfast.top/https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest" \
       "https://gh-proxy.com/https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest" \
-      "https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest"; do
-      if LATEST_REL=$(curl -fsSL --connect-timeout 8 --max-time 15 "$ghbase" 2>/dev/null); then break; fi
+      "https://ghproxy.net/https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest" \
+      "https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest" \
+      "https://ghfast.top/https://api.github.com/repos/yimu190097/LotteryHistoryQuery/releases/latest"; do
+      cand=$(curl -fsSL --connect-timeout 8 --max-time 15 "$ghbase" 2>/dev/null || true)
+      if [ -n "$cand" ] \
+         && echo "$cand" | grep -q '"tag_name"' \
+         && echo "$cand" | grep -qE '"name"[[:space:]]*:[[:space:]]*"[^"]+\.apk"'; then
+        LATEST_REL="$cand"
+        break
+      fi
     done
     if [ -z "$LATEST_REL" ]; then
       log "  APK: 获取最新 Release 失败（稍后重试）"
       return 1
     fi
-    RELEASE_TAG=$(echo "$LATEST_REL" | sed -n 's/.*"tag_name":"\([^"]*\)".*/\1/p')
+    # 容忍美化/紧凑两种 JSON 格式（冒号后可能有空白）
+    RELEASE_TAG=$(echo "$LATEST_REL" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
     [ -n "$RELEASE_TAG" ] || RELEASE_TAG="v24.2"
 
     # 动态提取 Release 中所有 .apk 资产名（Actions 用动态标签命名 cmd-日期-序号，
@@ -79,7 +89,7 @@ sync_apk() {
     local apks=()
     while IFS= read -r name; do
       [ -n "$name" ] && apks+=("$name")
-    done < <(echo "$LATEST_REL" | grep -oE '"name":"[^"]+\.apk"' | sed 's/"name":"//; s/"$//')
+    done < <(echo "$LATEST_REL" | grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]+\.apk"' | sed -E 's/"name"[[:space:]]*:[[:space:]]*"//; s/"$//')
 
     if [ "${#apks[@]}" -eq 0 ]; then
       log "  APK: Release 中没有找到 .apk 资产"
