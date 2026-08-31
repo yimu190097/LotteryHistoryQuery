@@ -33,6 +33,7 @@ function initTables() {
       plan_type TEXT NOT NULL DEFAULT 'FREE',
       remaining_queries INTEGER NOT NULL DEFAULT 0,
       monthly_expire_at INTEGER,
+      free_query_date INTEGER NOT NULL DEFAULT 0,
       server_version INTEGER NOT NULL DEFAULT 0,
       local_version INTEGER NOT NULL DEFAULT 0,
       updated_at INTEGER NOT NULL,
@@ -169,8 +170,8 @@ function initTables() {
       'INSERT INTO users (phone, password_hash, nickname, is_admin, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)'
     ).run(testPhone, testHash, '测试用户', now, now);
     db.prepare(
-      'INSERT INTO quotas (user_phone, plan_type, remaining_queries, monthly_expire_at, server_version, local_version, updated_at) VALUES (?, ?, ?, NULL, 1, 0, ?)'
-    ).run(testPhone, 'FREE', 0, now);
+      'INSERT INTO quotas (user_phone, plan_type, remaining_queries, monthly_expire_at, free_query_date, server_version, local_version, updated_at) VALUES (?, ?, ?, NULL, ?, 1, 0, ?)'
+    ).run(testPhone, 'FREE', 0, Math.floor(Date.now() / 86400000), now);
     console.log(`[DB] 测试账号已创建: ${testPhone} / test123456`);
   }
   console.log('[DB] 数据库初始化完成');

@@ -37,17 +37,18 @@ class QuotaRepository(private val context: Context) {
     /** 观察当前用户配额，UI 订阅 */
     fun observe(phone: String): Flow<QuotaEntity?> = quotaDao.observeByUser(phone)
 
-    /** 新用户初始化配额：免费用户，每日 2 次 */
+    /** 新用户初始化配额：免费用户，每日查询次数从服务端配置获取 */
     suspend fun initForNewUser(phone: String) = withContext(Dispatchers.IO) {
         if (quotaDao.getByUser(phone) == null) {
             val now = System.currentTimeMillis()
             val today = (now / 86400000).toInt()
+            val limit = fetchFreeQueryLimit()
             quotaDao.upsert(
                 QuotaEntity(
                     userPhone = phone,
                     planType = PlanType.FREE,
                     freeUsed = 0,
-                    freeQueryLimit = 2,
+                    freeQueryLimit = limit,
                     freeQueryDate = today,
                     monthlyExpireAt = null,
                     serverVersion = 0,
@@ -63,12 +64,13 @@ class QuotaRepository(private val context: Context) {
         if (quotaDao.getByUser(phone) == null) {
             val now = System.currentTimeMillis()
             val oneYear = 365L * 24 * 60 * 60 * 1000
+            val limit = fetchFreeQueryLimit()
             quotaDao.upsert(
                 QuotaEntity(
                     userPhone = phone,
                     planType = PlanType.ANNUAL_VIP,
                     freeUsed = 0,
-                    freeQueryLimit = 2,
+                    freeQueryLimit = limit,
                     freeQueryDate = (now / 86400000).toInt(),
                     monthlyExpireAt = now + oneYear,
                     serverVersion = 0,
@@ -123,8 +125,18 @@ class QuotaRepository(private val context: Context) {
             return@withContext true
         } catch (e: com.lottery.history.network.ApiClient.ApiException) {
             if (e.code == 403) {
-                // 配额不足，更新本地状态
+                // 配额不足，从异常中取出 freeUsed/freeLimit 更新本地状态
                 android.util.Log.w("QuotaRepository", "quota exhausted: ${e.message}")
+                if (e.freeUsed != null || e.freeLimit != null) {
+                    quotaDao.update(
+                        quota.copy(
+                            freeUsed = e.freeUsed ?: quota.freeUsed,
+                            freeQueryLimit = e.freeLimit ?: quota.freeQueryLimit,
+                            freeQueryDate = (now / 86400000).toInt(),
+                            updatedAt = now
+                        )
+                    )
+                }
                 return@withContext false
             }
             // 其他错误走本地兜底
@@ -221,5 +233,16 @@ class QuotaRepository(private val context: Context) {
             ExistingWorkPolicy.APPEND_OR_REPLACE,
             request
         )
+    }
+
+    /** 从服务端获取免费查询次数上限，失败或离线时回退默认值 2 */
+    private suspend fun fetchFreeQueryLimit(): Int = withContext(Dispatchers.IO) {
+        try {
+            val config = com.lottery.history.network.ApiClient.getClientConfig()
+            config.freeQueryLimit.coerceAtLeast(1)
+        } catch (e: Exception) {
+            android.util.Log.w("QuotaRepository", "fetch config failed, fallback to 2: ${e.message}")
+            2
+        }
     }
 }

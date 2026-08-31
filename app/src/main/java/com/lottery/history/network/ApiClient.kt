@@ -86,8 +86,14 @@ object ApiClient {
     )
     data class SessionsResponse(val sessions: List<SessionInfo>, val maxSessions: Int)
     data class UploadResponse(val url: String, val size: Long, val mimetype: String)
+    data class ClientConfig(val freeQueryLimit: Int)
 
-    class ApiException(val code: Int, override val message: String) : Exception(message)
+    class ApiException(
+        val code: Int,
+        override val message: String,
+        val freeUsed: Int? = null,
+        val freeLimit: Int? = null
+    ) : Exception(message)
 
     // ============ API 方法 ============
 
@@ -123,12 +129,16 @@ object ApiClient {
         gson.fromJson(resp, ConsumeResponse::class.java)
     }
 
-    /**
-     * 拉取当前用户权威配额快照（用于离线后对账）。
-     */
+    /** 拉取当前用户权威配额快照（用于离线后对账）。 */
     suspend fun getQuota(): QuotaResponse = withContext(Dispatchers.IO) {
         val resp = get("/api/users/client/quota", requireAuth = true)
         gson.fromJson(resp, QuotaResponse::class.java)
+    }
+
+    /** 获取客户端公开配置（免登录）：免费查询次数上限、VIP 套餐列表等 */
+    suspend fun getClientConfig(): ClientConfig = withContext(Dispatchers.IO) {
+        val resp = get("/api/users/client/config")
+        gson.fromJson(resp, ClientConfig::class.java)
     }
 
     /** 获取当前用户的所有活跃终端 */
@@ -200,7 +210,17 @@ object ApiClient {
         val resp = client.newCall(req).execute()
         val body = resp.body?.string() ?: "{}"
         if (!resp.isSuccessful) {
-            throw ApiException(resp.code, parseError(body))
+            val errMsg = parseError(body)
+            var freeUsed: Int? = null
+            var freeLimit: Int? = null
+            if (resp.code == 403) {
+                try {
+                    val json = gson.fromJson(body, JsonObject::class.java)
+                    freeUsed = json.get("freeUsed")?.asInt
+                    freeLimit = json.get("freeLimit")?.asInt
+                } catch (_: Exception) { }
+            }
+            throw ApiException(resp.code, errMsg, freeUsed, freeLimit)
         }
         return body
     }

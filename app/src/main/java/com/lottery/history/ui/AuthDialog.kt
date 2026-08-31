@@ -147,14 +147,18 @@ class AuthDialog(
             // 协程完成时对话框可能已被关闭，检查状态避免操作已销毁的 UI
             if (!isShowing) return@launch
             btnAction.isEnabled = true
-            result.fold(
-                onSuccess = {
-                    Toast.makeText(context, "操作成功", Toast.LENGTH_SHORT).show()
-                    onSuccess()
-                    dismiss()
-                },
-                onFailure = { e -> showError(e.message ?: "操作失败") }
-            )
+        result.fold(
+            onSuccess = { notice ->
+                // 展示终端踢除等提示
+                if (!notice.isNullOrBlank()) {
+                    Toast.makeText(context, notice, Toast.LENGTH_LONG).show()
+                }
+                Toast.makeText(context, "操作成功", Toast.LENGTH_SHORT).show()
+                onSuccess()
+                dismiss()
+            },
+            onFailure = { e -> showError(e.message ?: "操作失败") }
+        )
         }
     }
 

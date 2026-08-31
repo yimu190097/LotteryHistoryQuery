@@ -560,10 +560,11 @@ async function consumeOneQuery() {
   }
   // 已登录：调服务器扣减
   try {
+    var clientOpId = 'web_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
     var res = await fetch('/api/users/client/consume', {
       method: 'POST',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ phone: authState.phone, count: 1 })
+      body: JSON.stringify({ phone: authState.phone, count: 1, clientOpId: clientOpId })
     });
     if (res.status === 401) { logout(); return { ok: false, msg: '登录已过期，请重新登录' }; }
     if (res.status === 403) {

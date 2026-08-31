@@ -23,8 +23,8 @@ class AuthRepository(private val context: Context) {
     private val userDao by lazy { LotteryDatabase.get(context).userDao() }
     private val sessionStore by lazy { SessionStore(context) }
 
-    /** 注册：服务器优先，拿 JWT + 配额 */
-    suspend fun register(phone: String, password: String): Result<Unit> = withContext(Dispatchers.IO) {
+    /** 注册：服务器优先，拿 JWT + 配额。返回 notice 消息（终端踢除提示等） */
+    suspend fun register(phone: String, password: String): Result<String?> = withContext(Dispatchers.IO) {
         try {
             if (!isValidPhone(phone)) return@withContext Result.failure(IllegalArgumentException("手机号格式不正确"))
             if (password.length < 6) return@withContext Result.failure(IllegalArgumentException("密码至少6位"))
@@ -55,15 +55,15 @@ class AuthRepository(private val context: Context) {
                 serverVersion = 1
             )
             // sessionStore.saveLogin 已在 ApiClient.register 内部完成
-            Result.success(Unit)
+            Result.success(resp.notice)
         } catch (e: Exception) {
             Log.w("AuthRepository", "register failed: ${e.message}")
             Result.failure(e)
         }
     }
 
-    /** 登录：服务器优先，失败时降级到本地（离线可用） */
-    suspend fun login(phone: String, password: String): Result<Unit> = withContext(Dispatchers.IO) {
+    /** 登录：服务器优先，失败时降级到本地（离线可用）。返回 notice 消息（终端踢除提示等） */
+    suspend fun login(phone: String, password: String): Result<String?> = withContext(Dispatchers.IO) {
         try {
             // 1) 先尝试服务器登录
             try {
@@ -77,7 +77,7 @@ class AuthRepository(private val context: Context) {
                     monthlyExpireAt = resp.monthlyExpireAt,
                     serverVersion = 1
                 )
-                return@withContext Result.success(Unit)
+                return@withContext Result.success(resp.notice)
             } catch (serverErr: Exception) {
                 Log.w("AuthRepository", "server login failed, fallback to local: ${serverErr.message}")
             }
@@ -88,7 +88,7 @@ class AuthRepository(private val context: Context) {
                 return@withContext Result.failure(IllegalArgumentException("密码错误"))
             }
             sessionStore.saveLoginPhone(phone)
-            Result.success(Unit)
+            Result.success(null)
         } catch (e: Exception) {
             Result.failure(e)
         }
