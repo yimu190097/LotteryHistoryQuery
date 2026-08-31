@@ -34,7 +34,10 @@ TURN_HOST="${TURN_HOST:-}"
 TURN_USER="${TURN_USER:-lottery}"
 TURN_PASS="${TURN_PASS:-$(openssl rand -base64 12 | tr -d '/+=' | head -c 16)}"
 ADMIN_USER="${ADMIN_USER:-admin}"
-ADMIN_PASS="${ADMIN_PASS:-admin123}"
+# 未显式指定管理员密码时随机生成，避免落到弱默认值 admin123
+if [[ -z "${ADMIN_PASS:-}" ]]; then
+  ADMIN_PASS="$(openssl rand -base64 12 | tr -d '/+=' | head -c 14)"
+fi
 JWT_SECRET="${JWT_SECRET:-$(openssl rand -base64 48 | tr -d '/+=')}"
 TUNNEL_MODE="${TUNNEL_MODE:-quick}"   # quick | named
 TUNNEL_NAME="${TUNNEL_NAME:-lottery}"

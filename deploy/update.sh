@@ -26,13 +26,17 @@ RAW_BASES=(
 download_file() {
     local rel="$1"
     local dest="$PROJECT_DIR/$rel"
+    local tmp="$dest.tmp"
     mkdir -p "$(dirname "$dest")"
     for base in "${RAW_BASES[@]}"; do
-        if curl -fsSL --connect-timeout 8 --max-time 20 "$base/$rel" -o "$dest" 2>/dev/null; then
+        # 先下到临时文件再原子替换，避免下载中断留下半损坏的线上文件（尤其 deploy.js）
+        if curl -fsSL --connect-timeout 8 --max-time 20 "$base/$rel" -o "$tmp" 2>/dev/null; then
+            mv -f "$tmp" "$dest"
             log "  OK: $rel"
             return 0
         fi
     done
+    rm -f "$tmp"
     log "  SKIP: $rel"
     return 1
 }
@@ -128,7 +132,7 @@ FILES=(
   server/src/ws/chatServer.js
   server/src/ws/callManager.js
   server/public/index.html
-  server/public/css/style.css
+  server/public/css/admin.css
   server/public/js/admin.js
   server/public/web/index.html
   server/public/js/chat.js
