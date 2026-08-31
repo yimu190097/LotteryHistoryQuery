@@ -498,14 +498,36 @@ table tr:hover { background: var(--table-hover); }
 .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
 
 /* ========== 响应式 ========== */
+@media (max-width: 1024px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  table th, table td { padding: 8px 10px; font-size: 13px; }
+  .btn-sm { padding: 3px 8px; font-size: 12px; }
+}
+
 @media (max-width: 768px) {
   .sidebar { width: 60px; }
   .sidebar .logo h2 { display: none; }
   .sidebar .logo .ver { display: none; }
   .sidebar nav a span:not(.icon) { display: none; }
   .sidebar .user-info { display: none; }
-  .main-content { margin-left: 60px; }
+  .main-content { margin-left: 60px; padding: 16px; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .page-header { flex-direction: column; gap: 8px; }
+  .page-header button { width: 100%; }
+  .toolbar { flex-direction: column; }
+  .toolbar .search-bar { width: 100%; }
+  .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { min-width: 600px; }
+  .modal { width: 95vw; padding: 16px; }
+  .detail-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  .main-content { padding: 12px; }
+  .card { padding: 12px; }
+  .stat-card { padding: 14px; }
+  .stat-card .stat-value { font-size: 24px; }
+  .login-card { padding: 24px; width: 95vw; }
 }
 
 /* ==================== 客服会话模块 ==================== */

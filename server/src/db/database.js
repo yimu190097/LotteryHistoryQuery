@@ -88,6 +88,17 @@ function initTables() {
     CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action, created_at);
     CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at DESC);
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_phone TEXT NOT NULL,
+      jti TEXT NOT NULL UNIQUE,
+      device_info TEXT,
+      ip_address TEXT,
+      created_at INTEGER NOT NULL,
+      last_active_at INTEGER NOT NULL,
+      FOREIGN KEY (user_phone) REFERENCES users(phone)
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_sessions_phone ON user_sessions(user_phone);
   `);  try {
     db.prepare('ALTER TABLE admins ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0').run();
     console.log('[DB Migration] 已补列: admins.must_change_password');
@@ -121,6 +132,24 @@ function initTables() {
   );
   for (const [key, value] of Object.entries(defaultConfigs)) {
     insertConfig.run(key, value, Date.now());
+  }
+
+  // 创建测试账号（如不存在）
+  const testPhone = '13800138000';
+  const testUser = db.prepare('SELECT phone FROM users WHERE phone = ?').get(testPhone);
+  if (!testUser) {
+    const testHash = bcrypt.hashSync('test123456', 10);
+    const now = Date.now();
+    db.prepare(
+      'INSERT INTO users (phone, password_hash, nickname, is_admin, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)'
+    ).run(testPhone, testHash, '测试用户', now, now);
+    const freeQuota = parseInt(
+      (db.prepare("SELECT value FROM system_config WHERE key = 'free_quota'").get()?.value) || '10'
+    );
+    db.prepare(
+      'INSERT INTO quotas (user_phone, plan_type, remaining_queries, monthly_expire_at, server_version, local_version, updated_at) VALUES (?, ?, ?, NULL, 1, 0, ?)'
+    ).run(testPhone, 'PAY_PER_USE', freeQuota, now);
+    console.log(`[DB] 测试账号已创建: ${testPhone} / test123456`);
   }
   console.log('[DB] 数据库初始化完成');
 }function cleanAuditLog() {

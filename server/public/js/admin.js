@@ -268,7 +268,7 @@ async function renderUsers() {
       <table>
         <thead><tr>
           <th>手机号</th><th>昵称</th><th>套餐类型</th><th>状态</th><th>剩余次数</th>
-          <th>到期时间</th><th>注册时间</th><th>操作</th>
+          <th>到期时间</th><th>终端</th><th>注册时间</th><th>操作</th>
         </tr></thead>
         <tbody>${data.data.map(u => {
           const isMonthly = u.plan_type === 'MONTHLY';
@@ -276,6 +276,8 @@ async function renderUsers() {
           const statusText = isMonthly ? (isExpired ? '已过期' : '正常') : '—';
           const statusBadge = isMonthly ? (isExpired ? 'badge-danger' : 'badge-success') : 'badge-info';
           const quotaColor = (u.remaining_queries ?? 0) > 0 ? '#2E7D32' : '#C62828';
+          const sc = u.session_count || 0;
+          const sessionColor = sc >= 3 ? '#C62828' : sc > 0 ? '#2E7D32' : '#9E9E9E';
           return `
           <tr>
             <td><strong>${u.phone}</strong></td>
@@ -284,6 +286,7 @@ async function renderUsers() {
             <td><span class="badge ${statusBadge}">${statusText}</span></td>
             <td style="font-weight:600;color:${quotaColor}">${u.remaining_queries ?? 0}</td>
             <td>${u.monthly_expire_at ? formatDateShort(u.monthly_expire_at) : '—'}</td>
+            <td><span style="font-weight:600;color:${sessionColor};cursor:pointer" onclick="showUserSessions('${u.phone}')" title="点击管理终端">${sc} 台</span></td>
             <td>${formatDateShort(u.created_at)}</td>
             <td style="white-space:nowrap">
               <button class="btn btn-outline btn-sm" onclick="showUserDetail('${u.phone}')">详情</button>
@@ -423,6 +426,53 @@ async function handleSetQuota(e, phone) {
     showToast('配额设置成功', 'success');
     closeModal();
     renderUsers();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+// ==================== 终端管理 ====================
+async function showUserSessions(phone) {
+  try {
+    const data = await api(`/api/users/${phone}/sessions`);
+    const sessions = data.sessions || [];
+    $('#modalContent').innerHTML = `
+      <h3>终端管理 - ${phone} <span style="font-size:13px;color:var(--text-secondary);font-weight:normal">（最多 ${data.maxSessions} 台）</span></h3>
+      ${sessions.length === 0 ? '<div class="empty-state">暂无活跃终端</div>' : `
+        <div style="max-height:320px;overflow-y:auto">
+          <table>
+            <thead><tr><th>设备</th><th>IP</th><th>状态</th><th>登录时间</th><th>最近活跃</th><th>操作</th></tr></thead>
+            <tbody>${sessions.map(s => {
+              const dev = (s.deviceInfo || 'Unknown').substring(0, 60);
+              const onlineBadge = s.online ? '<span class="badge badge-success">在线</span>' : '<span class="badge" style="background:#EEE;color:#999">离线</span>';
+              return `<tr>
+                <td style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.deviceInfo || ''}">${dev}</td>
+                <td style="font-size:12px">${s.ipAddress || '—'}</td>
+                <td>${onlineBadge}</td>
+                <td>${formatDate(s.createdAt)}</td>
+                <td>${formatDate(s.lastActiveAt)}</td>
+                <td><button class="btn btn-danger btn-sm" onclick="deleteUserSession('${phone}',${s.id})">踢下线</button></td>
+              </tr>`;
+            }).join('')}</tbody>
+          </table>
+        </div>
+      `}
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeModal()">关闭</button>
+      </div>
+    `;
+    openModal();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function deleteUserSession(phone, sessionId) {
+  if (!confirm('确定要踢掉这个终端吗？')) return;
+  try {
+    await api(`/api/users/${phone}/sessions/${sessionId}`, { method: 'DELETE' });
+    showToast('终端已删除', 'success');
+    showUserSessions(phone);
   } catch (err) {
     showToast(err.message, 'error');
   }

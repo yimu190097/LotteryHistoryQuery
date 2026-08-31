@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { db } = require('../db/database');
-const { authMiddleware, generateUserToken, userAuthMiddleware } = require('../middleware/auth');
+const { authMiddleware, generateUserToken, userAuthMiddleware, MAX_SESSIONS_PER_USER } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -13,6 +13,36 @@ function isValidPhone(phone) {
 
 // 有效的套餐类型
 const VALID_PLAN_TYPES = ['PAY_PER_USE', 'MONTHLY'];
+
+// 终端管理：创建 session，超过上限则踢掉最旧的
+function createSession(phone, jti, req) {
+  const now = Date.now();
+  const deviceInfo = req.headers['user-agent'] || 'Unknown';
+  const ip = req.ip || req.socket?.remoteAddress || '';
+
+  // 统计当前活跃 session 数
+  const count = db.prepare('SELECT COUNT(*) as cnt FROM user_sessions WHERE user_phone = ?').get(phone).cnt;
+  if (count >= MAX_SESSIONS_PER_USER) {
+    // 踢掉最旧的 session
+    const oldest = db.prepare(
+      'SELECT id FROM user_sessions WHERE user_phone = ? ORDER BY created_at ASC LIMIT 1'
+    ).get(phone);
+    if (oldest) {
+      db.prepare('DELETE FROM user_sessions WHERE id = ?').run(oldest.id);
+    }
+  }
+
+  db.prepare(
+    'INSERT INTO user_sessions (user_phone, jti, device_info, ip_address, created_at, last_active_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(phone, jti, deviceInfo, ip, now, now);
+}
+
+// 更新 session 活跃时间
+function touchSession(phone, jti) {
+  if (!jti) return;
+  db.prepare('UPDATE user_sessions SET last_active_at = ? WHERE user_phone = ? AND jti = ?')
+    .run(Date.now(), phone, jti);
+}
 
 // ==================== 客户端公开接口（无需登录） ====================
 
@@ -62,7 +92,8 @@ router.post('/client/register', (req, res) => {
     'INSERT INTO audit_log (admin_id, admin_username, action, target, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)'
   ).run(null, 'system', 'USER_REGISTER', phone, `客户端注册，赠送${freeQuota}次`, now);
 
-  const token = generateUserToken({ phone, nickname: nickname || null });
+  const { token, jti } = generateUserToken({ phone, nickname: nickname || null });
+  createSession(phone, jti, req);
   res.json({
     token,
     phone,
@@ -94,8 +125,9 @@ router.post('/client/login', (req, res) => {
   db.prepare('UPDATE users SET updated_at = ? WHERE phone = ?').run(Date.now(), phone);
 
   const token = generateUserToken(user);
+  createSession(user.phone, token.jti, req);
   res.json({
-    token,
+    token: token.token,
     phone: user.phone,
     nickname: user.nickname,
     planType: quota?.plan_type || 'PAY_PER_USE',
@@ -119,6 +151,9 @@ router.post('/client/consume', userAuthMiddleware, (req, res) => {
   if (phone !== req.user.phone) {
     return res.status(403).json({ error: '不能操作其他用户的配额' });
   }
+
+  // 更新最近活跃时间
+  touchSession(phone, req.user.jti);
 
   const now = Date.now();
 
@@ -257,6 +292,59 @@ router.get('/client/quota', userAuthMiddleware, (req, res) => {
   });
 });
 
+// ==================== 客户端终端管理（需要用户 Token） ====================
+
+/**
+ * GET /api/users/client/sessions - 获取当前用户所有活跃终端
+ * 返回: [{ id, deviceInfo, ipAddress, createdAt, lastActiveAt, isCurrent }]
+ */
+router.get('/client/sessions', userAuthMiddleware, (req, res) => {
+  const sessions = db.prepare(
+    'SELECT id, device_info, ip_address, created_at, last_active_at, jti FROM user_sessions WHERE user_phone = ? ORDER BY created_at DESC'
+  ).all(req.user.phone);
+
+  const now = Date.now();
+  const result = sessions.map(s => ({
+    id: s.id,
+    deviceInfo: s.device_info,
+    ipAddress: s.ip_address,
+    createdAt: s.created_at,
+    lastActiveAt: s.last_active_at,
+    isCurrent: s.jti === req.user.jti,
+    // 24h 内有活动视为"在线"
+    online: (now - s.last_active_at) < 24 * 60 * 60 * 1000
+  }));
+
+  res.json({ sessions: result, maxSessions: MAX_SESSIONS_PER_USER });
+});
+
+/**
+ * DELETE /api/users/client/sessions/:id - 删除指定终端
+ */
+router.delete('/client/sessions/:id', userAuthMiddleware, (req, res) => {
+  const session = db.prepare(
+    'SELECT id, jti FROM user_sessions WHERE id = ? AND user_phone = ?'
+  ).get(req.params.id, req.user.phone);
+
+  if (!session) {
+    return res.status(404).json({ error: '终端不存在' });
+  }
+
+  db.prepare('DELETE FROM user_sessions WHERE id = ?').run(session.id);
+  res.json({ message: '终端已删除' });
+});
+
+/**
+ * DELETE /api/users/client/sessions - 删除所有其他终端（保留当前）
+ */
+router.delete('/client/sessions', userAuthMiddleware, (req, res) => {
+  const result = db.prepare(
+    'DELETE FROM user_sessions WHERE user_phone = ? AND jti != ?'
+  ).run(req.user.phone, req.user.jti);
+
+  res.json({ message: `已删除 ${result.changes} 个其他终端` });
+});
+
 // ==================== 管理端接口（需要登录） ====================
 router.use(authMiddleware);
 
@@ -349,7 +437,8 @@ router.get('/', (req, res) => {
 
   const dataSql = `
     SELECT u.phone, u.nickname, u.is_admin, u.created_at, u.updated_at,
-           q.plan_type, q.remaining_queries, q.monthly_expire_at, q.updated_at as quota_updated_at
+           q.plan_type, q.remaining_queries, q.monthly_expire_at, q.updated_at as quota_updated_at,
+           (SELECT COUNT(*) FROM user_sessions WHERE user_phone = u.phone) as session_count
     FROM users u
     LEFT JOIN quotas q ON u.phone = q.user_phone
     ${whereClause}
@@ -568,6 +657,45 @@ router.delete('/:phone', (req, res) => {
   ).run(req.admin.id, req.admin.username, 'DELETE_USER', phone, '删除用户及关联数据', now);
 
   res.json({ message: '用户已删除' });
+});
+
+/**
+ * GET /api/users/:phone/sessions - 管理员查看用户终端列表
+ */
+router.get('/:phone/sessions', (req, res) => {
+  const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(req.params.phone);
+  if (!user) return res.status(404).json({ error: '用户不存在' });
+
+  const sessions = db.prepare(
+    'SELECT id, device_info, ip_address, created_at, last_active_at FROM user_sessions WHERE user_phone = ? ORDER BY created_at DESC'
+  ).all(req.params.phone);
+
+  const now = Date.now();
+  res.json({
+    sessions: sessions.map(s => ({
+      id: s.id,
+      deviceInfo: s.device_info,
+      ipAddress: s.ip_address,
+      createdAt: s.created_at,
+      lastActiveAt: s.last_active_at,
+      online: (now - s.last_active_at) < 24 * 60 * 60 * 1000
+    })),
+    maxSessions: MAX_SESSIONS_PER_USER
+  });
+});
+
+/**
+ * DELETE /api/users/:phone/sessions/:id - 管理员删除用户终端
+ */
+router.delete('/:phone/sessions/:id', (req, res) => {
+  const session = db.prepare(
+    'SELECT id FROM user_sessions WHERE id = ? AND user_phone = ?'
+  ).get(req.params.id, req.params.phone);
+
+  if (!session) return res.status(404).json({ error: '终端不存在' });
+
+  db.prepare('DELETE FROM user_sessions WHERE id = ?').run(session.id);
+  res.json({ message: '终端已删除' });
 });
 
 /**

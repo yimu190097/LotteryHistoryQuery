@@ -64,6 +64,16 @@ object ApiClient {
         val remainingQueries: Int,
         val monthlyExpireAt: Long?
     )
+    data class SessionInfo(
+        val id: Long,
+        val deviceInfo: String,
+        val ipAddress: String,
+        val createdAt: Long,
+        val lastActiveAt: Long,
+        val isCurrent: Boolean,
+        val online: Boolean
+    )
+    data class SessionsResponse(val sessions: List<SessionInfo>, val maxSessions: Int)
     data class UploadResponse(val url: String, val size: Long, val mimetype: String)
 
     class ApiException(val code: Int, override val message: String) : Exception(message)
@@ -108,6 +118,24 @@ object ApiClient {
     suspend fun getQuota(): QuotaResponse = withContext(Dispatchers.IO) {
         val resp = get("/api/users/client/quota", requireAuth = true)
         gson.fromJson(resp, QuotaResponse::class.java)
+    }
+
+    /** 获取当前用户的所有活跃终端 */
+    suspend fun getSessions(): SessionsResponse = withContext(Dispatchers.IO) {
+        val resp = get("/api/users/client/sessions", requireAuth = true)
+        gson.fromJson(resp, SessionsResponse::class.java)
+    }
+
+    /** 删除指定终端 */
+    suspend fun deleteSession(id: Long): String = withContext(Dispatchers.IO) {
+        val resp = delete("/api/users/client/sessions/$id", requireAuth = true)
+        gson.fromJson(resp, JsonObject::class.java).get("message")?.asString ?: "ok"
+    }
+
+    /** 删除所有其他终端（保留当前） */
+    suspend fun deleteOtherSessions(): String = withContext(Dispatchers.IO) {
+        val resp = delete("/api/users/client/sessions", requireAuth = true)
+        gson.fromJson(resp, JsonObject::class.java).get("message")?.asString ?: "ok"
     }
 
     /**
@@ -170,6 +198,24 @@ object ApiClient {
         val req = Request.Builder()
             .url(BASE_URL + path)
             .get()
+            .apply {
+                if (requireAuth) {
+                    sessionStore.getToken()?.let { header("Authorization", "Bearer $it") }
+                }
+            }
+            .build()
+        val resp = client.newCall(req).execute()
+        val body = resp.body?.string() ?: "{}"
+        if (!resp.isSuccessful) {
+            throw ApiException(resp.code, parseError(body))
+        }
+        return body
+    }
+
+    private fun delete(path: String, requireAuth: Boolean = false): String {
+        val req = Request.Builder()
+            .url(BASE_URL + path)
+            .delete()
             .apply {
                 if (requireAuth) {
                     sessionStore.getToken()?.let { header("Authorization", "Bearer $it") }

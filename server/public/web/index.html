@@ -14,24 +14,24 @@
   --text_primary:#212121; --text_secondary:#757575; --text_hint:#616161;
   --divider:#E0E0E0; --divider_subtle:#E0E0E0;
   --button_red:#C62828; --button_gray:#BDBDBD; --surface_variant:#F5F5F5;
-  /* 字号（sp 原样）：micro<tiny<small<body<title<subtitle */
   --micro:13px; --tiny:14px; --small:15px; --body:17px; --title:19px; --subtitle:21px;
   --card_margin:12px; --card_padding:14px; --page_padding:14px;
+  --max-width:420px;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;}
 body{
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
-  background:#37474F;  /* 桌面调试观感：深色底衬托手机框架 */
+  background:var(--bg_light);
   display:flex;align-items:flex-start;justify-content:center;
-  padding:24px 0;min-height:100vh;
+  min-height:100vh;
 }
-/* ============ 手机外壳（宽 360dp，1dp=1px） ============ */
+/* 手机优先：窄屏居中，宽屏最大 420px */
 #device{
-  width:360px;background:var(--surface);box-shadow:0 12px 40px rgba(0,0,0,.45);
-  border-radius:22px;overflow:hidden;position:relative;
+  width:100%;max-width:var(--max-width);background:var(--surface);overflow:hidden;position:relative;
+  min-height:100vh;
 }
-#screen{height:calc(100vh - 120px);min-height:600px;background:var(--bg_light);
+#screen{min-height:100vh;background:var(--bg_light);
   overflow-y:auto;position:relative;scrollbar-width:none;-ms-overflow-style:none;}
 #screen::-webkit-scrollbar{display:none;}
 
@@ -200,6 +200,25 @@ body{
 .tierRow .nm .dsc{font-size:12px;color:var(--text_secondary);}
 .tierRow .amt{text-align:right;font-weight:bold;color:var(--primary_red);}
 .empty{text-align:center;color:var(--text_secondary);padding:30px;font-size:var(--small);}
+
+/* ============ 响应式适配 ============ */
+@media (min-width: 768px) {
+  :root { --max-width: 420px; }
+  body { padding: 12px 0; }
+}
+
+@media (min-width: 1024px) {
+  :root { --max-width: 440px; }
+  body { padding: 20px 0; }
+}
+
+@media (max-width: 360px) {
+  :root { --card_padding: 10px; --page_padding: 10px; --micro: 12px; --tiny: 13px; --small: 14px; --body: 16px; }
+  #toolbar .title { font-size: 17px; }
+  #toolbar .act { font-size: 11px; padding: 4px 5px; }
+  .tab { font-size: 15px; height: 48px; }
+  .dialog { width: 95vw; max-height: 85vh; }
+}
 </style>
 </head>
 <body>
@@ -320,6 +339,11 @@ body{
     <button class="auth-btn" id="authBtn" onclick="submitAuth()">登录</button>
     <div class="auth-switch" id="authSwitch" onclick="toggleAuthMode()">没有账号？去注册</div>
   </div>
+</div></div>
+
+<!-- 终端管理 弹窗 -->
+<div class="mask" id="maskSessions"><div class="dialog" style="width:340px">
+  <div id="sessionBody"></div>
 </div></div>
 
 <script>
@@ -534,9 +558,9 @@ async function consumeOneQuery() {
   }
 }
 
-/* ---------- 球尺寸 / 列数（computeBallLayout 原样） ---------- */
+/* ---------- 球尺寸 / 列数（computeBallLayout 原样，适配动态宽度） ---------- */
 function ballLayout(){
-  var totalPad = 20*2, avail = 360 - totalPad, margin = 3;
+  var totalPad = 20*2, avail = Math.min(document.getElementById('device').offsetWidth || 360, 420) - totalPad, margin = 3;
   var range = cur.mainMax - cur.mainMin + 1;
   var columns;
   if(range<=10) columns=5;
@@ -1153,8 +1177,9 @@ async function downloadUserApk(){
 var authMode='login';
 function openAuthDialog(){
   if(authState.token){
-    var info='当前登录：'+maskedPhone(authState.phone)+'\n'+fmtQuota(authState.planType,authState.remainingQueries,authState.monthlyExpireAt)+'\n\n确定退出登录？';
-    if(confirm(info)){logout();}
+    var info='当前登录：'+maskedPhone(authState.phone)+'\n'+fmtQuota(authState.planType,authState.remainingQueries,authState.monthlyExpireAt)+'\n\n[确定] 退出登录\n[取消] 管理终端';
+    var r=confirm(info);
+    if(r){logout();}else{showSessionManager();}
   }else{
     authMode='login';renderAuth();showMask('maskAuth');
   }
@@ -1194,6 +1219,43 @@ async function submitAuth(){
     $('authBtn').disabled=false;
     renderAuth();
   }
+}
+
+/* ---------- 终端管理 ---------- */
+async function showSessionManager(){
+  if(!authState.token){toast('请先登录');return;}
+  try{
+    var res=await fetch('/api/users/client/sessions',{headers:authHeaders()});
+    if(!res.ok){var err=await res.json();toast(err.error||'获取失败');return;}
+    var data=await res.json();
+    var now=Date.now();
+    var html='<div class="dhead" style="padding:10px 14px">终端管理（最多 '+data.maxSessions+' 台）<span class="close" onclick="closeMask(\'maskSessions\')">关闭</span></div><div class="dbody" style="padding:0 8px 8px">';
+    if(!data.sessions.length){html+='<div class="empty">暂无活跃终端</div>';}
+    else{
+      data.sessions.forEach(function(s){
+        var dev=(s.deviceInfo||'Unknown').substring(0,50);
+        var onlineBadge=s.online?'<span style="color:#2E7D32;font-weight:bold">● 在线</span>':'<span style="color:#9E9E9E">○ 离线</span>';
+        html+='<div class="hitem" style="display:flex;align-items:center;padding:10px 6px">'
+          +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:bold;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+dev+'</div>'
+          +'<div style="font-size:12px;color:var(--text-secondary)">'+onlineBadge+' · '+s.ipAddress+' · '+new Date(s.lastActiveAt).toLocaleString()+'</div></div>'
+          +(s.isCurrent?'<span style="font-size:11px;color:#fff;background:var(--primary_red);border-radius:4px;padding:2px 6px;margin-left:8px;white-space:nowrap">当前</span>'
+          :'<span style="font-size:12px;color:var(--danger);margin-left:8px;cursor:pointer;white-space:nowrap" onclick="deleteMySession('+s.id+')">删除</span>')
+          +'</div>';
+      });
+    }
+    html+='</div>';
+    $('sessionBody').innerHTML=html;
+    showMask('maskSessions');
+  }catch(e){toast('网络错误：'+e.message);}
+}
+async function deleteMySession(id){
+  if(!confirm('确定要删除这个终端吗？'))return;
+  try{
+    var res=await fetch('/api/users/client/sessions/'+id,{method:'DELETE',headers:authHeaders()});
+    if(!res.ok){var err=await res.json();toast(err.error||'删除失败');return;}
+    toast('终端已删除');
+    showSessionManager();
+  }catch(e){toast('网络错误：'+e.message);}
 }
 
 /* ---------- init ---------- */
