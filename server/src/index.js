@@ -592,9 +592,14 @@ app.get('/api/apk/releases', (req, res) => {
   });
 });
 
-// SPA fallback
+// 根路径重定向到用户端网页版
+app.get('/', (req, res) => {
+  res.redirect('/web/');
+});
+
+// SPA fallback（管理后台，非 web/ 路径）
 app.get('*', (req, res) => {
-  if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads') && !req.path.startsWith('/downloads')) {
+  if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads') && !req.path.startsWith('/downloads') && !req.path.startsWith('/web')) {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
   } else if (req.path.startsWith('/api')) {
     res.status(404).json({ error: 'API不存在' });

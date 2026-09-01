@@ -15,10 +15,10 @@
   --divider:#E0E0E0; --divider_subtle:#E0E0E0;
   --button_red:#C62828; --button_gray:#9E9E9E; --surface_variant:#F5F5F5;
   --fs-base:0px;
-  --micro:calc(13px + var(--fs-base)); --tiny:calc(14px + var(--fs-base));
-  --small:calc(15px + var(--fs-base)); --body:calc(16px + var(--fs-base));
-  --title:calc(18px + var(--fs-base)); --subtitle:calc(19px + var(--fs-base));
-  --card_margin:10px; --card_padding:12px; --page_padding:12px;
+  --micro:calc(10px + var(--fs-base)); --tiny:calc(11px + var(--fs-base));
+  --small:calc(12px + var(--fs-base)); --body:calc(13px + var(--fs-base));
+  --title:calc(14px + var(--fs-base)); --subtitle:calc(15px + var(--fs-base));
+  --card_margin:4px; --card_padding:6px; --page_padding:6px;
   --max-width:1200px;
 }
 :root.large{--fs-base:2px;}
@@ -39,10 +39,10 @@ body{
 #screen::-webkit-scrollbar{display:none;}
 
 /* ================= Toolbar ================= */
-#toolbar{background:var(--primary_red);height:46px;display:flex;align-items:center;
-  padding:0 6px;position:sticky;top:0;z-index:20;gap:2px;}
-#toolbar .title{flex:1;color:#fff;font-size:18px;font-weight:bold;padding-left:4px;white-space:nowrap;overflow:hidden;}
-#toolbar .act{color:#fff;font-size:12px;padding:6px 8px;border-radius:4px;cursor:pointer;white-space:nowrap;font-weight:600;background:rgba(255,255,255,.12);min-height:36px;display:flex;align-items:center;}
+#toolbar{background:var(--primary_red);height:40px;display:flex;align-items:center;
+  padding:0 4px;position:sticky;top:0;z-index:20;gap:2px;}
+#toolbar .title{flex:1;color:#fff;font-size:16px;font-weight:bold;padding-left:4px;white-space:nowrap;overflow:hidden;}
+#toolbar .act{color:#fff;font-size:11px;padding:4px 6px;border-radius:4px;cursor:pointer;white-space:nowrap;font-weight:600;background:rgba(255,255,255,.12);min-height:30px;display:flex;align-items:center;}
 #toolbar .act:active{background:rgba(255,255,255,.25);}
 
 /* ================= 最新开奖区（白底） ================= */
@@ -52,17 +52,17 @@ body{
 #latestHead .all{color:var(--primary_red);font-size:var(--small);font-weight:bold;padding:2px 8px;cursor:pointer;}
 #latestScroller{display:flex;gap:0;overflow-x:auto;padding:2px 4px 6px;scrollbar-width:none;}
 #latestScroller::-webkit-scrollbar{display:none;}
-.lcard{flex:0 0 auto;width:148px;margin:4px;padding:6px;border-radius:6px;
+.lcard{flex:0 0 auto;width:140px;margin:3px;padding:5px;border-radius:5px;
   border:1px solid #E0E0E0;background:#fff;cursor:pointer;}
 .lcard .r1{display:flex;align-items:center;}
-.lcard .ln{font-size:13px;font-weight:bold;color:var(--primary_red);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:4px;}
-.lcard .iss{flex:1;text-align:right;font-size:11px;color:var(--text_secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.lcard .dt{font-size:11px;color:var(--text_secondary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.lcard .balls{display:flex;flex-wrap:wrap;margin-top:4px;}
-.lcard .bt{width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;
-  font-size:11px;font-weight:700;color:#fff;margin:1px;}
-.lcard .plus{font-size:12px;color:var(--text_secondary);margin:0 2px;line-height:18px;}
-.lcard .view{margin-top:3px;text-align:right;font-size:11px;font-weight:bold;color:var(--primary_red);}
+.lcard .ln{font-size:12px;font-weight:bold;color:var(--primary_red);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:3px;}
+.lcard .iss{flex:1;text-align:right;font-size:10px;color:var(--text_secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lcard .dt{font-size:10px;color:var(--text_secondary);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lcard .balls{display:flex;flex-wrap:wrap;margin-top:2px;}
+.lcard .bt{width:20px;height:20px;line-height:20px;text-align:center;border-radius:50%;
+  font-size:10px;font-weight:700;color:#fff;margin:1px;}
+.lcard .plus{font-size:11px;color:var(--text_secondary);margin:0 2px;line-height:16px;}
+.lcard .view{margin-top:2px;text-align:right;font-size:10px;font-weight:bold;color:var(--primary_red);}
 
 /* ================= 数据状态条 ================= */
 #dataStatus{background:#FFF3E0;color:#E65100;font-size:var(--small);text-align:center;
@@ -86,10 +86,11 @@ body{
 #upgradeBtn{display:none;font-size:11px;font-weight:bold;color:#fff;background:var(--primary_red);border-radius:4px;padding:4px 8px;cursor:pointer;white-space:nowrap;}
 
 /* ================= 彩种 Tab（2×4 吸顶） ================= */
-#tabBar{background:var(--primary_red);position:sticky;top:46px;z-index:19;padding:6px 6px 4px;}
-#tabGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px 4px;}
-.tab{height:48px;display:flex;align-items:center;justify-content:center;border-radius:5px;
-  color:#E6FFFFFF;font-size:15px;font-weight:bold;border:1px solid rgba(255,255,255,.35);
+#tabBar{background:var(--primary_red);position:sticky;top:40px;z-index:19;padding:4px 4px 2px;}
+#tabGrid{display:flex;overflow-x:auto;gap:4px;padding-bottom:2px;scrollbar-width:none;}
+#tabGrid::-webkit-scrollbar{display:none;}
+.tab{flex:0 0 auto;height:40px;min-width:68px;display:flex;align-items:center;justify-content:center;border-radius:5px;
+  color:#E6FFFFFF;font-size:13px;font-weight:bold;border:1px solid rgba(255,255,255,.35);padding:0 6px;
   background:transparent;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .tab.on{background:#fff;color:var(--primary_red);border:2px solid var(--primary_red);}
 #whiteLine{height:1px;background:#fff;opacity:.75;margin-top:4px;}
@@ -100,42 +101,42 @@ body{
   margin-bottom:var(--card_margin);padding:var(--card_padding);}
 
 /* 按期号查询 */
-#issueCard .t{color:var(--primary_red);font-size:var(--title);font-weight:bold;margin-bottom:6px;}
-#issueHint{font-size:var(--small);color:var(--text_secondary);margin-bottom:6px;line-height:1.4;}
+#issueCard .t{color:var(--primary_red);font-size:var(--title);font-weight:bold;margin-bottom:4px;}
+#issueHint{font-size:var(--micro);color:var(--text_secondary);margin-bottom:4px;line-height:1.3;}
 #issueRow{display:flex;align-items:center;}
-#issueInput{flex:1;height:40px;border:1px solid #CFD8DC;border-radius:6px;padding:0 10px;
+#issueInput{flex:1;height:36px;border:1px solid #CFD8DC;border-radius:5px;padding:0 8px;
   font-size:var(--body);color:var(--text_primary);background:#fff;outline:none;}
 #issueInput::placeholder{color:var(--text_secondary);}
-#btnByIssue{flex:0 0 auto;height:40px;line-height:40px;margin-left:6px;padding:0 14px;
-  background:var(--primary_blue);color:#fff;font-size:var(--body);border-radius:6px;
+#btnByIssue{flex:0 0 auto;height:36px;line-height:36px;margin-left:4px;padding:0 12px;
+  background:var(--primary_blue);color:#fff;font-size:var(--small);border-radius:5px;
   text-align:center;cursor:pointer;font-weight:600;}
 
 /* 选号对比 */
-#pickCard .lab{color:var(--primary_red);font-size:var(--title);font-weight:bold;margin-bottom:6px;}
-#pkSelectedText{color:var(--primary_red);font-size:var(--small);margin-top:2px;margin-bottom:4px;min-height:20px;}
-#pkSelectedBalls{display:flex;flex-wrap:wrap;margin-bottom:6px;min-height:32px;}
-#pkTitle{color:var(--text_primary);font-size:var(--body);font-weight:bold;}
-#pkGrid{display:flex;flex-wrap:wrap;margin-top:4px;margin-bottom:8px;}
+#pickCard .lab{color:var(--primary_red);font-size:var(--title);font-weight:bold;margin-bottom:4px;}
+#pkSelectedText{color:var(--primary_red);font-size:var(--micro);margin-top:1px;margin-bottom:2px;min-height:18px;}
+#pkSelectedBalls{display:flex;flex-wrap:wrap;margin-bottom:4px;min-height:28px;}
+#pkTitle{color:var(--text_primary);font-size:var(--small);font-weight:bold;}
+#pkGrid{display:flex;flex-wrap:wrap;margin-top:2px;margin-bottom:4px;}
 /* 后区 */
-#scSection{margin-top:2px;}
-#scSelectedText{color:var(--primary_blue);font-size:var(--small);margin-bottom:4px;min-height:20px;}
-#scSelectedBalls{display:flex;flex-wrap:wrap;margin-bottom:6px;min-height:32px;}
-#scTitle{color:var(--text_primary);font-size:var(--body);font-weight:bold;}
-#scGrid{display:flex;flex-wrap:wrap;margin-top:4px;margin-bottom:12px;}
+#scSection{margin-top:1px;}
+#scSelectedText{color:var(--primary_blue);font-size:var(--micro);margin-bottom:2px;min-height:18px;}
+#scSelectedBalls{display:flex;flex-wrap:wrap;margin-bottom:4px;min-height:28px;}
+#scTitle{color:var(--text_primary);font-size:var(--small);font-weight:bold;}
+#scGrid{display:flex;flex-wrap:wrap;margin-top:2px;margin-bottom:8px;}
 /* 模式 Chips（3D/排列三） */
-#chipRow{display:flex;margin:4px 0 2px;}
-.chip{font-size:var(--small);font-weight:bold;padding:6px 12px;border-radius:5px;
-  margin-right:6px;cursor:pointer;border:none;}
+#chipRow{display:flex;margin:2px 0 1px;}
+.chip{font-size:var(--micro);font-weight:bold;padding:4px 10px;border-radius:4px;
+  margin-right:4px;cursor:pointer;border:none;}
 .chip.on{background:var(--primary_red);color:#fff;}
 .chip.off{background:#ECEFF1;color:#546E7A;}
 /* 位置球（3D/排列三 百十个） */
-#posRow{display:flex;justify-content:center;margin-bottom:6px;gap:0;}
+#posRow{display:flex;justify-content:center;margin-bottom:4px;gap:0;}
 .posCol{flex:1;text-align:center;}
-.posCol .pt{color:#546E7A;font-size:12px;padding-bottom:3px;}
-.posCol .pball{width:28px;height:28px;line-height:28px;margin:0 auto;border-radius:50%;
-  font-size:11px;font-weight:700;color:#BDBDBD;background:#fff;border:1px solid #BDBDBD;cursor:pointer;}
+.posCol .pt{color:#546E7A;font-size:10px;padding-bottom:2px;}
+.posCol .pball{width:24px;height:24px;line-height:24px;margin:0 auto;border-radius:50%;
+  font-size:10px;font-weight:700;color:#BDBDBD;background:#fff;border:1px solid #BDBDBD;cursor:pointer;}
 .posCol .pball.on{background:var(--primary_red);color:#fff;border-color:var(--primary_red);}
-.posCol .ptip{color:#9E9E9E;font-size:10px;padding-top:2px;}
+.posCol .ptip{color:#9E9E9E;font-size:9px;padding-top:1px;}
 /* 选号球 */
 .ball{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;
   font-family:monospace;font-weight:700;background:#fff;border:1px solid var(--ball_border);
@@ -145,24 +146,24 @@ body{
 
 /* 按钮行 */
 #btnRow{display:flex;align-items:center;}
-#btnReset,#btnQuery{height:44px;flex:1;display:flex;align-items:center;justify-content:center;
-  border-radius:6px;font-size:var(--body);font-weight:600;color:#fff;cursor:pointer;border:none;}
-#btnReset{background:var(--button_gray);margin-right:6px;}
-#btnQuery{background:var(--button_red);margin-left:6px;}
+#btnReset,#btnQuery{height:38px;flex:1;display:flex;align-items:center;justify-content:center;
+  border-radius:5px;font-size:var(--small);font-weight:600;color:#fff;cursor:pointer;border:none;}
+#btnReset{background:var(--button_gray);margin-right:4px;}
+#btnQuery{background:var(--button_red);margin-left:4px;}
 
 /* ================= 查询结果 ================= */
-#resultCard .head{display:flex;align-items:center;padding-bottom:4px;}
+#resultCard .head{display:flex;align-items:center;padding-bottom:2px;}
 #resultCard .ht{flex:1;text-align:center;font-size:var(--title);font-weight:bold;color:var(--text_primary);}
-#btnHistory{font-size:var(--small);font-weight:bold;color:var(--primary_red);
-  background:#FFF0EC;border:1px solid #F4C7BC;border-radius:4px;padding:3px 8px;cursor:pointer;}
-#selText{padding-bottom:2px;font-size:var(--small);color:var(--text_hint);line-height:1.4;white-space:pre-wrap;}
-#resultBallsRow .rb{display:flex;align-items:center;margin-top:2px;flex-wrap:wrap;}
-#resultBallsRow .rblb{color:var(--red_ball);font-size:var(--small);font-weight:bold;margin-right:4px;}
-#resultBallsRow .rbsl{color:var(--blue_ball);font-size:var(--small);font-weight:bold;margin-right:4px;}
+#btnHistory{font-size:var(--micro);font-weight:bold;color:var(--primary_red);
+  background:#FFF0EC;border:1px solid #F4C7BC;border-radius:3px;padding:2px 6px;cursor:pointer;}
+#selText{padding-bottom:1px;font-size:var(--small);color:var(--text_hint);line-height:1.3;white-space:pre-wrap;}
+#resultBallsRow .rb{display:flex;align-items:center;margin-top:1px;flex-wrap:wrap;}
+#resultBallsRow .rblb{color:var(--red_ball);font-size:var(--micro);font-weight:bold;margin-right:3px;}
+#resultBallsRow .rbsl{color:var(--blue_ball);font-size:var(--micro);font-weight:bold;margin-right:3px;}
 #resultBallsRow .ball{pointer-events:none;}
-.hline{height:0.5px;background:var(--divider);margin:4px 0;}
+.hline{height:0.5px;background:var(--divider);margin:2px 0;}
 /* 结果表头 */
-#tblHead{display:flex;align-items:center;padding:6px 0 4px;background:#F7F7F7;}
+#tblHead{display:flex;align-items:center;padding:4px 0 2px;background:#F7F7F7;}
 #tblHead span{text-align:center;font-weight:bold;}
 #tblHead .hPrize{flex:1.3;font-size:var(--small);color:var(--text_primary);}
 #tblHead .hPri{flex:1.1;font-size:var(--small);color:var(--red_ball);}
@@ -172,13 +173,13 @@ body{
 /* 结果行 */
 .row{display:flex;align-items:center;padding:0;}
 .row:nth-child(even){background:#FAFAFA;}
-.row div{text-align:center;padding:8px 2px;font-size:14px;}
+.row div{text-align:center;padding:6px 2px;font-size:13px;}
 .row .cPrize{flex:1.3;font-weight:bold;}
 .row .cPri{flex:1.1;font-weight:bold;}
 .row .cSec{flex:1.1;font-weight:bold;}
 .row .cCnt{flex:0.9;font-weight:bold;}
 .row .cAct{flex:1.1;}
-.row .actbtn{padding:6px 0;border-radius:6px;font-size:14px;font-weight:bold;color:#fff;display:inline-block;min-width:48px;cursor:pointer;}
+.row .actbtn{padding:4px 0;border-radius:5px;font-size:12px;font-weight:bold;color:#fff;display:inline-block;min-width:42px;cursor:pointer;}
 .row .actbtn.yes{background:var(--button_red);}
 .row .actbtn.no{background:var(--button_gray);}
 .rdiv{height:0.5px;background:#EFEFEF;}
@@ -209,15 +210,17 @@ body{
 .hitem .bt{width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;font-size:10px;font-weight:700;color:#fff;margin:1px;}
 .hitem .view{text-align:right;margin-top:3px;}
 .hitem .view span{font-size:var(--micro);font-weight:bold;color:#fff;background:var(--button_red);border-radius:4px;padding:3px 8px;cursor:pointer;}
-.tierRow{display:flex;align-items:center;border-bottom:0.5px solid var(--divider);padding:8px 2px;font-size:14px;}
+.tierRow{display:flex;align-items:center;border-bottom:0.5px solid var(--divider);padding:6px 2px;font-size:13px;}
 .tierRow .nm{flex:1;}
 .tierRow .nm .pr{font-weight:bold;}
 .tierRow .nm .pr.off{color:#9E9E9E;}
-.tierRow .nm .mc{font-size:11px;color:#546E7A;margin-top:1px;line-height:1.3;}
-.tierRow .cnt{text-align:right;font-size:12px;color:var(--text_secondary);min-width:52px;line-height:1.3;}
-.tierRow .cnt .apn{font-size:10px;color:#1565C0;}
-.tierRow .amt{text-align:right;font-weight:bold;color:var(--primary_red);margin-left:4px;min-width:70px;line-height:1.3;}
-.tierRow .amt .apa{font-size:10px;color:#1565C0;font-weight:normal;}
+.tierRow .nm .mc{font-size:10px;color:#546E7A;margin-top:1px;line-height:1.2;}
+.tierRow .cnt{text-align:right;font-size:11px;color:var(--text_secondary);min-width:46px;line-height:1.2;}
+.tierRow .cnt .apn{font-size:9px;color:#1565C0;}
+.tierRow .amt{text-align:right;font-weight:bold;color:var(--primary_red);margin-left:2px;min-width:62px;line-height:1.2;}
+.tierRow .amt .apa{font-size:9px;color:#1565C0;font-weight:normal;}
+.tierAppend .nm{padding-left:12px;}
+.tierAppend .cnt,.tierAppend .amt{font-size:11px;color:#1565C0;}
 .tierOff{background:#F5F5F5;}
 .empty{text-align:center;color:var(--text_secondary);padding:24px;font-size:var(--small);}
 
@@ -226,16 +229,16 @@ body{
 @media (min-width: 768px) {
   :root { --max-width: 1200px; }
   body { padding: 8px 0; }
-  #content { display: flex; flex-wrap: wrap; gap: 10px; }
-  #issueCard { flex: 1 1 260px; min-width: 240px; }
-  #pickCard { flex: 2 1 380px; min-width: 320px; }
+  #content { display: flex; flex-wrap: wrap; gap: 8px; }
+  #issueCard { flex: 1 1 240px; min-width: 220px; }
+  #pickCard { flex: 2 1 360px; min-width: 300px; }
   #resultCard { flex: 1 1 100%; }
   #latestScroller { flex-wrap: wrap; }
-  .lcard { width: 160px; }
+  .lcard { width: 150px; }
   .dialog { width: 480px; max-width: 90vw; }
-  #maskAuth .dialog { width: 380px; }
-  #maskSessions .dialog { width: 440px; }
-  #maskLatest .dialog { height: 520px; }
+  #maskAuth .dialog { width: 360px; }
+  #maskSessions .dialog { width: 420px; }
+  #maskLatest .dialog { height: 480px; }
 }
 
 @media (min-width: 1024px) {
@@ -243,15 +246,15 @@ body{
   body { padding: 16px 0; }
   #latestScroller { flex-wrap: nowrap; }
   .dialog { width: 560px; max-width: 80vw; max-height: 85vh; }
-  #maskAuth .dialog { width: 400px; }
-  #maskSessions .dialog { width: 480px; }
+  #maskAuth .dialog { width: 380px; }
+  #maskSessions .dialog { width: 460px; }
 }
 
 @media (max-width: 360px) {
-  :root { --card_padding: 8px; --page_padding: 8px; --micro: 11px; --tiny: 12px; --small: 13px; --body: 14px; }
-  #toolbar .title { font-size: 15px; }
+  :root { --card_padding: 6px; --page_padding: 6px; --micro: 10px; --tiny: 11px; --small: 12px; --body: 13px; }
+  #toolbar .title { font-size: 14px; }
   #toolbar .act { font-size: 10px; padding: 3px 4px; }
-  .tab { font-size: 13px; height: 40px; }
+  .tab { font-size: 12px; height: 36px; }
   .dialog { width: 95vw; max-height: 85vh; }
 }
 </style>
@@ -298,7 +301,7 @@ body{
     <div id="content">
       <!-- 按期号查询 -->
       <div class="card" id="issueCard">
-        <div class="t">按期号查询（只记得期号？直接输）</div>
+        <div class="t" id="issueCardTitle">正在查询双色球</div>
         <div id="issueHint"></div>
         <div id="issueRow">
           <input id="issueInput" inputmode="numeric" placeholder="">
@@ -665,6 +668,7 @@ function selectTab(i){
   var tabs=$('tabGrid').children;
   for(var k=0;k<tabs.length;k++)tabs[k].className='tab'+(k==i?' on':'');
   draws=[];
+  $('issueCardTitle').textContent='正在查询'+cur.name;
   buildPicker();
   loadHistory();
 }
@@ -814,7 +818,7 @@ function setIssueHint(){
   var maxIssue='';
   if(draws.length)maxIssue=draws[0].issue;
   $('issueHint').textContent='格式示例：'+issueExample(cur.code)+(maxIssue?' ｜ 最新：'+maxIssue:'')+' ｜ 支持输后几位模糊匹配';
-  $('issueInput').placeholder='如 '+issuePattern(cur.code);
+  $('issueInput').placeholder='输入'+cur.name+'期号，如 '+issuePattern(cur.code);
 }
 function issueExample(c){
   if(cur.code==='3d'||cur.code==='p3'||cur.code==='p5'||cur.code==='7lc')return pad2(2026)+pad2(8)+'268';
@@ -861,12 +865,22 @@ async function doIssueQuery(){
     var hc=hitCount(cur,selPri,selPSet,seSec,hit);
     if(hc.pc===rl[0]&&hc.sc===rl[1]){matched={name:rl[2],amt:rl[3],pc:hc.pc,sc:hc.sc};break;}
   }
-  $('selText').textContent='期号 '+hit.issue+'（'+hit.date+'）：'+(matched?'命中【'+matched.name+'】'+(matched.amt?'，单注奖金 '+matched.amt+' 元':''):'未命中任何奖项');
+  var ns='';
+  if(cur.pos){
+    ns=selPri.map(function(n){return pad2(n);}).join(' ');
+  }else{
+    ns=Array.from(selPri).sort(function(a,b){return a-b;}).map(function(n){return pad2(n);}).join(' ');
+    if(cur.hasSec){
+      var ss2=Array.from(selSec).sort(function(a,b){return a-b;}).map(function(n){return pad2(n);}).join(' ');
+      ns+=' + '+ss2;
+    }
+  }
+  $('selText').textContent='查询号码：'+ns+' | 期号 '+hit.issue+'（'+hit.date+'）：'+(matched?'命中【'+matched.name+'】'+(matched.amt?'，单注奖金 '+matched.amt+' 元':''):'未命中任何奖项');
   $('selText').style.color=matched?'#C62828':'#546E7A';
   $('selText').style.fontWeight='bold';
-  $('rRedBalls').innerHTML=hit.dmain.map(function(n){return '<span class="ball on" style="width:28px;height:28px;margin:2px;font-size:10px;">'+n+'</span>';}).join('');
+  $('rRedBalls').innerHTML=hit.dmain.map(function(n){return '<span class="ball on" style="width:24px;height:24px;margin:2px;font-size:10px;">'+n+'</span>';}).join('');
   if(cur.hasSec&&hit.dsec.length){
-    $('rBlueBalls').innerHTML=hit.dsec.map(function(n){return '<span class="ball sec on" style="width:28px;height:28px;margin:2px;font-size:10px;">'+n+'</span>';}).join('');
+    $('rBlueBalls').innerHTML=hit.dsec.map(function(n){return '<span class="ball sec on" style="width:24px;height:24px;margin:2px;font-size:10px;">'+n+'</span>';}).join('');
     $('rBlueRow').style.display='';
   }else{$('rBlueBalls').innerHTML='';$('rBlueRow').style.display='none';}
   var c=$('resultContainer');c.innerHTML='';
@@ -970,16 +984,26 @@ function matchAll(selPri,selSec){
 }
 function renderResults(results,selPri){
   var totalHit=results.reduce(function(s,r){return s+r.count;},0);
-  $('selText').textContent=(totalHit>0?'您选的号码，在历史上共命中 '+totalHit+' 期：':'您选的号码，在历史上暂未命中任何奖项')
+  var ns='';
+  if(cur.pos){
+    ns=selPri.map(function(n){return pad2(n);}).join(' ');
+  }else{
+    ns=Array.from(selPri).sort(function(a,b){return a-b;}).map(function(n){return pad2(n);}).join(' ');
+    if(cur.hasSec){
+      var ss=Array.from(selSec).sort(function(a,b){return a-b;}).map(function(n){return pad2(n);}).join(' ');
+      ns+=' + '+ss;
+    }
+  }
+  $('selText').textContent='查询号码：'+ns+'\n'+(totalHit>0?'在历史上共命中 '+totalHit+' 期：':'在历史上暂未命中任何奖项')
     +(cur.vers.length>1?'\n（本彩种有 '+cur.vers.length+' 个政策版本，已按各期适用版本匹配）':'');
   $('selText').style.color=totalHit>0?'#C62828':'#546E7A';
   $('selText').style.fontWeight='bold';
   // 结果区已选球
   var sorted=Array.from(selPri).sort(function(a,b){return a-b;});
-  $('rRedBalls').innerHTML=sorted.map(function(n){return '<span class="ball on" style="width:28px;height:28px;margin:2px;font-size:10px;">'+pad2(n)+'</span>';}).join('');
+  $('rRedBalls').innerHTML=sorted.map(function(n){return '<span class="ball on" style="width:24px;height:24px;margin:2px;font-size:10px;">'+pad2(n)+'</span>';}).join('');
   if(cur.hasSec){
     var ss=Array.from(selSec).sort(function(a,b){return a-b;});
-    $('rBlueBalls').innerHTML=ss.map(function(n){return '<span class="ball sec on" style="width:28px;height:28px;margin:2px;font-size:10px;">'+pad2(n)+'</span>';}).join('');
+    $('rBlueBalls').innerHTML=ss.map(function(n){return '<span class="ball sec on" style="width:24px;height:24px;margin:2px;font-size:10px;">'+pad2(n)+'</span>';}).join('');
   }
   // 表头（单区隐藏命中蓝球列）
   var secShow=cur.hasSec;
@@ -1179,56 +1203,56 @@ function showTierRows(cfg,draw,ver){
       matchLines.push(desc);
     });
     var matchStr=matchLines.join(' / ');
-    // DLT 追加数据（对齐 APK: 合并基本+追加注数，金额分行带标签）
+    // DLT 追加数据
     var atd=hasAppend?appendTiers[uniqNames.indexOf(name)]||null:null;
     var appCnt=atd?atd.count:null;
     var baseCnt=td?td.count:null;
     var baseAmt=td?td.amount:null;
     var appAmt=atd?atd.amount:null;
-    // 注数（对齐 APK: 合并基本+追加为总注数，追加注数移到金额列一起展示）
-    var cntStr='—';
+    // 基本投注注数
+    var baseCntStr='—';
     if(isFuyunOff){
-      cntStr='—（奖池未达门槛，本奖项停发）';
+      baseCntStr='—（奖池未达门槛，本奖项停发）';
     }else if(baseCnt!==null){
-      if(hasAppend&&atd){
-        var mergedCnt=baseCnt+(appCnt>0?appCnt:0);
-        if(mergedCnt>0)cntStr=mergedCnt.toLocaleString()+'注';
-        else cntStr='空开';
-      }else{
-        if(baseCnt>0)cntStr=baseCnt.toLocaleString()+'注';
-        else cntStr='空开';
-      }
+      baseCntStr=baseCnt>0?baseCnt.toLocaleString()+'注':'空开';
     }
-    // 金额（对齐 APK: 基本投注/追加投注 分行，追加注数+金额一起展示）
-    var amtStr='—';
+    // 基本投注金额
+    var baseAmtStr='—';
     if(isFuyunOff){
-      amtStr='—（奖池未达门槛，本奖项停发）';
+      baseAmtStr='—（奖池未达门槛，本奖项停发）';
     }else if(baseCnt!==null){
-      if(hasAppend&&atd){
-        var parts=[];
-        if(baseCnt>0&&baseAmt>0)parts.push('基本投注 '+fmtAmt(baseAmt));
-        else if(baseCnt===0)parts.push('空开无奖金');
-        else parts.push('基本投注 —');
-        if(appCnt>0&&appAmt>0)parts.push('<span class="apa">追加'+appCnt.toLocaleString()+'注 '+fmtAmt(appAmt)+'</span>');
-        else if(appCnt>0)parts.push('<span class="apa">追加'+appCnt.toLocaleString()+'注 —</span>');
-        else parts.push('<span class="apa">追加空开 —</span>');
-        amtStr=parts.join('<br>');
-      }else{
-        if(baseAmt>0)amtStr=fmtAmt(baseAmt);
-        else if(baseCnt>0)amtStr='—';
-        else amtStr='空开无奖金';
-      }
+      if(baseAmt>0)baseAmtStr=fmtAmt(baseAmt);
+      else if(baseCnt>0)baseAmtStr='—';
+      else baseAmtStr='空开无奖金';
     }
-    // 构建行
+    // 追加投注注数
+    var appCntStr='';
+    if(hasAppend&&atd){
+      appCntStr=appCnt>0?appCnt.toLocaleString()+'注':(appCnt===0?'空开':'—');
+    }
+    // 追加投注金额
+    var appAmtStr='';
+    if(hasAppend&&atd){
+      appAmtStr=appCnt>0&&appAmt>0?fmtAmt(appAmt):(appCnt>0?'—':'空开无奖金');
+    }
+    // 构建主行
     var rowClass='tierRow';
     if(isFuyunOff)rowClass+=' tierOff';
     html+='<div class="'+rowClass+'">'
       +'<div class="nm"><div class="pr'+(isFuyunOff?' off':'')+'">'+(isFuyunOff?name+'（本期不开放）':name)+'</div>'
       +(matchStr?'<div class="mc">'+matchStr+'</div>':'')
       +'</div>'
-      +'<div class="cnt">'+cntStr+'</div>'
-      +'<div class="amt">'+amtStr+'</div>'
+      +'<div class="cnt">'+baseCntStr+'</div>'
+      +'<div class="amt">'+baseAmtStr+'</div>'
       +'</div>';
+    // 追加投注独立行（在对应奖级下方展示）
+    if(hasAppend&&atd){
+      html+='<div class="tierRow tierAppend">'
+        +'<div class="nm"><div class="pr" style="color:#1565C0;font-size:12px;">└ 追加投注</div></div>'
+        +'<div class="cnt"><span class="apa">'+appCntStr+'</span></div>'
+        +'<div class="amt"><span class="apa">'+appAmtStr+'</span></div>'
+        +'</div>';
+    }
   });
   return html;
 }
@@ -1562,6 +1586,10 @@ buildPicker();
 loadAllLatest();
 loadHistory();
 checkAuthOnLoad();
+// 自动轮巡：每2分钟刷新所有彩种最新数据
+setInterval(function(){loadAllLatest();},120000);
+// 自动轮巡：每5分钟刷新当前彩种历史数据
+setInterval(function(){loadHistory();},300000);
 </script>
 </body>
 </html>
