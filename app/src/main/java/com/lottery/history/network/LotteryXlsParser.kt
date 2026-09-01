@@ -321,7 +321,7 @@ object LotteryXlsParser {
                                 jackpotAmount == null -> ConditionalValue.HOLD
                                 jackpotAmount >= 1_500_000_000L -> ConditionalValue.ON  // ≥15亿启动
                                 jackpotAmount < 300_000_000L -> ConditionalValue.OFF  // <3亿停止
-                                else -> ConditionalValue.OFF  // 3亿~15亿间：未达启动阈值，不开启
+                                else -> ConditionalValue.HOLD  // 3亿~15亿间：迟滞区间，维持上期状态（由 resolveFuyunHysteresis 按时间正序回填）
                             }
                         )
                     }
@@ -378,8 +378,29 @@ object LotteryXlsParser {
                 // 单行错误忽略
             }
         }
+        resolveFuyunHysteresis(result)
         result.sortByDescending { it.issue }
         return result
+    }
+
+    /**
+     * Fuyun hysteresis backfill. 
+     */
+    private fun resolveFuyunHysteresis(draws: MutableList<LotteryDraw>) {
+        var prev = ConditionalValue.OFF
+        for (d in draws.sortedBy { it.issue }) {
+            val cur = d.conditionalFlags[ConditionalKey.SSQ_FUYUN] ?: continue
+            val resolved = if (cur == ConditionalValue.HOLD) prev else cur
+            prev = resolved
+            if (resolved != cur) {
+                val idx = draws.indexOfFirst { it === d }
+                if (idx >= 0) {
+                    draws[idx] = d.copy(
+                        conditionalFlags = d.conditionalFlags + (ConditionalKey.SSQ_FUYUN to resolved)
+                    )
+                }
+            }
+        }
     }
 
     // ============ 结构化奖级提取（按已知数据格式精确提取，不猜测）============
