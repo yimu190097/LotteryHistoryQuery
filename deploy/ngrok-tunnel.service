@@ -1,0 +1,18 @@
+[Unit]
+Description=ngrok HTTPS tunnel (fixed domain)
+After=network-online.target lottery-server.service
+Wants=network-online.target
+Requires=lottery-server.service
+
+[Service]
+Type=simple
+# 固定域名：在 https://dashboard.ngrok.com/domains 领取后替换
+# 免费版送 1 个静态域名，重启网址不变
+ExecStart=/usr/local/bin/ngrok http --domain=showbiz-unbridle-decent.ngrok-free.dev 3000 --log=stdout
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
