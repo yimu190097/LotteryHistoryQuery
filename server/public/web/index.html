@@ -1318,23 +1318,23 @@ function selectTabTo(cd){
 /* 福运奖开关判定（对齐 App LotteryXlsParser，数据驱动优先 + 奖池兜底）：
    双色球数据源布局(0-based): 0期号 1日期 2-7红 8蓝 9-14出球顺序 15销售额 16奖池 17-28前6对奖级 29,30第7对(福运奖)
    官方公布第7对福运奖数据 → ON；否则奖池>=15亿 ON；<3亿 OFF；[3亿,15亿)迟滞区间保守 OFF */
-function isFuyunOn(t){
+function fuyunRaw(t){
   // 福运奖启停规则（官方）：奖池≥15亿启动，<3亿停止
   // 数据格式：2026版起每期固定7对奖级，第7对(t[29..30])为福运奖(注数,金额)
   // 注意：数据源始终包含第7对占位数据(0/5)，不能仅凭存在性判断ON/OFF
   var hasPair=t.length>30&&t[29]!==undefined&&t[30]!==undefined&&t[29]!=='-'&&t[30]!=='-';
   if(hasPair){
     var cnt=parseInt(t[29],10);
-    if(cnt>0)return true;  // 有人中福运奖，确定开启（数据驱动）
+    if(cnt>0)return 'ON';  // 有人中福运奖，确定开启（数据驱动）
     // 注数为0：检查奖池阈值判断
     var jp=t.length>16?parseInt(t[16],10):0;
-    if(!jp)return false;
-    if(jp>=1500000000)return true;  // ≥15亿=启动阈值
-    if(jp<300000000)return false;   // <3亿=停止阈值
-    return false;  // 3亿~15亿之间：未达启动阈值，不开启
+    if(!jp)return 'OFF';
+    if(jp>=1500000000)return 'ON';  // ≥15亿=启动阈值
+    if(jp<300000000)return 'OFF';   // <3亿=停止阈值
+    return 'HOLD';  // [3亿,15亿)迟滞区间，回填
   }
   // 无第7对奖级（2003版数据）：奖池从未达15亿，福运奖不适用
-  return false;
+  return 'OFF';
 }
 function parseNumberSafe(raw){
   var s=raw.trim();if(!s)return null;
@@ -1422,9 +1422,11 @@ function parseDraws(text){
       +(cur.hasSec&&bsec.length?('<span class="plus">+</span>'+bsec.map(function(n){return '<span class="bt" style="background:var(--blue_ball)">'+n+'</span>';}).join('')):''),
       dmain:bmain, dsec:bsec,
       sales:sales, jackpot:jackpot,
-      fuyun:cur.code==='ssq'&&isFuyunOn(t),
+      fuyun:null, fyRaw:(cur.code==='ssq'?fuyunRaw(t):'OFF'),
       tiers:displayTiers, allTiers:tiers, appendTiers:appendTiers});
   }
+  // fuyun hysteresis backfill: HOLD keeps prev state, ascending by issue
+  if(cur.code==='ssq'){var asc=out.slice().sort(function(a,b){return a.issue<b.issue?-1:(a.issue>b.issue?1:0);});var prev=false;for(var k=0;k<asc.length;k++){var st=asc[k].fyRaw||'OFF';var v=(st==='ON')?true:((st==='OFF')?false:prev);asc[k].fuyun=v;prev=v;}}
   return out;
 }
 async function loadHistory(){
