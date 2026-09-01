@@ -6,9 +6,11 @@ Requires=lottery-server.service
 
 [Service]
 Type=simple
-# 固定域名：在 https://dashboard.ngrok.com/domains 领取后替换
-# 免费版送 1 个静态域名，重启网址不变
-ExecStart=/usr/local/bin/ngrok http --domain=showbiz-unbridle-decent.ngrok-free.dev 3000 --log=stdout
+# 必须显式指定 HOME，否则 systemd 环境下 $HOME 未定义，ngrok 读不到 authtoken 报 4018
+Environment=HOME=/root
+# 新版 ngrok 已废弃 --domain，改用 --url 指定固定域名
+# 固定域名在 https://dashboard.ngrok.com/domains 领取（免费版送 1 个）
+ExecStart=/usr/local/bin/ngrok http --url=https://showbiz-unbridle-decent.ngrok-free.dev 3000 --log=stdout
 Restart=always
 RestartSec=5
 StandardOutput=journal
