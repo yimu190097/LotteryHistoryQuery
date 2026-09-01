@@ -59,3 +59,12 @@ server/public/uploads/
 # 部署生成的密钥文件
 server/.env
 deploy/.env.local
+
+# IDE 工具产物
+.trae-html-share-packages/
+
+# ngrok token
+.ngrok_token
+
+# 临时验证产物
+/tmp/
