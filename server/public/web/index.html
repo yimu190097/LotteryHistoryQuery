@@ -266,7 +266,7 @@ body{
     <div id="toolbar">
       <div class="title">开奖历史查询</div>
       <div class="act" onclick="toggleFontSize()" id="fontBtn" title="切换字号大小">Aa</div>
-      <div class="act" onclick="openAuthDialog()">登录</div>
+      <div class="act" id="loginBtn" onclick="openAuthDialog()">登录</div>
       <div class="act" onclick="downloadUserApk()">下载APP</div>
       <div class="act" onclick="refreshData()">刷新</div>
     </div>
@@ -304,7 +304,7 @@ body{
         <div class="t" id="issueCardTitle">正在查询双色球</div>
         <div id="issueHint"></div>
         <div id="issueRow">
-          <input id="issueInput" inputmode="numeric" placeholder="">
+          <input id="issueInput" name="issue_no" inputmode="numeric" autocomplete="off" placeholder="">
           <div id="btnByIssue" onclick="doIssueQuery()">查该期</div>
         </div>
       </div>
@@ -372,8 +372,8 @@ body{
 <div class="mask" id="maskAuth" onclick="if(event.target===this)closeMask('maskAuth')"><div class="dialog" style="width:360px">
   <div class="dhead auth-title" id="authTitle">登录<span class="close" onclick="closeMask('maskAuth')">关闭</span></div>
   <div class="dbody">
-    <input class="auth-field" id="authPhone" placeholder="请输入手机号" inputmode="numeric">
-    <input class="auth-field" id="authPass" type="password" placeholder="请输入密码（至少6位）">
+    <input class="auth-field" id="authPhone" name="phone" placeholder="请输入手机号" inputmode="numeric" autocomplete="tel">
+    <input class="auth-field" id="authPass" name="password" type="password" placeholder="请输入密码（至少6位）" autocomplete="current-password">
     <button class="auth-btn" id="authBtn" onclick="submitAuth()">登录</button>
     <div class="auth-switch" id="authSwitch" onclick="toggleAuthMode()">没有账号？去注册</div>
   </div>
@@ -497,6 +497,7 @@ function updateUserBar() {
   var upgrade = $('upgradeBtn');
   if (authState.token) {
     $('userPhone').textContent = maskedPhone(authState.phone);
+    $('loginBtn').textContent = '退出';
     $('quotaInfo').innerHTML = fmtQuota(authState.planType, authState.freeUsed, authState.freeLimit, authState.monthlyExpireAt, authState.vipExpired);
     // 颜色条
     bar.className = '';
@@ -514,6 +515,7 @@ function updateUserBar() {
     }
   } else {
     $('userPhone').textContent = '点击登录';
+    $('loginBtn').textContent = '登录';
     $('quotaInfo').innerHTML = '登录后每日免费查询 ' + authState.freeLimit + ' 次';
     bar.className = 'guest';
     upgrade.style.display = 'none';
@@ -832,6 +834,7 @@ function focusIssueInput(){$('issueInput').focus();}
 
 /* ---------- 查询 ---------- */
 async function doQuery(){
+  if(!authState.token){openAuthDialog();return;}
   if(draws.length===0){toast('请先刷新获取开奖数据');return;}
   var hasSel = cur.pos ? posVals.every(function(v){return v>=0;})
     : (selMain.size>0 && (!cur.hasSec || selSec.size>0));
@@ -845,6 +848,7 @@ async function doQuery(){
 }
 /* 按期号查询：后缀模糊匹配单期，用当期规则版本判定是否命中 */
 async function doIssueQuery(){
+  if(!authState.token){openAuthDialog();return;}
   var inp=($('issueInput').value||'').trim();
   if(!inp){setIssueHint();$('issueInput').focus();toast('请输入期号');return;}
   if(draws.length===0){toast('请先刷新获取开奖数据');return;}
@@ -1381,22 +1385,37 @@ function parseDraws(text){
     var ver=verForDate(cur,t[1]);
     var tierCount=ver&&ver.tc?ver.tc:(cur.tierCount||7);
     var displayTiers=validTiers.slice(0,tierCount);
-    // DLT 追加投注数据提取（对齐 APK LotteryXlsParser）
-    // 数据源格式：7基本奖级对 + 7追加占位对(全0) + 实际追加数据
+    // DLT 追加投注数据提取（对齐 APK LotteryXlsParser 真实字段布局）
+    // dlt2_desc.txt 1-based 布局（0-based 下标）：
+    //   前缀 0-10 = 期号+日期+7号码(5前2后)+销售+奖池
+    //   基本投注 11-24 = 7 对（基本1~7等，所有版本通用）
+    //   基本尾部 25-28 = 2 对（2019版=基本8/9等；2009/2007=基本8等+忽略；2026/2014=全0忽略）
+    //   追加投注 29-36 = 4 对（追加1~4等）
+    //   追加5等 count = 37，amount = 基本5等×追加比例
+    //   追加6~7等：源不单独给，count=0，amount = 基本6/7等×比例
     var appendTiers=null;
     if(cur.code==='dlt'&&ver&&ver.apc){
-      var appendStart=tierStart+28; // 跳过7基本+7占位=14对=28个字段
+      var ratio=(ver.d>='2019-02-18')?0.8:0.6; // 2007~2014年追加比例60%，2019年起80%
+      function baseAmtAt(i){var x=displayTiers[i];return (x&&x.amount>0)?x.amount:0;}
       var appendData=[];
-      for(var ak=0;ak<ver.apc;ak++){
-        var aci=appendStart+ak*2,aai=appendStart+ak*2+1;
-        if(aci>=t.length||aai>=t.length)break;
+      // 追加1~4等：4 对（下标 29~36）
+      for(var ak=0;ak<4;ak++){
+        var aci=29+ak*2,aai=30+ak*2;
+        if(aci>=t.length||aai>=t.length){appendData.push(null);continue;}
         var acRaw=t[aci],aaRaw=t[aai];
         if(acRaw==='-'||aaRaw==='-'||!acRaw||!aaRaw){appendData.push(null);continue;}
         var acnt=parseNumberSafe(acRaw),aamt=parseNumberSafe(aaRaw);
         if(acnt===null||aamt===null){appendData.push(null);continue;}
         appendData.push({count:acnt,amount:aamt});
       }
-      appendTiers=appendData;
+      // 追加5等：count=字段38(下标37)，amount=基本5等×比例
+      var a5Raw=t[37];
+      var a5cnt=(a5Raw==='-'||!a5Raw)?0:(parseNumberSafe(a5Raw)||0);
+      appendData.push({count:a5cnt,amount:Math.round(baseAmtAt(4)*ratio)});
+      // 追加6~7等：count=0，amount=基本6/7等×比例
+      appendData.push({count:0,amount:Math.round(baseAmtAt(5)*ratio)});
+      appendData.push({count:0,amount:Math.round(baseAmtAt(6)*ratio)});
+      appendTiers=appendData.slice(0,ver.apc);
     }
     out.push({issue:t[0],date:t[1],main:main,sec:sec,
       ballHtml:bmain.map(function(n){return '<span class="bt" style="background:var(--red_ball)">'+n+'</span>';}).join('')
@@ -1496,7 +1515,7 @@ async function downloadUserApk(){
 var authMode='login';
 function openAuthDialog(){
   if(authState.token){
-    var info='当前登录：'+maskedPhone(authState.phone)+'\n\n[确定] 退出登录\n[取消] 管理终端';
+    var info='当前登录：'+maskedPhone(authState.phone)+'\n\n点击「确定」退出当前账号\n点击「取消」管理登录终端';
     var r=confirm(info);
     if(r){logout();}else{showSessionManager();}
   }else{

@@ -14,7 +14,7 @@
     <h1>彩票后台管理</h1>
     <p class="subtitle">Lottery Admin Panel v1.0</p>
     <form onsubmit="handleLogin(event)">
-      <input type="text" id="loginUsername" placeholder="管理员账号" required autocomplete="username">
+      <input type="text" id="loginUsername" placeholder="管理员账号" required autocomplete="off">
       <input type="password" id="loginPassword" placeholder="管理员密码" required autocomplete="current-password">
       <button type="submit">登 录</button>
       <div id="loginError" class="error"></div>
@@ -52,7 +52,7 @@
       </a>
     </nav>
     <div class="user-info">
-      <div id="currentUser">admin</div>
+      <div id="currentUser"></div>
       <a class="logout" onclick="handleLogout()">退出登录</a>
       <div class="theme-toggle" onclick="toggleTheme()" title="切换深色/浅色模式">
         <span class="theme-icon" id="themeIcon">🌙</span>
