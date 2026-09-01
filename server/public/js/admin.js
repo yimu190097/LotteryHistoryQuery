@@ -134,13 +134,43 @@ function showApp(admin) {
   $('#loginPage').style.display = 'none';
   $('#appPage').style.display = 'flex';
   $('#currentUser').textContent = admin.username;
+  // 设置头像字母
+  const avatarEl = $('#avatarLetter');
+  if (avatarEl) {
+    avatarEl.textContent = (admin.username || 'A').charAt(0).toUpperCase();
+  }
   navigate('dashboard');
 }
+
+// ==================== 侧边栏折叠 ====================
+function toggleSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  if (sidebar) {
+    sidebar.classList.toggle('open');
+  }
+}
+
+// 移动端点击内容区关闭侧边栏
+document.addEventListener('click', function(e) {
+  if (window.innerWidth <= 768) {
+    const sidebar = document.querySelector('.sidebar');
+    const toggle = document.querySelector('.sidebar-toggle');
+    if (sidebar && sidebar.classList.contains('open') &&
+        !sidebar.contains(e.target) && !(toggle && toggle.contains(e.target))) {
+      sidebar.classList.remove('open');
+    }
+  }
+});
 
 // ==================== 导航 ====================
 function navigate(page) {
   $$('.sidebar nav a').forEach(a => a.classList.remove('active'));
   $(`.sidebar nav a[data-page="${page}"]`)?.classList.add('active');
+
+  // 移动端自动关闭侧边栏
+  if (window.innerWidth <= 768) {
+    document.querySelector('.sidebar')?.classList.remove('open');
+  }
 
   switch (page) {
     case 'dashboard': renderDashboard(); break;
@@ -156,10 +186,19 @@ function navigate(page) {
 async function renderDashboard() {
   $('#mainContent').innerHTML = `
     <div class="page-header"><h1>仪表盘</h1></div>
-    <div class="stats-grid" id="statsGrid"><div class="empty-state">加载中...</div></div>
+    <div class="stats-grid" id="statsGrid">
+      <div class="empty-state"><div class="icon">⏳</div><div class="title">加载中...</div></div>
+    </div>
+    <div class="config-summary" id="configSummary"></div>
+    <div class="card" id="trendCard" style="display:none">
+      <div class="card-header"><h3>最近7天查询趋势</h3></div>
+      <div id="trendChart"></div>
+    </div>
     <div class="card">
       <div class="card-header"><h3>最近操作日志</h3></div>
-      <div class="table-container" id="recentLogs"><div class="empty-state">加载中...</div></div>
+      <div class="table-container" id="recentLogs">
+        <div class="empty-state"><div class="icon">⏳</div><div class="title">加载中...</div></div>
+      </div>
     </div>
   `;
 
@@ -168,32 +207,68 @@ async function renderDashboard() {
     const qs = data.stats?.quotaStats || {};
     const s = data.stats || {};
 
-    $('#statsGrid').innerHTML = `
-      <div class="stat-card" style="border-left:4px solid var(--primary)">
-        <div class="stat-value">${s.totalUsers || 0}</div>
-        <div class="stat-label">总用户数</div>
+    // 统计卡片
+    const stats = [
+      { cls: 'primary', icon: '👥', value: s.totalUsers || 0, label: '总用户数', trend: `本月新增 ${s.monthNewUsers || 0}`, trendDir: 'up' },
+      { cls: 'info', icon: '🆕', value: s.todayNewUsers || 0, label: '今日新增用户', trend: `本周新增 ${s.weekNewUsers || 0}`, trendDir: 'up' },
+      { cls: 'success', icon: '⭐', value: qs.active_vip || 0, label: 'VIP 会员', trend: `月${qs.monthly_vip||0} 季${qs.quarterly_vip||0} 半年${qs.semi_annual_vip||0} 年${qs.annual_vip||0}`, trendDir: 'up' },
+      { cls: 'warning', icon: '📊', value: s.todayQueries || 0, label: '今日查询量', trend: `总计 ${s.totalQueries || 0} 次`, trendDir: 'up' },
+      { cls: 'danger', icon: '⚡', value: s.activeUsers || 0, label: '7日活跃用户', trend: `本周查询 ${s.weekQueries || 0} 次`, trendDir: 'up' },
+      { cls: 'info', icon: '👤', value: qs.free_users || 0, label: '免费用户', trend: qs.expired_vip > 0 ? `已过期 VIP ${qs.expired_vip} 人` : '', trendDir: qs.expired_vip > 0 ? 'down' : 'up' },
+    ];
+
+    $('#statsGrid').innerHTML = stats.map(st => `
+      <div class="stat-card ${st.cls}">
+        <div class="stat-icon">${st.icon}</div>
+        <div class="stat-body">
+          <div class="stat-value">${st.value}</div>
+          <div class="stat-label">${st.label}</div>
+          ${st.trend ? `<div class="stat-trend ${st.trendDir}">${st.trend}</div>` : ''}
+        </div>
       </div>
-      <div class="stat-card" style="border-left:4px solid var(--info)">
-        <div class="stat-value">${s.todayNewUsers || 0}</div>
-        <div class="stat-label">今日新增</div>
-      </div>
-      <div class="stat-card" style="border-left:4px solid var(--success)">
-        <div class="stat-value">${qs.active_vip || 0}</div>
-        <div class="stat-label">VIP 会员</div>
-      </div>
-      <div class="stat-card" style="border-left:4px solid var(--warning)">
-        <div class="stat-value">${qs.free_users || 0}</div>
-        <div class="stat-label">免费用户</div>
-      </div>
-      <div class="stat-card" style="border-left:4px solid var(--danger)">
-        <div class="stat-value">${qs.expired_vip || 0}</div>
-        <div class="stat-label">已过期VIP</div>
-      </div>
-    `;
+    `).join('');
+
+    // 配置摘要
+    if (data.configSummary && data.configSummary.length) {
+      const cfgMap = {};
+      data.configSummary.forEach(c => { cfgMap[c.key] = c.value; });
+      const cfgItems = [
+        { icon: '📱', label: 'APP 版本', value: cfgMap['app_version'] || '—' },
+        { icon: '🔢', label: '免费每日查询', value: (cfgMap['free_query_limit'] || '2') + ' 次' },
+        { icon: '📋', label: '日志保留', value: (cfgMap['audit_log_retention_days'] || '90') + ' 天' },
+      ];
+      $('#configSummary').innerHTML = cfgItems.map(c => `
+        <div class="config-item">
+          <div class="cfg-icon">${c.icon}</div>
+          <div class="cfg-info">
+            <div class="cfg-label">${c.label}</div>
+            <div class="cfg-value">${c.value}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // 趋势图
+    if (s.weekTrend && s.weekTrend.length) {
+      $('#trendCard').style.display = '';
+      const maxVal = Math.max(...s.weekTrend.map(d => d.count), 1);
+      const bars = s.weekTrend.map(d => {
+        const pct = Math.round((d.count / maxVal) * 100);
+        return `<div class="trend-bar" style="height:${Math.max(pct, 4)}%" title="${d.day}: ${d.count} 次"><span class="bar-tip">${d.count}</span></div>`;
+      }).join('');
+      const labels = s.weekTrend.map(d => {
+        const parts = d.day.split('-');
+        return `<div class="trend-label">${parts[1]||''}/${parts[2]||''}</div>`;
+      }).join('');
+      $('#trendChart').innerHTML = `
+        <div class="trend-chart">${bars}</div>
+        <div class="trend-labels">${labels}</div>
+      `;
+    }
 
     renderLogTable($('#recentLogs'), data.recentLogs || []);
   } catch (err) {
-    $('#statsGrid').innerHTML = `<div class="empty-state">加载失败: ${err.message}</div>`;
+    $('#statsGrid').innerHTML = `<div class="empty-state"><div class="icon">❌</div><div class="title">加载失败</div><div class="desc">${err.message}</div></div>`;
   }
 }
 
@@ -482,7 +557,13 @@ async function deleteUserSession(phone, sessionId) {
 }
 
 // ==================== 注册用户 ====================
-function showRegisterUserModal() {
+async function showRegisterUserModal() {
+  let freeLimit = 2;
+  try {
+    const configs = await api('/api/config');
+    freeLimit = parseInt(configs.free_query_limit) || 2;
+  } catch (e) { /* 忽略 */ }
+
   $('#modalContent').innerHTML = `
     <h3>注册新用户</h3>
     <form onsubmit="handleRegisterUser(event)">
@@ -501,13 +582,14 @@ function showRegisterUserModal() {
       <div class="form-group">
         <label>套餐类型</label>
         <select id="regPlanType">
-          <option value="FREE">免费用户（每日2次）</option>
+          <option value="FREE">免费用户（每日${freeLimit}次）</option>
           <option value="MONTHLY_VIP">月VIP</option>
           <option value="QUARTERLY_VIP">季VIP</option>
           <option value="SEMI_ANNUAL_VIP">半年VIP</option>
           <option value="ANNUAL_VIP">年VIP</option>
         </select>
       </div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">当前规则：免费用户每日可查询 ${freeLimit} 次，VIP 不限次数</div>
       <div class="modal-actions">
         <button type="button" class="btn btn-outline" onclick="closeModal()">取消</button>
         <button type="submit" class="btn btn-primary">注册</button>
@@ -662,7 +744,7 @@ async function renderSettings() {
         <input type="text" id="cfg_${f.key}" value="${configs[f.key] || ''}" style="flex:1">
         <button class="btn btn-primary btn-sm" onclick="saveConfig('${f.key}')">保存</button>
       </div>
-    `).join('')} + `
+    `).join('')}
       <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">
         <h4 style="margin-bottom:4px">VIP 套餐价格</h4>
         <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">修改后，用户端看到的价格将同步更新。实际扣费需手动确认后生效。</div>
