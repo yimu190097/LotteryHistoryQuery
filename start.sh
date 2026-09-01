@@ -36,23 +36,23 @@ node src/index.js > /tmp/server.log 2>&1 &
 sleep 2
 echo "  服务器已启动: http://localhost:3000"
 
-# 4. 启动 ngrok 隧道
+# 固定域名（ngrok 静态域名，免费版送 1 个）
+# 在 https://dashboard.ngrok.com/domains 领取后填这里
+NGROK_DOMAIN="showbiz-unbridle-decent.ngrok-free.dev"
+
+# 4. 启动 ngrok 隧道（用固定域名，重启网址不变）
 if [ -f ~/.config/ngrok/ngrok.yml ]; then
   echo "[4/4] 启动 ngrok 隧道..."
   pkill ngrok 2>/dev/null || true
   sleep 1
-  nohup ngrok http 3000 --log=stdout > /tmp/ngrok.log 2>&1 &
+  nohup ngrok http --domain="$NGROK_DOMAIN" 3000 --log=stdout > /tmp/ngrok.log 2>&1 &
   sleep 3
-  URL=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -o '"public_url":"[^"]*"' | head -1 | cut -d'"' -f4)
-  if [ -n "$URL" ]; then
-    echo ""
-    echo "========================================="
-    echo "  公网地址: $URL/web/"
-    echo "  管理后台: $URL/"
-    echo "========================================="
-  else
-    echo "  隧道启动中，查看状态: curl http://localhost:4040/api/tunnels"
-  fi
+  echo ""
+  echo "========================================="
+  echo "  固定网址:   https://$NGROK_DOMAIN"
+  echo "  网页版:     https://$NGROK_DOMAIN/web/"
+  echo "  管理后台:   https://$NGROK_DOMAIN/"
+  echo "========================================="
 else
   echo "[4/4] 跳过 ngrok（未配置 token）"
 fi
