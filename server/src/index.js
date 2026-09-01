@@ -103,8 +103,16 @@ app.use('/api/auth/login', loginLimiter);
 app.use('/api/users/client/login', clientLoginLimiter);
 app.use('/api/users/client/register', registerLimiter);
 
-// 静态文件 - Web管理面板（js/css/html 浏览器缓存 1h，配合 ETag 做增量校验）
-app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: 3600 * 1000 }));
+// 静态文件 - HTML 禁用缓存（确保用户拿到最新页面），JS/CSS/图片 缓存1h
+app.use((req, res, next) => {
+  if (req.path.endsWith('.html') || req.path === '/' || req.path === '/web/' || req.path.endsWith('/web/')) {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  }
+  next();
+});
+app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: 3600 * 1000, etag: true }));
 
 // APK 下载目录
 const DOWNLOADS_DIR = path.join(__dirname, '..', 'public', 'downloads');
