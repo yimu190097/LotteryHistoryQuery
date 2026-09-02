@@ -1216,14 +1216,14 @@ function showTierRows(cfg,draw,ver){
     // 基本投注注数
     var baseCntStr='—';
     if(isFuyunOff){
-      baseCntStr='—（奖池未达门槛，本奖项停发）';
+      baseCntStr=(baseCnt!==null)?(baseCnt>0?baseCnt.toLocaleString()+'注':'0注'):'—';
     }else if(baseCnt!==null){
       baseCntStr=baseCnt>0?baseCnt.toLocaleString()+'注':'空开';
     }
     // 基本投注金额
     var baseAmtStr='—';
     if(isFuyunOff){
-      baseAmtStr='—（奖池未达门槛，本奖项停发）';
+      baseAmtStr=(baseCnt!==null&&baseAmt>0)?fmtAmt(baseAmt):'—';
     }else if(baseCnt!==null){
       if(baseAmt>0)baseAmtStr=fmtAmt(baseAmt);
       else if(baseCnt>0)baseAmtStr='—';
