@@ -194,7 +194,7 @@ object LotteryType {
                     "奖池<8亿：三5000/四300/五150/六15/七5；奖池≥8亿上浮至6666/380/200/18/7。一二等奖总额各封顶1亿。",
                 realTiersToUse = 7, prizeTierPairCount = 7,
                 extraFieldCount = 2,  // 销售额 + 奖池
-                appendTierPairCount = 7,
+                appendTierPairCount = 2,  // 2026新规：追加仅参与一、二等奖（80%）
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
@@ -224,7 +224,7 @@ object LotteryType {
                     "不会因为数据源按7级合并存储就丢奖级。]",
                 realTiersToUse = 9, prizeTierPairCount = 9,   // 解析层DLT专属：9对=12-25(7对)+26-29(2对=8/9等)
                 extraFieldCount = 2,
-                appendTierPairCount = 7,  // 追加投注7级：追加1-4(字段30-37)+追加5(count38)+6(补)+7(补)=7级完整
+                appendTierPairCount = 2,  // 2019起：追加仅参与一、二等奖（80%）
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
                     LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
@@ -254,7 +254,7 @@ object LotteryType {
                     "realTiersToUse=6 用于展示层按当期真实政策6级分组显示。]",
                 realTiersToUse = 6, prizeTierPairCount = 6,  // 6级版本：真实解析仅显示前6级（基本投注7+尾扩展取前6截断即可）
                 extraFieldCount = 2,
-                appendTierPairCount = 6,  // 6级追加投注=6级（第7级政策不存在）
+                appendTierPairCount = 3,  // 2014起：追加参与一至三等奖
                 appendRatio = 0.6,  // 2007-2019年追加比例为60%
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
@@ -276,7 +276,7 @@ object LotteryType {
                     "\n[DLT官方源字段布局：基本投注12-25(7×2)+26-29(尾部扩展4字段=8/9等候选)。8级版本取基本1-7+尾部扩展第1对=基本8等]。",
                 realTiersToUse = 8, prizeTierPairCount = 8,  // DLT专属：12-25(7对)+26-27(1对)=8对
                 extraFieldCount = 2,
-                appendTierPairCount = 7,  // 追加投注7级=7级（和7级合并版统一布局）
+                appendTierPairCount = 5,  // 2007-2014：追加参与一至五等奖（60%）
                 appendRatio = 0.6,  // 2007-2019年追加比例为60%
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
@@ -301,7 +301,7 @@ object LotteryType {
                     "\n[DLT官方源字段布局：基本投注12-25(7×2)+26-29(尾部扩展4字段=8/9等候选)。8级版本取基本1-7+尾部扩展第1对=基本8等]。",
                 realTiersToUse = 8, prizeTierPairCount = 8,  // DLT专属：12-25(7对)+26-27(1对)=8对
                 extraFieldCount = 2,
-                appendTierPairCount = 7,  // 追加投注7级=7级（和7级合并版统一布局）
+                appendTierPairCount = 5,  // 2007-2014：追加参与一至五等奖（60%）
                 appendRatio = 0.6,  // 2007-2019年追加比例为60%
                 rules = listOf(
                     LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
@@ -500,7 +500,12 @@ object LotteryType {
         issuePattern = "5-7位数字（例26089）", issueHint = "例如：26089"
     )
 
-    // ==================== 快乐8（选十玩法·长期稳定，中八=800元数据源验证）====================
+    // ==================== 快乐8（10玩法·39对奖级·双规则版本）====================
+    //  官方每期数据 = 39 对奖级（注数+奖金）：
+    //   选十7 + 选九7 + 选八6 + 选七5 + 选六4 + 选五3 + 选四3 + 选三2 + 选二1 + 选一1 = 39
+    //  新规则（2025-12-30 第 2025350 期起）：选十中八 800→720；选九中七 200→225；
+    //   选九中九改为浮动（单注最高25万）；其余维持。
+    //  旧规则（2020-10-28 至 2025349 期）：选十中八 800、选九中七 200、选九中九固定 30 万。
     val KL8 = LotteryTypeConfig(
         code = "kl8", displayName = "快乐8",
         url = "https://data.17500.cn/kl8_desc.txt",
@@ -509,22 +514,46 @@ object LotteryType {
         hasSecondary = false,
         ruleVersions = listOf(
             LotteryTypeConfig.RuleVersion(
-                key = "kl8_20201028",
-                effectiveFromDate = "2020-10-28",
-                policyLabel = "2020.10至今·选十玩法",
-                changeNote = "选十玩法7档奖级：中十浮动/中九8000/中八800/中七80/中六5/中五3/全不中2。" +
-                    "数据源共输出70+对子玩法奖级（20号码+销售额+奖池=2额外后），选十前7对。" +
-                    "选十中八官方固定奖800元（2023053期625注×800元=50万验证正确）。",
-                realTiersToUse = 7, prizeTierPairCount = 7,
+                key = "kl8_20251230",
+                effectiveFromDate = "2025-12-30",
+                policyLabel = "2025.12.30起·新规则",
+                changeNote = "2025-12-30第2025350期起调整：选十中八 800→720；选九中七 200→225；" +
+                    "选九中九改为浮动（单注最高25万）。其余维持（选十中九 8000、中七 80、中六 5、" +
+                    "中五 3、全不中 2；选八 50000/800/88/10/3/2；选七 10000/288/28/4/2；" +
+                    "选六 3000/30/10/3；选五 1000/21/3；选四 100/5/3；选三 53/3；选二 19；选一 4.6）。" +
+                    "数据源共39对奖级（选十前7对+其余玩法后32对），解析全部39对用于开奖详情按玩法分组展示。",
+                realTiersToUse = 7, prizeTierPairCount = 39,  // 查询只走选十7档匹配；解析39对用于展示
                 extraFieldCount = 2,  // 销售额 + 奖池
                 rules = listOf(
-                    LotteryTypeConfig.MatchRuleDef(10, 0, "选10中10全对", "一等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(9, 0, "选10中9", "二等奖", 8000),
-                    LotteryTypeConfig.MatchRuleDef(8, 0, "选10中8", "三等奖", 800),
-                    LotteryTypeConfig.MatchRuleDef(7, 0, "选10中7", "四等奖", 80),
-                    LotteryTypeConfig.MatchRuleDef(6, 0, "选10中6", "五等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(5, 0, "选10中5", "六等奖", 3),
-                    LotteryTypeConfig.MatchRuleDef(0, 0, "选10中0（幸运奖）", "七等奖", 2)
+                    // 选十玩法（用户选号默认 mainN=10，仅此玩法参与查询命中判断）
+                    LotteryTypeConfig.MatchRuleDef(10, 0, "选10中10全对", "选十中十", null),
+                    LotteryTypeConfig.MatchRuleDef(9, 0, "选10中9", "选十中九", 8000),
+                    LotteryTypeConfig.MatchRuleDef(8, 0, "选10中8", "选十中八", 720),
+                    LotteryTypeConfig.MatchRuleDef(7, 0, "选10中7", "选十中七", 80),
+                    LotteryTypeConfig.MatchRuleDef(6, 0, "选10中6", "选十中六", 5),
+                    LotteryTypeConfig.MatchRuleDef(5, 0, "选10中5", "选十中五", 3),
+                    LotteryTypeConfig.MatchRuleDef(0, 0, "选10中0（幸运奖）", "选十全不中", 2)
+                )
+            ),
+            LotteryTypeConfig.RuleVersion(
+                key = "kl8_20201028",
+                effectiveFromDate = "2020-10-28",
+                policyLabel = "2020.10-2025.12·旧规则",
+                changeNote = "2020-10-28至2025-12-29（第2025349期）旧规则：选十玩法7档奖级：" +
+                    "中十浮动/中九8000/中八800/中七80/中六5/中五3/全不中2。选九中九固定30万、选九中七200。" +
+                    "数据源共39对奖级（20号码+销售额+奖池=2额外后），解析全部39对用于开奖详情按玩法分组展示。" +
+                    "选十中八官方固定奖800元（2023053期625注×800元=50万验证正确）。",
+                realTiersToUse = 7, prizeTierPairCount = 39,  // 查询只走选十7档匹配；解析39对用于展示
+                extraFieldCount = 2,  // 销售额 + 奖池
+                rules = listOf(
+                    // 选十玩法（用户选号默认 mainN=10，仅此玩法参与查询命中判断）
+                    LotteryTypeConfig.MatchRuleDef(10, 0, "选10中10全对", "选十中十", null),
+                    LotteryTypeConfig.MatchRuleDef(9, 0, "选10中9", "选十中九", 8000),
+                    LotteryTypeConfig.MatchRuleDef(8, 0, "选10中8", "选十中八", 800),
+                    LotteryTypeConfig.MatchRuleDef(7, 0, "选10中7", "选十中七", 80),
+                    LotteryTypeConfig.MatchRuleDef(6, 0, "选10中6", "选十中六", 5),
+                    LotteryTypeConfig.MatchRuleDef(5, 0, "选10中5", "选十中五", 3),
+                    LotteryTypeConfig.MatchRuleDef(0, 0, "选10中0（幸运奖）", "选十全不中", 2)
                 )
             )
         ),
