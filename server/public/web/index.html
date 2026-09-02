@@ -398,11 +398,11 @@ var TYPES=[
   hasSec:true,secN:2,secMin:1,secMax:12,secLabel:'后区',parseMain:5,parseSec:2,pos:false,
   primaryUnit:'个前区',secondaryUnit:'个后区',extraCount:2, tierCount:7,
   vers:[
-   {d:'2026-01-31',tc:7,apc:7,r:[[5,2,'一等奖',null],[5,1,'二等奖',null],[5,0,'三等奖',5000],[4,2,'三等奖',5000],[4,1,'四等奖',300],[4,0,'五等奖',150],[3,2,'五等奖',150],[3,1,'六等奖',15],[2,2,'六等奖',15],[3,0,'七等奖',5],[2,1,'七等奖',5],[1,2,'七等奖',5],[0,2,'七等奖',5]]},
-   {d:'2019-02-18',tc:9,apc:7,r:[[5,2,'一等奖',null],[5,1,'二等奖',null],[5,0,'三等奖',10000],[4,2,'四等奖',3000],[4,1,'五等奖',300],[4,0,'六等奖',200],[3,2,'六等奖',200],[3,1,'七等奖',100],[2,2,'七等奖',100],[3,0,'八等奖',15],[2,1,'八等奖',15],[1,2,'八等奖',15],[0,2,'八等奖',15],[2,0,'九等奖',5],[1,1,'九等奖',5],[1,0,'九等奖',5],[0,1,'九等奖',5]]},
-   {d:'2014-05-05',tc:6,apc:6,r:[[5,2,'一等奖',null],[5,1,'二等奖',null],[5,0,'三等奖',null],[4,2,'三等奖',null],[4,1,'四等奖',null],[4,0,'五等奖',200],[3,2,'五等奖',200],[3,1,'六等奖',100],[2,2,'六等奖',100]]},
-   {d:'2009-10-17',tc:8,apc:7,r:[[5,2,'一等奖',null],[5,1,'二等奖',null],[5,0,'三等奖',null],[4,2,'四等奖',3000],[4,1,'五等奖',500],[4,0,'六等奖',200],[3,2,'六等奖',200],[3,1,'七等奖',10],[2,2,'七等奖',10],[3,0,'八等奖',5],[2,1,'八等奖',5],[1,2,'八等奖',5]]},
-   {d:'2007-05-28',tc:8,apc:7,r:[[5,2,'一等奖',null],[5,1,'二等奖',null],[5,0,'三等奖',null],[4,2,'四等奖',3000],[4,1,'五等奖',500],[4,0,'六等奖',100],[3,2,'六等奖',100],[3,1,'七等奖',10],[2,2,'七等奖',10],[3,0,'八等奖',5],[2,1,'八等奖',5],[1,2,'八等奖',5]]}
+   {d:'2026-01-31',tc:7,apc:2,r:[[5,2,'一等奖',null],[5,1,'二等奖',null],[5,0,'三等奖',5000],[4,2,'三等奖',5000],[4,1,'四等奖',300],[4,0,'五等奖',150],[3,2,'五等奖',150],[3,1,'六等奖',15],[2,2,'六等奖',15],[3,0,'七等奖',5],[2,1,'七等奖',5],[1,2,'七等奖',5],[0,2,'七等奖',5]]},
+   {d:'2019-02-18',tc:9,apc:2,r:[[5,2,'一等奖',null],[5,1,'二等奖',null],[5,0,'三等奖',10000],[4,2,'四等奖',3000],[4,1,'五等奖',300],[4,0,'六等奖',200],[3,2,'六等奖',200],[3,1,'七等奖',100],[2,2,'七等奖',100],[3,0,'八等奖',15],[2,1,'八等奖',15],[1,2,'八等奖',15],[0,2,'八等奖',15],[2,0,'九等奖',5],[1,1,'九等奖',5],[1,0,'九等奖',5],[0,1,'九等奖',5]]},
+   {d:'2014-05-05',tc:6,apc:3,r:[[5,2,'一等奖',null],[5,1,'二等奖',null],[5,0,'三等奖',null],[4,2,'三等奖',null],[4,1,'四等奖',null],[4,0,'五等奖',200],[3,2,'五等奖',200],[3,1,'六等奖',100],[2,2,'六等奖',100]]},
+   {d:'2009-10-17',tc:8,apc:5,r:[[5,2,'一等奖',null],[5,1,'二等奖',null],[5,0,'三等奖',null],[4,2,'四等奖',3000],[4,1,'五等奖',500],[4,0,'六等奖',200],[3,2,'六等奖',200],[3,1,'七等奖',10],[2,2,'七等奖',10],[3,0,'八等奖',5],[2,1,'八等奖',5],[1,2,'八等奖',5]]},
+   {d:'2007-05-28',tc:8,apc:5,r:[[5,2,'一等奖',null],[5,1,'二等奖',null],[5,0,'三等奖',null],[4,2,'四等奖',3000],[4,1,'五等奖',500],[4,0,'六等奖',100],[3,2,'六等奖',100],[3,1,'七等奖',10],[2,2,'七等奖',10],[3,0,'八等奖',5],[2,1,'八等奖',5],[1,2,'八等奖',5]]}
   ]},
  {code:'3d',api:'3d',name:'福彩3D',mainN:3,mainMin:0,mainMax:9,mainLabel:'号码',
   hasSec:false,secN:0,secMin:0,secMax:0,secLabel:'',parseMain:3,parseSec:0,pos:true,
@@ -430,7 +430,32 @@ var TYPES=[
  {code:'kl8',api:'kl8',name:'快乐8',mainN:10,mainMin:1,mainMax:80,mainLabel:'号码',
   hasSec:false,secN:0,secMin:0,secMax:0,secLabel:'',parseMain:20,parseSec:0,pos:false,
   primaryUnit:'个号码',secondaryUnit:'',extraCount:2, tierCount:7,
-  vers:[{d:'2020-10-28',tc:7,r:[[10,0,'一等奖',null],[9,0,'二等奖',8000],[8,0,'三等奖',800],[7,0,'四等奖',80],[6,0,'五等奖',5],[5,0,'六等奖',3],[0,0,'七等奖',2]]}]}
+  vers:[
+   {d:'2025-12-30',tc:39,r:[
+    [10,0,'选十中十',null,'kl8-10'],[9,0,'选十中九',8000,'kl8-10'],[8,0,'选十中八',720,'kl8-10'],[7,0,'选十中七',80,'kl8-10'],[6,0,'选十中六',5,'kl8-10'],[5,0,'选十中五',3,'kl8-10'],[0,0,'选十全不中',2,'kl8-10'],
+    [9,0,'选九中九',null,'kl8-9'],[8,0,'选九中八',2000,'kl8-9'],[7,0,'选九中七',225,'kl8-9'],[6,0,'选九中六',50,'kl8-9'],[5,0,'选九中五',10,'kl8-9'],[4,0,'选九中四',5,'kl8-9'],[0,0,'选九全不中',2,'kl8-9'],
+    [8,0,'选八中八',50000,'kl8-8'],[7,0,'选八中七',800,'kl8-8'],[6,0,'选八中六',88,'kl8-8'],[5,0,'选八中五',10,'kl8-8'],[4,0,'选八中四',3,'kl8-8'],[0,0,'选八全不中',2,'kl8-8'],
+    [7,0,'选七中七',10000,'kl8-7'],[6,0,'选七中六',288,'kl8-7'],[5,0,'选七中五',28,'kl8-7'],[4,0,'选七中四',4,'kl8-7'],[0,0,'选七全不中',2,'kl8-7'],
+    [6,0,'选六中六',3000,'kl8-6'],[5,0,'选六中五',30,'kl8-6'],[4,0,'选六中四',10,'kl8-6'],[0,0,'选六全不中',3,'kl8-6'],
+    [5,0,'选五中五',1000,'kl8-5'],[4,0,'选五中四',21,'kl8-5'],[0,0,'选五全不中',3,'kl8-5'],
+    [4,0,'选四中四',100,'kl8-4'],[3,0,'选四中三',5,'kl8-4'],[0,0,'选四全不中',3,'kl8-4'],
+    [3,0,'选三中三',53,'kl8-3'],[0,0,'选三全不中',3,'kl8-3'],
+    [2,0,'选二中二',19,'kl8-2'],
+    [1,0,'选一中一',4.6,'kl8-1']
+   ]},
+   {d:'2020-10-28',tc:39,r:[
+    [10,0,'选十中十',null,'kl8-10'],[9,0,'选十中九',8000,'kl8-10'],[8,0,'选十中八',800,'kl8-10'],[7,0,'选十中七',80,'kl8-10'],[6,0,'选十中六',5,'kl8-10'],[5,0,'选十中五',3,'kl8-10'],[0,0,'选十全不中',2,'kl8-10'],
+    [9,0,'选九中九',300000,'kl8-9'],[8,0,'选九中八',2000,'kl8-9'],[7,0,'选九中七',200,'kl8-9'],[6,0,'选九中六',50,'kl8-9'],[5,0,'选九中五',10,'kl8-9'],[4,0,'选九中四',5,'kl8-9'],[0,0,'选九全不中',2,'kl8-9'],
+    [8,0,'选八中八',50000,'kl8-8'],[7,0,'选八中七',800,'kl8-8'],[6,0,'选八中六',88,'kl8-8'],[5,0,'选八中五',10,'kl8-8'],[4,0,'选八中四',3,'kl8-8'],[0,0,'选八全不中',2,'kl8-8'],
+    [7,0,'选七中七',10000,'kl8-7'],[6,0,'选七中六',288,'kl8-7'],[5,0,'选七中五',28,'kl8-7'],[4,0,'选七中四',4,'kl8-7'],[0,0,'选七全不中',2,'kl8-7'],
+    [6,0,'选六中六',3000,'kl8-6'],[5,0,'选六中五',30,'kl8-6'],[4,0,'选六中四',10,'kl8-6'],[0,0,'选六全不中',3,'kl8-6'],
+    [5,0,'选五中五',1000,'kl8-5'],[4,0,'选五中四',21,'kl8-5'],[0,0,'选五全不中',3,'kl8-5'],
+    [4,0,'选四中四',100,'kl8-4'],[3,0,'选四中三',5,'kl8-4'],[0,0,'选四全不中',3,'kl8-4'],
+    [3,0,'选三中三',53,'kl8-3'],[0,0,'选三全不中',3,'kl8-3'],
+    [2,0,'选二中二',19,'kl8-2'],
+    [1,0,'选一中一',4.6,'kl8-1']
+   ]}
+  ]}
 ];
 var POSITIONAL = ['3d','p3'];
 var MODES = ['直选','组选3','组选6'];
@@ -866,6 +891,7 @@ async function doIssueQuery(){
   for(var k=0;k<ver.r.length;k++){
     var rl=ver.r[k];
     if(rl[4]==='fuyun'&&hit.fuyun!==true)continue;
+    if(cur.code==='kl8' && rl[4] && rl[4]!=='kl8-10') continue;
     var hc=hitCount(cur,selPri,selPSet,seSec,hit);
     if(hc.pc===rl[0]&&hc.sc===rl[1]){matched={name:rl[2],amt:rl[3],pc:hc.pc,sc:hc.sc};break;}
   }
@@ -899,12 +925,15 @@ async function doIssueQuery(){
 }
 /* 最新版规则 → 展示列（[奖项名, [[主中,后中],...], 单注奖金] 数组） */
 function latestPr(t){
-  return prForVersion(t.vers[0]);
+  return prForVersion(t.vers[0], t);
 }
-/* 指定版本规则 → 展示列（与 latestPr 同结构，但按指定版本解析） */
-function prForVersion(ver){
+/* 指定版本规则 → 展示列（与 latestPr 同结构，但按指定版本解析）
+   cfg 可选：当 cfg.code==='kl8' 时，仅返回选十玩法（用户选10号=选十查询）*/
+function prForVersion(ver, cfg){
   var rules=ver.r, order=[], map={};
   rules.forEach(function(r){
+    // kl8 查询模式下只保留选十玩法（用户选号模式 mainN=10）
+    if(cfg && cfg.code==='kl8' && r[4] && r[4]!=='kl8-10') return;
     if(!map[r[2]]){map[r[2]]={name:r[2],conds:[],amt:r[3]};order.push(r[2]);}
     map[r[2]].conds.push([r[0],r[1]]);
   });
@@ -949,6 +978,8 @@ function matchAll(selPri,selSec){
       var r=ver.r[i];
       // 条件性奖级：福运奖(3+0)仅在当期开关开启时计入（对齐 App conditionalFlags）
       if(r[4]==='fuyun' && d.fuyun!==true) continue;
+      // kl8: 只对选十玩法做命中匹配（用户选号 mainN:10 = 选十）
+      if(t.code==='kl8' && r[4] && r[4]!=='kl8-10') continue;
       var hc=hitCount(t,selPri,selPSet,selSec,d);
       if(hc.pc===r[0]&&hc.sc===r[1]){
         var key=ver.d+'|'+r[0]+'|'+r[1]+'|'+r[2];
@@ -961,6 +992,8 @@ function matchAll(selPri,selSec){
   // 2) 按最新版奖项名顺序合并展示
   var latest=t.vers[0].r, uniqueNames=[], nameConds={}, latestByCond={};
   latest.forEach(function(r){
+    // kl8: 查询结果排序仅保留选十玩法7个奖名
+    if(t.code==='kl8' && r[4] && r[4]!=='kl8-10') return;
     if(!nameConds[r[2]]){nameConds[r[2]]=[];uniqueNames.push(r[2]);}
     nameConds[r[2]].push([r[0],r[1]]);
     latestByCond[r[0]+','+r[1]]=r[2];
@@ -1149,9 +1182,62 @@ function matchDesc(cfg,mp,ms){
 }
 /* DLT 2026 新规浮动力度映射（对齐 APK dltFloatOverrideMap） */
 var DLT_FLOAT_MAP={5000:6666,300:380,150:200,15:18,5:7};
-function showTierRows(cfg,draw,ver){
+/* T1-P3b: 快乐8开奖详情 → 按选十/选九/…/选一 10 种玩法分组展示全部 39 对官方奖级（注数+金额）
+   官方每期 kl8_desc.txt 在 2 额外字段(销售额/奖池)后按此顺序输出 39 对：
+   选十7→选九7→选八6→选七5→选六4→选五3→选四3→选三2→选二1→选一1 = 共39对*/
+function buildKl8TierRows(draw,ver){
+  var plays=[
+    {tag:'kl8-10',name:'选十玩法',pairs:7,offset:0, note:'选10个号，中10/9/8/7/6/5/0个号'},
+    {tag:'kl8-9', name:'选九玩法',pairs:7,offset:7, note:'选9个号，中9/8/7/6/5/4/0个号'},
+    {tag:'kl8-8', name:'选八玩法',pairs:6,offset:14,note:'选8个号，中8/7/6/5/4/0个号'},
+    {tag:'kl8-7', name:'选七玩法',pairs:5,offset:20,note:'选7个号，中7/6/5/4/0个号'},
+    {tag:'kl8-6', name:'选六玩法',pairs:4,offset:25,note:'选6个号，中6/5/4/0个号'},
+    {tag:'kl8-5', name:'选五玩法',pairs:3,offset:29,note:'选5个号，中5/4/0个号'},
+    {tag:'kl8-4', name:'选四玩法',pairs:3,offset:32,note:'选4个号，中4/3/0个号'},
+    {tag:'kl8-3', name:'选三玩法',pairs:2,offset:35,note:'选3个号，中3/0个号'},
+    {tag:'kl8-2', name:'选二玩法',pairs:1,offset:37,note:'选2个号，中2个号'},
+    {tag:'kl8-1', name:'选一玩法',pairs:1,offset:38,note:'选1个号，中1个号'}
+  ];
+  var allTiers=draw.allTiers||draw.tiers||[];
   var html='';
-  var rules=(ver?prForVersion(ver):latestPr(cfg));
+  plays.forEach(function(play){
+    var pickN=parseInt(play.tag.replace('kl8-',''),10);
+    html+='<div style="padding:6px 6px 2px;background:#FAFAFE;margin-top:2px;border-top:1px solid #ECEFF1;">'
+      +'<div style="font-weight:bold;font-size:12px;color:#37474F;">'+play.name+' <span style="font-size:10px;font-weight:normal;color:#90A4AE;">（官方'+play.pairs+'档）</span></div>'
+      +'<div style="font-size:10px;color:#90A4AE;">'+play.note+'</div></div>';
+    for(var p=0;p<play.pairs;p++){
+      var idx=play.offset+p;
+      var rule=ver?ver.r[idx]:null;
+      var td=(idx<allTiers.length)?allTiers[idx]:null;
+      var nm=rule?rule[2]:('奖档'+(p+1));
+      var mp=rule?rule[0]:0;
+      var mc='';
+      if(mp===pickN) mc='选'+pickN+'中'+pickN+'（全中）';
+      else if(mp===0) mc='选'+pickN+'中0（全不中·幸运奖）';
+      else mc='选'+pickN+'中'+mp;
+      var ruleAmt=(rule&&rule[3]!==undefined)?rule[3]:null;
+      var cnt=(td&&td.count!==undefined)?td.count:null;
+      var amt=(td&&td.amount!==undefined)?td.amount:null;
+      var cs='—';
+      if(cnt===null) cs='—';
+      else if(cnt>0) cs=cnt.toLocaleString()+'注';
+      else cs='空开';
+      var as='—';
+      if(cnt===null) as='—';
+      else if(cnt>0 && amt!=null && amt>0) as=fmtAmt(amt);
+      else if(cnt>0) as=(ruleAmt==null)?'浮动（官方当期实际）':'—';
+      else as='空开无奖金';
+      html+='<div class="tierRow"><div class="nm"><div class="pr">'+nm+'</div><div class="mc">'+mc
+        +'</div></div><div class="cnt">'+cs+'</div><div class="amt">'+as+'</div></div>';
+    }
+  });
+  return html;
+}
+function showTierRows(cfg,draw,ver,prevDraw){
+  var html='';
+  // 快乐8 走专属分组展示逻辑（10玩法×39对官方原始数据）
+  if(cfg.code==='kl8'){ return buildKl8TierRows(draw,ver); }
+  var rules=(ver?prForVersion(ver,cfg):latestPr(cfg));
   var allTiers=draw.allTiers||draw.tiers||[];
   var tierByName={};
   if(allTiers.length){
@@ -1173,13 +1259,14 @@ function showTierRows(cfg,draw,ver){
       fuyunState=draw.fuyun?'ON':'OFF';
     }
   }
-  // DLT 奖池浮动：对齐 APK DLT_2026_FLOAT 判定（UP/NORMAL/HOLD）
+  // T3 DLT 奖池浮动：用「上一期」奖池判定本期固定奖上浮（对齐 APK DLT_2026_FLOAT）
+  // draw.jackpot = 本期开奖后滚存（用于下一期）；prevDraw.jackpot = 上期滚存 = 本期开奖前奖池
   var dltFloat=null;
   if(cfg.code==='dlt'){
-    var jp=draw.jackpot?parseNumberSafe(draw.jackpot):null;
-    if(jp!==null&&jp>=800000000)dltFloat='UP';
-    else if(jp!==null)dltFloat='NORMAL';
-    // jp===null → dltFloat stays null (HOLD: 奖池未知)
+    var prevJp=(prevDraw&&prevDraw.jackpot)?parseNumberSafe(prevDraw.jackpot):null;
+    if(prevJp!==null&&prevJp>=800000000)dltFloat='UP';
+    else if(prevJp!==null)dltFloat='NORMAL';
+    // prevJp===null → dltFloat stays null（HOLD：上期奖池缺失，暂按规则固定）
   }
   // DLT 追加数据
   var appendTiers=draw.appendTiers||[];
@@ -1273,12 +1360,15 @@ function openDrawDetail(d){
   // 确定适用规则版本（按开奖日期定位）
   var ver=verForDate(cur,d.date);
   var verLabel=ver?'【'+ver.d+'起适用】':'';
+  // T3: 找上一期（按日期更旧的那一期，draws 是倒序 = 新→旧，i+1 就是上期）
+  var idx=draws.indexOf(d);
+  var prev=(idx>=0&&idx+1<draws.length)?draws[idx+1]:null;
   $('detailBody').innerHTML=
     '<div style="text-align:center;color:var(--text_secondary);font-size:13px;margin-bottom:4px;">开奖日期：'+d.date+' '+verLabel+'</div>'
     +infoBar
     +'<div class="balls" style="display:flex;flex-wrap:wrap;justify-content:center;margin-bottom:10px;">'+d.ballHtml+'</div>'
     +'<div class="hline"></div>'
-    +showTierRows(cur,d,ver)
+    +showTierRows(cur,d,ver,prev)
     +'<div class="hline"></div>'
     +'<div style="font-size:11px;color:var(--text_secondary);padding:8px 0 4px;">空开=本期无人中奖；奖金以上方标注为准，均为本期实际开奖数据。</div>';
   showMask('maskDetail');
@@ -1372,7 +1462,9 @@ function parseDraws(text){
     // 奖级数据从 numEnd+extraCount 开始
     var tierStart=numEnd+extraCount;
     var tiers=[];
-    for(var k=0;k<15;k++){
+    // T1-P2: 解析上限可配置——快乐8官方数据=39对(选十~选一)，其余彩种不超过15对
+    var tierMax=(cur.code==='kl8')?39:15;
+    for(var k=0;k<tierMax;k++){
       var ci=tierStart+k*2,ai=tierStart+k*2+1;
       if(ci>=t.length||ai>=t.length)break;
       var cRaw=t[ci],aRaw=t[ai];
