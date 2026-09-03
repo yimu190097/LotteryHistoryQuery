@@ -1178,6 +1178,8 @@ function matchDesc(cfg,mp,ms){
     if(cfg.code==='kl8')return '中'+mp+'个号';
     return '中'+mp+'位';
   }
+  // 大乐透/双色球/七星彩：简洁 X+Y 命中格式（用户要求不用"前区/后区/红球/蓝球"文字）
+  if(cfg.code==='dlt'||cfg.code==='ssq'||cfg.code==='7xc')return mp+'+'+ms;
   var pl=cfg.primaryUnit||cfg.mainLabel||'前区',sl=cfg.secondaryUnit||cfg.secLabel||'后区';
   if(mp>0&&ms>0)return '中'+mp+pl+' + '+ms+sl;
   if(mp>0&&ms===0)return '中'+mp+pl;
