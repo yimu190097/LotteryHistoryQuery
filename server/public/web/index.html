@@ -1013,7 +1013,20 @@ function hitCount(t,selPri,selPSet,selSec,d){
 }
 function matchAll(selPri,selSec){
   var t=cur, selPSet=new Set(selPri);
-  // 1) 每期独立用其规则版本算命中，写入聚合桶
+  // 最新版规则：命中条件→奖级名 + 奖级顺序（仅统计查询模式相关规则；kl8 仅选十玩法）
+  var latest=t.vers[0], latestName={}, latestOrder=[], latestSet={};
+  latest.r.forEach(function(r){
+    if(t.code==='kl8' && r[4] && r[4]!=='kl8-10') return;
+    if(t.pos && (modeIdx===0?r[2]!=='直选奖':(modeIdx===1?r[2]!=='组选3':r[2]!=='组选6'))) return;
+    var ck=r[0]+','+r[1];
+    if(latestName[ck]===undefined)latestName[ck]=r[2];
+    if(!latestSet[r[2]]){latestSet[r[2]]=true;latestOrder.push(r[2]);}
+  });
+  // 1) 每期独立用其「当期规则版本」判定是否命中（保证所有号码的奖项与当期政策/规则匹配上）。
+  //    命中后按「最新版规则」的奖级名归桶 → 查询表格按最新规则统一奖级名
+  //    （如大乐透 4+2：2019-2025 为四等奖、2026 起为三等奖，查询表格统一显示三等奖）。
+  //    最新版不存在的旧条件 → 回退用当期规则名，保证不漏展示。
+  //    同时记录每期的当期奖级名/命中条件，供「查看」逐期展示该期元数据本来的中奖信息。
   var buckets={};
   draws.forEach(function(d){
     var ver=verForDate(t,d.date)||t.vers[t.vers.length-1];
@@ -1027,48 +1040,25 @@ function matchAll(selPri,selSec){
       if(t.pos && (modeIdx===0?r[2]!=='直选奖':(modeIdx===1?r[2]!=='组选3':r[2]!=='组选6'))) continue;
       var hc=hitCount(t,selPri,selPSet,selSec,d);
       if(hc.pc===r[0]&&hc.sc===r[1]){
-        var key=ver.d+'|'+r[0]+'|'+r[1]+'|'+r[2];
-        if(!buckets[key])buckets[key]={mp:r[0],ms:r[1],name:r[2],draws:[]};
-        buckets[key].draws.push(d);
+        var ck=r[0]+','+r[1];
+        var nm=(latestName[ck]!==undefined)?latestName[ck]:r[2];
+        if(!buckets[nm])buckets[nm]={name:nm,conds:[],seen:{},draws:[]};
+        if(!buckets[nm].seen[ck]){buckets[nm].seen[ck]=true;buckets[nm].conds.push([r[0],r[1]]);}
+        buckets[nm].draws.push({d:d,name:r[2],mp:r[0],ms:r[1]});
         break;
       }
     }
   });
-  // 2) 按各命中期"当期规则"的奖级名合并展示（不再按最新规则统一改名）。
-  //    保证查询表格里的奖级名与各期"查看详情"里的元数据奖项名一致，
-  //    即"所有号码的奖项和当期政策/规则匹配上，并准确显示"。
-  //    行顺序：从最新版本向旧版本收集首次出现的奖级名 → 现代口径在前、旧版独有奖级名在后。
-  var orderNames=[], orderSet={};
-  for(var vi=0;vi<t.vers.length;vi++){
-    t.vers[vi].r.forEach(function(r){
-      if(t.code==='kl8' && r[4] && r[4]!=='kl8-10') return;
-      if(t.pos && (modeIdx===0?r[2]!=='直选奖':(modeIdx===1?r[2]!=='组选3':r[2]!=='组选6'))) return;
-      if(!orderSet[r[2]]){orderSet[r[2]]=true;orderNames.push(r[2]);}
-    });
-  }
-  // 同名（当期规则下的奖级名）合并
-  var nameBuckets={};
-  Object.keys(buckets).forEach(function(k){
-    var b=buckets[k];
-    if(!nameBuckets[b.name])nameBuckets[b.name]=[];
-    nameBuckets[b.name]=nameBuckets[b.name].concat(b.draws);
-  });
+  // 2) 行顺序：最新版奖级名在前，旧版独有奖级名在后
   var makeRow=function(name){
-    // 命中主/次：跨版本同奖级名的命中条件可能不同（如大乐透4+2旧规为四等奖、新规为三等奖），
-    // 收集全部条件；条件不唯一则该列显示 "—"，具体命中条件在"查看"详情中逐期展示
-    var conds=[], seen={};
-    Object.keys(buckets).forEach(function(k){
-      var b=buckets[k]; if(b.name!==name)return;
-      var ck=b.mp+','+b.ms;
-      if(!seen[ck]){seen[ck]=true;conds.push([b.mp,b.ms]);}
-    });
-    var one=conds.length===1;
-    return {name:name,conds:conds,amt:null,mp:one?conds[0][0]:-1,ms:one?conds[0][1]:-1,count:nameBuckets[name].length,matches:nameBuckets[name]};
+    var b=buckets[name], one=b.conds.length===1;
+    // 命中主/次：跨条件同名则显示 "—"，具体命中条件在「查看」中逐期展示
+    return {name:name,conds:b.conds,amt:null,mp:one?b.conds[0][0]:-1,ms:one?b.conds[0][1]:-1,count:b.draws.length,matches:b.draws};
   };
   var list=[];
-  orderNames.forEach(function(name){ if(nameBuckets[name]) list.push(makeRow(name)); });
+  latestOrder.forEach(function(name){ if(buckets[name]) list.push(makeRow(name)); });
   // 旧版本独有奖级名（最新版本不存在）排在其后
-  Object.keys(nameBuckets).forEach(function(n){ if(!orderSet[n]) list.push(makeRow(n)); });
+  Object.keys(buckets).forEach(function(n){ if(!latestSet[n]) list.push(makeRow(n)); });
   return list;
 }
 function renderResults(results,selPri){
@@ -1084,7 +1074,7 @@ function renderResults(results,selPri){
     }
   }
   $('selText').textContent='查询号码：'+ns+'\n'+(totalHit>0?'在历史上共命中 '+totalHit+' 期：':'在历史上暂未命中任何奖项')
-    +(cur.vers.length>1?'\n（本彩种有 '+cur.vers.length+' 个政策版本，已按各期适用版本匹配）':'');
+    +(cur.vers.length>1?'\n（查询表按最新规则统一奖级名；各期实际中奖以「查看」为准）':'');
   $('selText').style.color=totalHit>0?'#C62828':'#546E7A';
   $('selText').style.fontWeight='bold';
   // 结果区已选球
@@ -1183,27 +1173,38 @@ function importRec(i){
   closeMask('maskHistory');doQuery();
 }
 var lastQueryResults=null;
+/* 某期元数据中指定奖级名的实际单注奖金（浮动奖/上浮奖显示当期真实金额，而非规则固定值） */
+function periodAmount(cfg,ver,draw,name){
+  var rules=prForVersion(ver,cfg);
+  var at=draw.allTiers||draw.tiers||[];
+  var tn={};
+  for(var i=0;i<Math.min(rules.length,at.length);i++){ if(!tn[rules[i][0]])tn[rules[i][0]]=at[i]; }
+  var td=tn[name];
+  return (td&&td.amount>0)?td.amount:null;
+}
 function openHistory(i,results){
   var r=results?results[i]:null;if(!r||!r.matches.length)return;
   lastQueryResults=r;
   var b=$('historyBody');
-  b.innerHTML='<div class="empty" style="font-size:13px;color:#546E7A;padding:10px;">「'+r.name+'」命中 '+r.count+' 期</div>'
-    +r.matches.map(function(d,k){
-      var ver=verForDate(cur,d.date);
+  b.innerHTML='<div class="empty" style="font-size:13px;color:#546E7A;padding:10px;">「'+r.name+'」命中 '+r.count+' 期（查询表按最新规则统一奖级名，以下逐期展示当期实际中奖）</div>'
+    +r.matches.map(function(m,k){
+      var d=m.d, ver=verForDate(cur,d.date);
       var verBadge=ver?ver.d.substring(0,10):'规则未知';
+      var amt=ver?periodAmount(cur,ver,d,m.name):null;
       return '<div class="hitem">'
         +'<div class="r0"><span class="idx">'+(k+1)+'</span><span class="iss">第'+d.issue+'期</span>'
         +'<span class="dt">'+d.date+'</span><span class="badge" style="margin-left:4px">'+verBadge+'起</span></div>'
         +'<div class="balls">'+d.ballHtml+'</div>'
-        +'<div class="view"><span onclick="openDetailDraw('+k+')">查看当期所有奖项</span></div>'
+        +'<div class="view"><span style="color:#C62828">命中【'+m.name+'】'+(amt?' · 单注奖金 '+fmtAmt(amt):'')+'</span>'
+        +'<span onclick="openDetailDraw('+k+')" style="margin-left:10px;cursor:pointer">查看当期所有奖项</span></div>'
         +'</div>';
     }).join('');
   showMask('maskHistory');
 }
 function openDetailDraw(k){
   if(!lastQueryResults)return;
-  var d=lastQueryResults.matches[k];
-  openDrawDetail(d);
+  var m=lastQueryResults.matches[k];
+  openDrawDetail(m?m.d:null);
 }
 
 /* ---------- 开奖详情弹窗 ---------- */
