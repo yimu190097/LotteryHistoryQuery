@@ -185,18 +185,16 @@ class HistoryAdapter(
             }
             if (matchedTierIdx >= 0) {
                 val append = appendTiers.getOrNull(matchedTierIdx)
-                if (append != null) {
+                // 【用户要求（2026-09）】：追加仅在实际产生奖金分配（注数>0）时才显示；
+                //   追加0注/无人中 → 不显示任何追加提示（含"本期空开"），避免不专业表现。
+                if (append != null && append.count > 0) {
                     val appendCount = append.count
                     val appendAmount = append.amount
                     holder.tvAppendInfo.visibility = View.VISIBLE
                     holder.tvAppendInfo.text = buildString {
                         append("追加投注：")
-                        if (appendCount > 0) {
-                            append("中${appendCount}注")
-                            if (appendAmount > 0) append(" / 单注${formatAmount(appendAmount)}")
-                        } else {
-                            append("本期空开")
-                        }
+                        append("中${appendCount}注")
+                        if (appendAmount > 0) append(" / 单注${formatAmount(appendAmount)}")
                     }
                 } else {
                     holder.tvAppendInfo.visibility = View.GONE
