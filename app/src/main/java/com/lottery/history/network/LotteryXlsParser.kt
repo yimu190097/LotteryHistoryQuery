@@ -325,17 +325,10 @@ object LotteryXlsParser {
                             }
                         )
                     }
-                    // —— DLT 2026 新规：三~七等奖奖池≥8亿时上浮 6666/380/200/18/7
-                    if (config.code == "dlt" && ruleVersion.key == "dlt_20260131") {
-                        put(
-                            ConditionalKey.DLT_2026_FLOAT,
-                            when {
-                                jackpotAmount == null -> ConditionalValue.HOLD
-                                jackpotAmount >= 800_000_000L -> ConditionalValue.UP
-                                else -> ConditionalValue.NORMAL
-                            }
-                        )
-                    }
+                    // —— DLT 2026 新规：三~七等奖奖池≥8亿时上浮 6666/380/200/18/7 ——
+                    //  注意：不能用「当期」奖池判定（draw.jackpotAmount=本期开奖后滚存，是留给下一期用的）。
+                    //  判定依据是「开奖前奖池」= 上一期滚存，必须在解析完成后按时间正序关联上一期奖池，
+                    //  统一由 resolveDltFloat() 后处理回填（与网页版 showTierRows 用 prevDraw.jackpot 判定完全一致）。
                 }
 
                 // —— 结构一致性审计 v11：不再只算 size（全 prizeTierPairCount）
@@ -379,8 +372,41 @@ object LotteryXlsParser {
             }
         }
         resolveFuyunHysteresis(result)
+        resolveDltFloat(result)
         result.sortByDescending { it.issue }
         return result
+    }
+
+    /**
+     * DLT 2026 新规固定奖上浮回填：用【上一期】奖池判定本期是否上浮（与网页版 showTierRows 完全一致）。
+     *
+     *  含义澄清：draw.jackpotAmount = 本期开奖后滚存（供下一期判定用）；
+     *  本期开奖前奖池 = 上一期的滚存。故按时间正序遍历，把上一期的 jackpotAmount 作为本期判定依据。
+     *
+     *  规则：上一期奖池 ≥8亿 → UP；<8亿 → NORMAL；上一期奖池缺失 → HOLD（不展示联动说明，仅按基础金额展示）。
+     *  仅对适用 dlt_20260131 新规的期次写入标志；其他版本不产生该标志。
+     */
+    private fun resolveDltFloat(draws: MutableList<LotteryDraw>) {
+        var prevJackpot: Long? = null
+        for (d in draws.sortedBy { it.issue }) {
+            if (d.ruleVersionKey == "dlt_20260131") {
+                val resolved = when {
+                    prevJackpot == null -> ConditionalValue.HOLD
+                    prevJackpot >= 800_000_000L -> ConditionalValue.UP
+                    else -> ConditionalValue.NORMAL
+                }
+                val cur = d.conditionalFlags[ConditionalKey.DLT_2026_FLOAT]
+                if (resolved != cur) {
+                    val idx = draws.indexOfFirst { it === d }
+                    if (idx >= 0) {
+                        draws[idx] = d.copy(
+                            conditionalFlags = d.conditionalFlags + (ConditionalKey.DLT_2026_FLOAT to resolved)
+                        )
+                    }
+                }
+            }
+            prevJackpot = d.jackpotAmount
+        }
     }
 
     /**
