@@ -1543,17 +1543,21 @@ async function loadHistory(){
 }
 async function loadAllLatest(){
   var totalDraws=0;
-  for(var i=0;i<TYPES.length;i++){
-    var t=TYPES[i];
+  // 联网优化：Promise.all 并行拉取所有彩种最新数据。原串行 fetch 9 个彩种
+  //   （含大数据量快乐8）会拖到 10~30s，最新开奖轮循区长时间空转。
+  var list=await Promise.all(TYPES.map(async function(t){
     try{
       var res=await fetch('/api/lottery/'+t.api);
-      if(!res.ok)continue;
+      if(!res.ok)return {t:t,dl:[]};
       var text=await res.text();
       var oldCur=cur;cur=t;
       var dl=parseDraws(text);
       cur=oldCur;
-      if(dl.length){latestMap[t.code]=dl[0];totalDraws+=dl.length;}
-    }catch(e){}
+      return {t:t,dl:dl};
+    }catch(e){return {t:t,dl:[]};}
+  }));
+  for(var i=0;i<list.length;i++){
+    if(list[i].dl.length){latestMap[list[i].t.code]=list[i].dl[0];totalDraws+=list[i].dl.length;}
   }
   refreshLatest();
   $('dataStatus').textContent='数据更新于 '+new Date().toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})+' · '+TYPES.length+'个彩种 · 共'+totalDraws+'期'+(draws.length?'（当前彩种'+draws.length+'期）':'');
@@ -1579,7 +1583,7 @@ function startAutoScroll(){
     if(maxScroll<=0)return;
     if(sc.scrollLeft>=maxScroll-4){sc.scrollTo({left:0,behavior:'smooth'});}
     else{sc.scrollBy({left:cardW,behavior:'smooth'});}
-  },3000);
+  },2500);
 }
 function stopAutoScroll(){if(autoScrollTimer){clearInterval(autoScrollTimer);autoScrollTimer=null;}}
 function pauseAutoScroll(){autoScrollPaused=true;}
