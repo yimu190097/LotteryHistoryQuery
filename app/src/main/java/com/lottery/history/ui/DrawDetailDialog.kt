@@ -487,7 +487,7 @@ class DrawDetailDialog(
             if (metadataMissing) {
                 append("数据解析异常，请返回主界面下拉刷新。如问题持续，请联系客服。")
             } else {
-                append("无人中奖=本期该奖项无人命中；\"规则固定¥X\"为基础额度，每期实际金额以官方公布为准。")
+                append("无人中奖=本期该奖项无人命中；单注奖金以官方公布为准。")
             }
             // —— 奖池联动说明仅在规则版本明确时展示（缺失时 ruleVersion 是占位骨架，startsWith 必错）——
             //  注意：状态基于「开奖前奖池/迟滞回填」判定，与当期显示奖池（开奖后滚存）数值未必一致，
@@ -753,21 +753,14 @@ class DrawDetailDialog(
             val baseMatch = rule.description.ifEmpty { buildMatchText(rule) }
 
             // —— v11：条件性奖级展示逻辑 ——
+            // 用户要求（2026-09）："（规则固定¥X）"类冗余提示不显示——固定奖单注奖金列已准确展示；
+            //   仅 DLT UP（奖池≥8亿上浮、金额与规则不同）才说明上浮金额，NORMAL/HOLD 不附加括号。
             val fullMatch = when {
-                // DLT 2026 浮动金额：显示本期实际的上下浮金额，不永远写死规则基础金额
-                rule.conditionalKey == ConditionalKey.DLT_2026_FLOAT && rule.fixedAmountYuan != null -> {
+                rule.conditionalKey == ConditionalKey.DLT_2026_FLOAT && rule.fixedAmountYuan != null &&
+                    dltFloat == ConditionalValue.UP -> {
                     val token = rule.fixedAmountYuan.toString()
                     val actual = dltFloatOverrideMap?.get(token) ?: rule.fixedAmountYuan
-                    val prefix = when (dltFloat) {
-                        // 状态可判定才标"已上浮"；HOLD(上期奖池缺失)按基础规则金额展示，不出现"未知"字样
-                        ConditionalValue.UP -> "本期奖池≥8亿已上浮"
-                        else -> "规则固定"
-                    }
-                    "$baseMatch（$prefix¥$actual）"
-                }
-
-                rule.fixedAmountYuan != null -> {
-                    "$baseMatch（规则固定¥${rule.fixedAmountYuan}）"
+                    "$baseMatch（本期奖池≥8亿已上浮¥$actual）"
                 }
 
                 else -> baseMatch
