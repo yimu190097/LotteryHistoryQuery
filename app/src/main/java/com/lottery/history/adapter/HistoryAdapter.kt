@@ -165,12 +165,24 @@ class HistoryAdapter(
         // ===== v13 新增：追加投注信息（仅大乐透等有追加玩法且 appendPrizeTiers 非空时显示） =====
         val appendTiers = draw.appendPrizeTiers
         if (appendTiers.isNotEmpty() && hasSelection) {
-            // 查找命中的追加奖级（按 matchedTierIndex 对应）
-            val matchedTierIdx = draw.resolveRuleVersion(config)?.rules?.indexOfFirst { rule ->
+            // 查找命中的追加奖级：用【去重奖级索引】对齐 appendPrizeTiers（追加1等/2等/3等...）。
+            //   ⚠️ 不能用 rules 原始索引：2014版三等奖有(5+0/4+2)两个命中方式占2个索引，
+            //   若按原始索引取，中 4+2 会 getOrNull(3)=null，导致该显示追加却漏显示（同奖级显示不一致）。
+            val rv = draw.resolveRuleVersion(config)
+            var matchedTierIdx = -1
+            if (rv != null) {
                 val pCount = draw.primaryNumbers.count { it in selectedPrimary }
                 val sCount = if (config.hasSecondary) draw.secondaryNumbers.count { it in selectedSecondary } else 0
-                pCount == rule.matchPrimary && sCount == rule.matchSecondary
-            } ?: -1
+                var dedup = -1
+                var lastName: String? = null
+                for (rule in rv.rules) {
+                    if (rule.prizeName != lastName) { dedup++; lastName = rule.prizeName }
+                    if (pCount == rule.matchPrimary && sCount == rule.matchSecondary) {
+                        matchedTierIdx = dedup
+                        break
+                    }
+                }
+            }
             if (matchedTierIdx >= 0) {
                 val append = appendTiers.getOrNull(matchedTierIdx)
                 if (append != null) {
