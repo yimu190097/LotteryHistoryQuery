@@ -919,9 +919,10 @@ async function doIssueQuery(){
   }else{$('rBlueBalls').innerHTML='';$('rBlueRow').style.display='none';}
   var c=$('resultContainer');c.innerHTML='';
   var row=document.createElement('div');row.className='row';
+  // P0 修复：期号查询单行列序与表头对齐（命中主区/红球在前、命中后区/蓝球在后）——与 renderResults 一致。
   row.innerHTML='<div class="cPrize" style="color:'+prizeColor(matched?matched.name:'未命中')+';">'+(matched?matched.name:'未命中')+'</div>'
-    +(cur.hasSec?'<div class="cSec" style="color:#78909C;">'+(matched?matched.sc+'个':'—')+'</div>':'')
     +'<div class="cPri" style="color:'+(matched&&matched.pc>=3?'#C62828':'#546E7A')+';">'+(matched?matched.pc+'个':'—')+'</div>'
+    +(cur.hasSec?'<div class="cSec" style="color:'+(matched&&matched.sc>0?'#1565C0':'#78909C')+';">'+(matched?matched.sc+'个':'—')+'</div>':'')
     +'<div class="cCnt" style="color:'+(matched?'#C62828':'#9E9E9E')+';">'+(matched?'中1次':'未中')+'</div>'
     +'<div class="cAct"><span class="actbtn no">—</span></div>';
   c.appendChild(row);
@@ -958,7 +959,9 @@ function hitCount(t,selPri,selPSet,selSec,d){
       var ds=d.main.slice().map(function(x){return +x;}).sort(function(a,b){return a-b;});
       var sss=selPri.slice().map(function(x){return +x;}).sort(function(a,b){return a-b;});
       var multi=ds.join()===sss.join();
-      if(!multi){pc=d.main.filter(function(x){return selPSet.has(+x);}).length;}
+      // P0 修复：组选模式号码不全中（多重集不等）→ 不得分。
+      //   之前按集合交集计数，用户 1,1,2 时开奖 1,2,2 会被误判为命中3（那是不同的组三号码）。
+      if(!multi){pc=0;}
       else{
         var a=sss[0],b=sss[1],c=sss[2];
         var two=(a===b&&b!==c)||(b===c&&a!==b), all=a!==b&&b!==c;
@@ -1503,8 +1506,10 @@ function parseDraws(text){
         appendData.push({count:acnt,amount:aamt});
       }
       // 追加5等：count=字段38(下标37)，amount=基本5等×比例
+      // P0 对齐 APK（LotteryXlsParser isPre2019Dlt）：2009/2007（及2014）版字段38是官方源行尾标记（如60），
+      //   不是真实注数，强制为0；2019/2026 版才读真实 count。追加5等仅在 apc=5 的 2009/2007 版会展示。
       var a5Raw=t[37];
-      var a5cnt=(a5Raw==='-'||!a5Raw)?0:(parseNumberSafe(a5Raw)||0);
+      var a5cnt=(ver.d<'2019-02-18')?0:((a5Raw==='-'||!a5Raw)?0:(parseNumberSafe(a5Raw)||0));
       appendData.push({count:a5cnt,amount:Math.round(baseAmtAt(4)*ratio)});
       // 追加6~7等：count=0，amount=基本6/7等×比例
       appendData.push({count:0,amount:Math.round(baseAmtAt(5)*ratio)});
