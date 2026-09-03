@@ -809,12 +809,11 @@ class DrawDetailDialog(
             val aAmount = appendEntry?.amount?.takeIf {
                 appendEntry.count?.let { c -> c > 0 || it == 0L } ?: true
             }
-            // 【用户要求：追加投注全奖级都显示，0注也要显示「追加无人中奖」，0金额显示「追加投注 —」】
-            //  旧版 hasAppendData 必须 count>0 才为 true，导致整期无人中奖的追加投注全部被过滤掉，
-            //  用户打开详情以为 DLT 根本没有追加投注这个玩法，骂死。
-            //  新版：只要规则版本含追加投注 (appendTierPairCount>0) 且 appendEntry 非 null
-            //  → hasAppend = true，哪怕 0注0金额，也在UI上显式告诉用户「追加无人中奖」。
-            val hasAppendData = ruleVersion.appendTierPairCount > 0 && appendEntry != null && !fuyunDisabled
+            // 【用户要求（2026-09）：追加投注仅在实际产生奖金分配（注数>0）时才显示；
+            //   追加0注/无人中 → 不显示任何追加提示，避免"不产生实际分配却提示"的不专业表现。
+            //   追加参与分配的奖级由 appendTierPairCount 限定（2026/2019=一二等，2014=一二三等，2007/2009=一至五等）】
+            val hasAppendData = ruleVersion.appendTierPairCount > 0 && appendEntry != null && !fuyunDisabled &&
+                (appendEntry.count ?: 0L) > 0
 
             result.add(
                 MergedPrizeRow(
