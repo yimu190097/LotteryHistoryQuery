@@ -1267,7 +1267,7 @@ function showTierRows(cfg,draw,ver,prevDraw){
     var prevJp=(prevDraw&&prevDraw.jackpot)?parseNumberSafe(prevDraw.jackpot):null;
     if(prevJp!==null&&prevJp>=800000000)dltFloat='UP';
     else if(prevJp!==null)dltFloat='NORMAL';
-    // prevJp===null → dltFloat stays null（HOLD：上期奖池缺失，暂按规则固定）
+    // prevJp===null → dltFloat stays null（HOLD：上期奖池缺失 → 不展示联动说明，仅显示基础奖金）
   }
   // DLT 追加数据
   var appendTiers=draw.appendTiers||[];
@@ -1283,14 +1283,14 @@ function showTierRows(cfg,draw,ver,prevDraw){
     conds.forEach(function(c){
       var desc=matchDesc(cfg,c[0],c[1]);
       if(!desc)return;
-      // DLT 浮动金额判定（对齐 APK: UP/NORMAL/HOLD 三种状态都有前缀）
+      // DLT 浮动金额判定（对齐 APK：UP/NORMAL 标注状态；HOLD 仅展示基础奖金，不出现不确定字样）
       if(dltFloat!==null&&ruleAmt!==null&&DLT_FLOAT_MAP[ruleAmt]){
         var actual=dltFloat==='UP'?DLT_FLOAT_MAP[ruleAmt]:ruleAmt;
-        var prefix=dltFloat==='UP'?'本期奖池≥8亿已上浮':(dltFloat==='NORMAL'?'规则固定':'上期奖池数据暂缺，本期暂按基础奖金');
+        var prefix=dltFloat==='UP'?'本期奖池≥8亿已上浮':'规则固定';
         desc+='（'+prefix+'¥'+actual+'）';
       }else if(dltFloat===null&&ruleAmt!==null&&DLT_FLOAT_MAP[ruleAmt]){
-        // HOLD: 上期奖池数据缺失，仍按基础奖金展示（不误报上浮）
-        desc+='（上期奖池数据暂缺，本期暂按基础奖金¥'+ruleAmt+'）';
+        // HOLD: 上期奖池数据缺失 → 仅展示基础奖金金额，不出现"暂缺"类字样（已开奖数据展示必须准确）
+        desc+='（追加¥'+ruleAmt+'）';
       }
       matchLines.push(desc);
     });
