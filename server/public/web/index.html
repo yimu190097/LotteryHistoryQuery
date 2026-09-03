@@ -901,6 +901,16 @@ async function doIssueQuery(){
     var hc=hitCount(cur,selPri,selPSet,seSec,hit);
     if(hc.pc===rl[0]&&hc.sc===rl[1]){matched={name:rl[2],amt:rl[3],pc:hc.pc,sc:hc.sc};break;}
   }
+  // 展示该期元数据实际单注奖金（浮动奖/上浮奖显示当期真实中奖金额，而非规则固定值）
+  var actAmt=null;
+  if(matched){
+    var rls=ver?prForVersion(ver,cur):latestPr(cur);
+    var at=hit.allTiers||hit.tiers||[];
+    var tn={};
+    for(var i2=0;i2<Math.min(rls.length,at.length);i2++){if(!tn[rls[i2][0]])tn[rls[i2][0]]=at[i2];}
+    var td2=tn[matched.name];
+    if(td2&&td2.amount>0)actAmt=td2.amount;
+  }
   var ns='';
   if(cur.pos){
     ns=selPri.map(function(n){return pad2(n);}).join(' ');
@@ -911,7 +921,7 @@ async function doIssueQuery(){
       ns+=' + '+ss2;
     }
   }
-  $('selText').textContent='查询号码：'+ns+' | 期号 '+hit.issue+'（'+hit.date+'）：'+(matched?'命中【'+matched.name+'】'+(matched.amt?'，单注奖金 '+matched.amt+' 元':''):'未命中任何奖项');
+  $('selText').textContent='查询号码：'+ns+' | 期号 '+hit.issue+'（'+hit.date+'）：'+(matched?'命中【'+matched.name+'】'+(actAmt?'，单注奖金 '+fmtAmt(actAmt):''):'未命中任何奖项');
   $('selText').style.color=matched?'#C62828':'#546E7A';
   $('selText').style.fontWeight='bold';
   $('rRedBalls').innerHTML=hit.dmain.map(function(n){return '<span class="ball on" style="width:24px;height:24px;margin:2px;font-size:10px;">'+n+'</span>';}).join('');
@@ -1013,7 +1023,7 @@ function matchAll(selPri,selSec){
       if(r[4]==='fuyun' && d.fuyun!==true) continue;
       // kl8: 只对选十玩法做命中匹配（用户选号 mainN:10 = 选十）
       if(t.code==='kl8' && r[4] && r[4]!=='kl8-10') continue;
-      // P1 修复：3D/排列三 组选模式，命中应归属组选3/组选6。
+      // P1 修复：3D/排列三 组选模式下，命中应归属组选3/组选6，而非恒为直选奖。
       if(t.pos && (modeIdx===0?r[2]!=='直选奖':(modeIdx===1?r[2]!=='组选3':r[2]!=='组选6'))) continue;
       var hc=hitCount(t,selPri,selPSet,selSec,d);
       if(hc.pc===r[0]&&hc.sc===r[1]){
@@ -1024,34 +1034,41 @@ function matchAll(selPri,selSec){
       }
     }
   });
-  // 2) 按最新版奖项名顺序合并展示
-  var latest=t.vers[0].r, uniqueNames=[], nameConds={}, latestByCond={};
-  latest.forEach(function(r){
-    // kl8: 查询结果排序仅保留选十玩法7个奖名
-    if(t.code==='kl8' && r[4] && r[4]!=='kl8-10') return;
-    if(!nameConds[r[2]]){nameConds[r[2]]=[];uniqueNames.push(r[2]);}
-    nameConds[r[2]].push([r[0],r[1]]);
-    latestByCond[r[0]+','+r[1]]=r[2];
-  });
-  var list=[], consumed={};
-  uniqueNames.forEach(function(name){
-    var conds=nameConds[name], one=conds.length===1, matched=[];
-    Object.keys(buckets).forEach(function(k){
-      if(consumed[k])return; var b=buckets[k];
-      if(conds.some(function(c){return c[0]===b.mp&&c[1]===b.ms;})){matched=matched.concat(b.draws);consumed[k]=true;}
+  // 2) 按各命中期"当期规则"的奖级名合并展示（不再按最新规则统一改名）。
+  //    保证查询表格里的奖级名与各期"查看详情"里的元数据奖项名一致，
+  //    即"所有号码的奖项和当期政策/规则匹配上，并准确显示"。
+  //    行顺序：从最新版本向旧版本收集首次出现的奖级名 → 现代口径在前、旧版独有奖级名在后。
+  var orderNames=[], orderSet={};
+  for(var vi=0;vi<t.vers.length;vi++){
+    t.vers[vi].r.forEach(function(r){
+      if(t.code==='kl8' && r[4] && r[4]!=='kl8-10') return;
+      if(t.pos && (modeIdx===0?r[2]!=='直选奖':(modeIdx===1?r[2]!=='组选3':r[2]!=='组选6'))) return;
+      if(!orderSet[r[2]]){orderSet[r[2]]=true;orderNames.push(r[2]);}
     });
-    var amt=null; latest.forEach(function(r){if(r[2]===name&&amt===null)amt=r[3];});
-    list.push({name:name,conds:conds,amt:amt,mp:one?conds[0][0]:-1,ms:one?conds[0][1]:-1,count:matched.length,matches:matched});
-  });
-  // 3) 剩余桶（老版本奖级，最新版无对应条件）→ 就近归属或保留原奖级名
+  }
+  // 同名（当期规则下的奖级名）合并
+  var nameBuckets={};
   Object.keys(buckets).forEach(function(k){
-    if(consumed[k])return; var b=buckets[k]; consumed[k]=true;
-    var ln=latestByCond[b.mp+','+b.ms]||null;
-    var existing=null;
-    for(var i2=0;i2<list.length;i2++){if(list[i2].name===(ln||b.name)){existing=list[i2];break;}}
-    if(existing){existing.matches=existing.matches.concat(b.draws);existing.count=existing.matches.length;existing.mp=-1;existing.ms=-1;}
-    else{list.push({name:b.name,conds:[[b.mp,b.ms]],amt:null,mp:b.mp,ms:b.ms,count:b.draws.length,matches:b.draws});}
+    var b=buckets[k];
+    if(!nameBuckets[b.name])nameBuckets[b.name]=[];
+    nameBuckets[b.name]=nameBuckets[b.name].concat(b.draws);
   });
+  var makeRow=function(name){
+    // 命中主/次：跨版本同奖级名的命中条件可能不同（如大乐透4+2旧规为四等奖、新规为三等奖），
+    // 收集全部条件；条件不唯一则该列显示 "—"，具体命中条件在"查看"详情中逐期展示
+    var conds=[], seen={};
+    Object.keys(buckets).forEach(function(k){
+      var b=buckets[k]; if(b.name!==name)return;
+      var ck=b.mp+','+b.ms;
+      if(!seen[ck]){seen[ck]=true;conds.push([b.mp,b.ms]);}
+    });
+    var one=conds.length===1;
+    return {name:name,conds:conds,amt:null,mp:one?conds[0][0]:-1,ms:one?conds[0][1]:-1,count:nameBuckets[name].length,matches:nameBuckets[name]};
+  };
+  var list=[];
+  orderNames.forEach(function(name){ if(nameBuckets[name]) list.push(makeRow(name)); });
+  // 旧版本独有奖级名（最新版本不存在）排在其后
+  Object.keys(nameBuckets).forEach(function(n){ if(!orderSet[n]) list.push(makeRow(n)); });
   return list;
 }
 function renderResults(results,selPri){
@@ -1481,7 +1498,10 @@ function parseDraws(text){
     if(!/^\d{4}-/.test(t[1]))continue;
     var nums=[];
     var numEnd=2;
-    for(var j=2;j<t.length;j++){if(/^\d{1,2}$/.test(t[j])){nums.push(t[j]);numEnd=j+1;}else break;}
+    // P2 加固：快乐8 销售/奖池可能为 0 等个位数（最新期未回填），若贪婪收集会把其并入号码，
+    //   导致奖级数据整体错位。快乐8 只收满 parseMain 个号码即停；其余彩种维持原有贪婪（双色球含出球顺序）。
+    var numCap=(cur.code==='kl8')?(cur.parseMain+cur.parseSec):Infinity;
+    for(var j=2;j<t.length;j++){if(nums.length<numCap&&/^\d{1,2}$/.test(t[j])){nums.push(t[j]);numEnd=j+1;}else break;}
     if(nums.length<cur.parseMain+cur.parseSec)continue;
     var main=nums.slice(0,cur.parseMain);
     var sec=cur.parseSec>0?nums.slice(cur.parseMain,cur.parseMain+cur.parseSec):[];
