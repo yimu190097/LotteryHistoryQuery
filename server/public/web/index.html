@@ -1297,8 +1297,9 @@ function showTierRows(cfg,draw,ver,prevDraw){
         var prefix=dltFloat==='UP'?'本期奖池≥8亿已上浮':'规则固定';
         desc+='（'+prefix+'¥'+actual+'）';
       }else if(cfg.code==='dlt'&&dltFloat===null&&ruleAmt!==null&&DLT_FLOAT_MAP[ruleAmt]){
-        // HOLD: 上期奖池数据缺失 → 仅展示基础奖金金额，不出现"暂缺"类字样（已开奖数据展示必须准确）
-        desc+='（追加¥'+ruleAmt+'）';
+        // HOLD: 上期奖池数据缺失 → 仅展示规则固定奖金金额，不出现"暂缺"类字样。
+        //   P0：三至七等是固定奖，追加投注不参与奖金分配，绝不能用"追加¥X"误导用户。
+        desc+='（规则固定¥'+ruleAmt+'）';
       }
       matchLines.push(desc);
     });
@@ -1325,16 +1326,6 @@ function showTierRows(cfg,draw,ver,prevDraw){
       else if(baseCnt>0)baseAmtStr='—';
       else baseAmtStr='无人中奖，无奖金';
     }
-    // 追加投注注数
-    var appCntStr='';
-    if(hasAppend&&atd){
-      appCntStr=appCnt>0?appCnt.toLocaleString()+'注':(appCnt===0?'无人中奖':'—');
-    }
-    // 追加投注金额
-    var appAmtStr='';
-    if(hasAppend&&atd){
-      appAmtStr=appCnt>0&&appAmt>0?fmtAmt(appAmt):(appCnt>0?'—':'无人中奖，无奖金');
-    }
     // 构建主行
     var rowClass='tierRow';
     if(isFuyunOff)rowClass+=' tierOff';
@@ -1345,8 +1336,12 @@ function showTierRows(cfg,draw,ver,prevDraw){
       +'<div class="cnt">'+baseCntStr+'</div>'
       +'<div class="amt">'+baseAmtStr+'</div>'
       +'</div>';
-    // 追加投注独立行（在对应奖级下方展示）
-    if(hasAppend&&atd){
+    // 追加投注信息（用户要求：仅当追加实际产生奖金分配（注数>0）才显示追加行；
+    //   追加0注/无人中 → 不显示任何追加提示，避免"不产生实际分配却提示"的不专业表现。
+    //   追加参与分配的奖级范围由 ver.apc 限定：2026/2019=一二等，2014=一二三等，2007/2009=一至五等）
+    if(hasAppend&&atd&&appCnt>0){
+      var appCntStr=appCnt.toLocaleString()+'注';
+      var appAmtStr=appAmt>0?fmtAmt(appAmt):'—';
       html+='<div class="tierRow tierAppend">'
         +'<div class="nm"><div class="pr" style="color:#1565C0;font-size:12px;">└ 追加投注</div></div>'
         +'<div class="cnt"><span class="apa">'+appCntStr+'</span></div>'
