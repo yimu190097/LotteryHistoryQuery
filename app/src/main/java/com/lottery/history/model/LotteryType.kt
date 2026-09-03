@@ -487,7 +487,7 @@ object LotteryType {
             )
         ),
         parsePrimaryCount = 6, parseSecondaryCount = 1,
-        primaryUnit = "位前区", secondaryUnit = "位后区",
+        primaryUnit = "位（前区）", secondaryUnit = "位（后区）",
         issuePattern = "5-7位数字（例26089）", issueHint = "例如：26089"
     )
 
