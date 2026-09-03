@@ -425,7 +425,7 @@ var TYPES=[
   primaryUnit:'位（前区）',secondaryUnit:'位（后区）',extraCount:2, tierCount:6,
   vers:[
    {d:'2020-10-11',tc:6,r:[[6,1,'一等奖',null],[6,0,'二等奖',null],[5,1,'三等奖',3000],[5,0,'四等奖',500],[4,1,'四等奖',500],[4,0,'五等奖',30],[3,1,'五等奖',30],[3,0,'六等奖',5],[2,1,'六等奖',5],[1,1,'六等奖',5],[0,1,'六等奖',5]]},
-   {d:'2004-05-18',tc:6,r:[[6,1,'一等奖',null],[6,0,'二等奖',null],[5,1,'三等奖',1800],[5,0,'四等奖',300],[4,1,'四等奖',300],[4,0,'五等奖',20],[3,1,'五等奖',20],[3,0,'六等奖',5],[2,1,'六等奖',5],[1,1,'六等奖',5],[0,1,'六等奖',5]]}
+   {d:'2004-05-18',tc:6,r:[[7,0,'一等奖',null],[6,0,'二等奖',null],[5,0,'三等奖',1800],[4,0,'四等奖',300],[3,0,'五等奖',20],[2,0,'六等奖',5]]}
   ]},
  {code:'kl8',api:'kl8',name:'快乐8',mainN:10,mainMin:1,mainMax:80,mainLabel:'号码',
   hasSec:false,secN:0,secMin:0,secMax:0,secLabel:'',parseMain:20,parseSec:0,pos:false,
@@ -896,6 +896,8 @@ async function doIssueQuery(){
     var rl=ver.r[k];
     if(rl[4]==='fuyun'&&hit.fuyun!==true)continue;
     if(cur.code==='kl8' && rl[4] && rl[4]!=='kl8-10') continue;
+    // P1 修复：3D/排列三 组选模式，期号查询奖级名应为组选3/组选6。
+    if(cur.pos && (modeIdx===0?rl[2]!=='直选奖':(modeIdx===1?rl[2]!=='组选3':rl[2]!=='组选6'))) continue;
     var hc=hitCount(cur,selPri,selPSet,seSec,hit);
     if(hc.pc===rl[0]&&hc.sc===rl[1]){matched={name:rl[2],amt:rl[3],pc:hc.pc,sc:hc.sc};break;}
   }
@@ -971,6 +973,30 @@ function hitCount(t,selPri,selPSet,selSec,d){
     }
     return {pc:pc,sc:0};
   }
+  // P1 修复：排列五为位置游戏，须按位全中（顺序一致）才计一等奖，不能用集合匹配。
+  if(t.code==='p5'){
+    var pc5=0; for(var i=0;i<5;i++){ if(selPri[i]!==undefined&&+(d.main[i])===+selPri[i]) pc5++; }
+    return {pc:pc5,sc:0};
+  }
+  // P1 修复：七星彩为位置游戏，须按位匹配。
+  //   新规(2020-10-11+)：前6位任意N位按位相同 + 后1位（官方奖级对照表 6+1/6+0/5+1/5+0,4+1/4+0,3+1/3+0,2+1,1+1,0+1）。
+  //   旧规(2004-2019)：7位中连续N位按位相同（一~六等奖 = 连续7~2位）。
+  if(t.code==='7xc'){
+    var vx=verForDate(t,d.date);
+    if(vx && vx.d>='2020-10-11'){
+      var pcx=0; for(var i=0;i<6;i++){ if(selPri[i]!==undefined&&+(d.main[i])===+selPri[i]) pcx++; }
+      var scx=(selSec&&selSec.has(+d.sec[0]))?1:0;
+      return {pc:pcx,sc:scx};
+    }else{
+      var run=0,best=0;
+      for(var i=0;i<7;i++){
+        var dv=i<6?+(d.main[i]):(d.sec&&d.sec.length?+(d.sec[0]):-1);
+        var sv=i<6?+selPri[i]:((selSec&&selSec.has(dv))?dv:-2);
+        if(sv===dv){run++; if(run>best)best=run;} else run=0;
+      }
+      return {pc:best,sc:0};
+    }
+  }
   var mp=d.main.filter(function(x){return selPSet.has(+x);}).length;
   var ms=t.hasSec?d.sec.filter(function(x){return selSec.has(+x);}).length:0;
   return {pc:mp,sc:ms};
@@ -987,6 +1013,8 @@ function matchAll(selPri,selSec){
       if(r[4]==='fuyun' && d.fuyun!==true) continue;
       // kl8: 只对选十玩法做命中匹配（用户选号 mainN:10 = 选十）
       if(t.code==='kl8' && r[4] && r[4]!=='kl8-10') continue;
+      // P1 修复：3D/排列三 组选模式，命中应归属组选3/组选6。
+      if(t.pos && (modeIdx===0?r[2]!=='直选奖':(modeIdx===1?r[2]!=='组选3':r[2]!=='组选6'))) continue;
       var hc=hitCount(t,selPri,selPSet,selSec,d);
       if(hc.pc===r[0]&&hc.sc===r[1]){
         var key=ver.d+'|'+r[0]+'|'+r[1]+'|'+r[2];
