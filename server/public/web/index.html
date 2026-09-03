@@ -1284,11 +1284,14 @@ function showTierRows(cfg,draw,ver,prevDraw){
       var desc=matchDesc(cfg,c[0],c[1]);
       if(!desc)return;
       // DLT 浮动金额判定（对齐 APK：UP/NORMAL 标注状态；HOLD 仅展示基础奖金，不出现不确定字样）
-      if(dltFloat!==null&&ruleAmt!==null&&DLT_FLOAT_MAP[ruleAmt]){
+      // P0 修复：必须 cfg.code==='dlt' 门控——非 DLT 彩种 dltFloat 恒为 null，
+      //   若不加彩种判断，双色球六等奖/福运奖、7乐彩/七星彩六等奖等 5/15/150/300 元奖级
+      //   会命中 DLT_FLOAT_MAP 的 key，错误显示"（追加¥X）"。
+      if(cfg.code==='dlt'&&dltFloat!==null&&ruleAmt!==null&&DLT_FLOAT_MAP[ruleAmt]){
         var actual=dltFloat==='UP'?DLT_FLOAT_MAP[ruleAmt]:ruleAmt;
         var prefix=dltFloat==='UP'?'本期奖池≥8亿已上浮':'规则固定';
         desc+='（'+prefix+'¥'+actual+'）';
-      }else if(dltFloat===null&&ruleAmt!==null&&DLT_FLOAT_MAP[ruleAmt]){
+      }else if(cfg.code==='dlt'&&dltFloat===null&&ruleAmt!==null&&DLT_FLOAT_MAP[ruleAmt]){
         // HOLD: 上期奖池数据缺失 → 仅展示基础奖金金额，不出现"暂缺"类字样（已开奖数据展示必须准确）
         desc+='（追加¥'+ruleAmt+'）';
       }
