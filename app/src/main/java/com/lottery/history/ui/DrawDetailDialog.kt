@@ -490,31 +490,29 @@ class DrawDetailDialog(
                 append("无人中奖=本期该奖项无人命中；\"规则固定¥X\"为基础额度，每期实际金额以官方公布为准。")
             }
             // —— 奖池联动说明仅在规则版本明确时展示（缺失时 ruleVersion 是占位骨架，startsWith 必错）——
+            //  注意：状态基于「开奖前奖池/迟滞回填」判定，与当期显示奖池（开奖后滚存）数值未必一致，
+            //  因此只陈述状态结论，绝不绑定当期奖池数值（否则迟滞区间会出现"奖池5亿但已上浮"的矛盾文案）。
             if (!metadataMissing) {
                 if (config.code == "dlt" && ruleVersion.key.startsWith("dlt_2026")) {
                     val floatState = draw?.conditionalFlags?.get(ConditionalKey.DLT_2026_FLOAT)
-                    // 状态可判定才展示联动说明；HOLD(上期奖池缺失)不展示，避免出现"暂缺"类不确定表述
+                    // 状态可判定才展示联动说明；HOLD(上一期奖池缺失)不展示，避免出现"暂缺"类不确定表述
                     if (floatState == ConditionalValue.UP || floatState == ConditionalValue.NORMAL) {
-                        val jp = draw?.jackpotAmount
                         append("\n★大乐透2026新规奖池联动：")
-                        if (jp != null) append("当前奖池${formatAmount(jp)}，")
                         append(if (floatState == ConditionalValue.UP)
-                            "≥8亿已上浮（三6666/四380/五200/六18/七7）"
+                            "开奖前奖池≥8亿，本期固定奖已上浮（三6666/四380/五200/六18/七7）"
                         else
-                            "<8亿未上浮（三5000/四300/五150/六15/七5）")
+                            "开奖前奖池<8亿，本期固定奖未上浮（三5000/四300/五150/六15/七5）")
                     }
                 }
                 if (config.code == "ssq" && ruleVersion.key.startsWith("ssq_2026")) {
                     val fuyunState = draw?.conditionalFlags?.get(ConditionalKey.SSQ_FUYUN)
                     // 状态可判定才展示说明；HOLD(奖池无法判定)不展示，避免出现不确定表述
                     if (fuyunState == ConditionalValue.ON || fuyunState == ConditionalValue.OFF) {
-                        val jp = draw?.jackpotAmount
-                        append("\n★双色球福运奖双门槛：")
-                        if (jp != null) append("奖池${formatAmount(jp)}，")
+                        append("\n★双色球福运奖：")
                         append(if (fuyunState == ConditionalValue.ON)
-                            "≥15亿福运奖已开启（中3红=5元）"
+                            "本期福运奖已开启（中3红=5元）"
                         else
-                            "福运奖未开启（奖池<15亿或已停止，中3红不中奖）")
+                            "本期福运奖未开启（中3红不中奖）")
                     }
                 }
             }
