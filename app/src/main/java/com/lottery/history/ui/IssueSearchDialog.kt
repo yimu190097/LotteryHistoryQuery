@@ -324,22 +324,23 @@ class IssueSearchDialog(context: Context) : Dialog(context) {
         })
 
         // ===== v13 新增：条件性奖级状态提示（福运奖/上浮） =====
+        //  HOLD 状态（奖池缺失无法判定）不展示说明，避免出现"维持上期状态/暂按基础金额"等不确定表述
         val flags = draw.conditionalFlags
         if (flags.isNotEmpty()) {
             val flagLines = buildList {
                 flags[ConditionalKey.SSQ_FUYUN]?.let { state ->
-                    add(when (state) {
-                        ConditionalValue.ON -> "★ 福运奖：≥15亿已开启（中3红=5元）"
-                        ConditionalValue.OFF -> "★ 福运奖：未开启（中3红不中奖）"
-                        else -> "★ 福运奖：奖池3~15亿间维持上期状态"
-                    })
+                    when (state) {
+                        ConditionalValue.ON -> add("★ 福运奖：已开启（中3红=5元）")
+                        ConditionalValue.OFF -> add("★ 福运奖：未开启（中3红不中奖）")
+                        else -> Unit // HOLD：状态不可判定，不展示
+                    }
                 }
                 flags[ConditionalKey.DLT_2026_FLOAT]?.let { state ->
-                    add(when (state) {
-                        ConditionalValue.UP -> "★ 大乐透：奖池≥8亿已上浮（三6666/四380/五200/六18/七7）"
-                        ConditionalValue.NORMAL -> "★ 大乐透：奖池<8亿未上浮（三5000/四300/五150/六15/七5）"
-                        else -> "★ 大乐透：奖池状态未知，暂按基础金额展示"
-                    })
+                    when (state) {
+                        ConditionalValue.UP -> add("★ 大乐透：奖池≥8亿已上浮（三6666/四380/五200/六18/七7）")
+                        ConditionalValue.NORMAL -> add("★ 大乐透：奖池<8亿未上浮（三5000/四300/五150/六15/七5）")
+                        else -> Unit // HOLD：状态不可判定，不展示
+                    }
                 }
             }
             if (flagLines.isNotEmpty()) {
