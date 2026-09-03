@@ -136,17 +136,17 @@ object LotteryType {
                 realTiersToUse = 7, prizeTierPairCount = 7,
                 extraFieldCount = 8,  // 6红球出球顺序 + 销售额 + 奖池
                 rules = listOf(
-                    LotteryTypeConfig.MatchRuleDef(6, 1, "6红球+1蓝球全中", "一等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(6, 0, "中6红球，蓝球未中", "二等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(5, 1, "中5红球+1蓝球", "三等奖", 3000),
-                    LotteryTypeConfig.MatchRuleDef(5, 0, "中5红球（蓝球未中）", "四等奖", 200),
-                    LotteryTypeConfig.MatchRuleDef(4, 1, "中4红球+1蓝球", "四等奖", 200),
-                    LotteryTypeConfig.MatchRuleDef(4, 0, "中4红球（蓝球未中）", "五等奖", 10),
-                    LotteryTypeConfig.MatchRuleDef(3, 1, "中3红球+1蓝球", "五等奖", 10),
-                    LotteryTypeConfig.MatchRuleDef(2, 1, "中2红球+1蓝球", "六等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(1, 1, "中1红球+1蓝球", "六等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(0, 1, "仅中蓝球", "六等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "中3红球（蓝球未中）", "福运奖", 5, ConditionalKey.SSQ_FUYUN)
+                    LotteryTypeConfig.MatchRuleDef(6, 1, "6+1", "一等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(6, 0, "6+0", "二等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 1, "5+1", "三等奖", 3000),
+                    LotteryTypeConfig.MatchRuleDef(5, 0, "5+0", "四等奖", 200),
+                    LotteryTypeConfig.MatchRuleDef(4, 1, "4+1", "四等奖", 200),
+                    LotteryTypeConfig.MatchRuleDef(4, 0, "4+0", "五等奖", 10),
+                    LotteryTypeConfig.MatchRuleDef(3, 1, "3+1", "五等奖", 10),
+                    LotteryTypeConfig.MatchRuleDef(2, 1, "2+1", "六等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(1, 1, "1+1", "六等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(0, 1, "0+1", "六等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "3+0", "福运奖", 5, ConditionalKey.SSQ_FUYUN)
                 )
             ),
             LotteryTypeConfig.RuleVersion(
@@ -157,16 +157,16 @@ object LotteryType {
                 realTiersToUse = 6, prizeTierPairCount = 6,
                 extraFieldCount = 8,
                 rules = listOf(
-                    LotteryTypeConfig.MatchRuleDef(6, 1, "6红球+1蓝球全中", "一等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(6, 0, "中6红球，蓝球未中", "二等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(5, 1, "中5红球+1蓝球", "三等奖", 3000),
-                    LotteryTypeConfig.MatchRuleDef(5, 0, "中5红球（蓝球未中）", "四等奖", 200),
-                    LotteryTypeConfig.MatchRuleDef(4, 1, "中4红球+1蓝球", "四等奖", 200),
-                    LotteryTypeConfig.MatchRuleDef(4, 0, "中4红球（蓝球未中）", "五等奖", 10),
-                    LotteryTypeConfig.MatchRuleDef(3, 1, "中3红球+1蓝球", "五等奖", 10),
-                    LotteryTypeConfig.MatchRuleDef(2, 1, "中2红球+1蓝球", "六等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(1, 1, "中1红球+1蓝球", "六等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(0, 1, "仅中蓝球", "六等奖", 5)
+                    LotteryTypeConfig.MatchRuleDef(6, 1, "6+1", "一等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(6, 0, "6+0", "二等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 1, "5+1", "三等奖", 3000),
+                    LotteryTypeConfig.MatchRuleDef(5, 0, "5+0", "四等奖", 200),
+                    LotteryTypeConfig.MatchRuleDef(4, 1, "4+1", "四等奖", 200),
+                    LotteryTypeConfig.MatchRuleDef(4, 0, "4+0", "五等奖", 10),
+                    LotteryTypeConfig.MatchRuleDef(3, 1, "3+1", "五等奖", 10),
+                    LotteryTypeConfig.MatchRuleDef(2, 1, "2+1", "六等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(1, 1, "1+1", "六等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(0, 1, "0+1", "六等奖", 5)
                 )
             )
         ),
@@ -196,19 +196,19 @@ object LotteryType {
                 extraFieldCount = 2,  // 销售额 + 奖池
                 appendTierPairCount = 2,  // 2026新规：追加仅参与一、二等奖（80%）
                 rules = listOf(
-                    LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(5, 0, "中5前区（后区未中）", "三等奖", 5000, ConditionalKey.DLT_2026_FLOAT),
-                    LotteryTypeConfig.MatchRuleDef(4, 2, "中4前区+2后区", "三等奖", 5000, ConditionalKey.DLT_2026_FLOAT),
-                    LotteryTypeConfig.MatchRuleDef(4, 1, "中4前区+1后区", "四等奖", 300, ConditionalKey.DLT_2026_FLOAT),
-                    LotteryTypeConfig.MatchRuleDef(4, 0, "中4前区（后区未中）", "五等奖", 150, ConditionalKey.DLT_2026_FLOAT),
-                    LotteryTypeConfig.MatchRuleDef(3, 2, "中3前区+2后区", "五等奖", 150, ConditionalKey.DLT_2026_FLOAT),
-                    LotteryTypeConfig.MatchRuleDef(3, 1, "中3前区+1后区", "六等奖", 15, ConditionalKey.DLT_2026_FLOAT),
-                    LotteryTypeConfig.MatchRuleDef(2, 2, "中2前区+2后区", "六等奖", 15, ConditionalKey.DLT_2026_FLOAT),
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "中3前区（后区未中）", "七等奖", 5, ConditionalKey.DLT_2026_FLOAT),
-                    LotteryTypeConfig.MatchRuleDef(2, 1, "中2前区+1后区", "七等奖", 5, ConditionalKey.DLT_2026_FLOAT),
-                    LotteryTypeConfig.MatchRuleDef(1, 2, "中1前区+2后区", "七等奖", 5, ConditionalKey.DLT_2026_FLOAT),
-                    LotteryTypeConfig.MatchRuleDef(0, 2, "仅中2后区", "七等奖", 5, ConditionalKey.DLT_2026_FLOAT)
+                    LotteryTypeConfig.MatchRuleDef(5, 2, "5+2", "一等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 1, "5+1", "二等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 0, "5+0", "三等奖", 5000, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(4, 2, "4+2", "三等奖", 5000, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(4, 1, "4+1", "四等奖", 300, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(4, 0, "4+0", "五等奖", 150, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(3, 2, "3+2", "五等奖", 150, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(3, 1, "3+1", "六等奖", 15, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(2, 2, "2+2", "六等奖", 15, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "3+0", "七等奖", 5, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(2, 1, "2+1", "七等奖", 5, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(1, 2, "1+2", "七等奖", 5, ConditionalKey.DLT_2026_FLOAT),
+                    LotteryTypeConfig.MatchRuleDef(0, 2, "0+2", "七等奖", 5, ConditionalKey.DLT_2026_FLOAT)
                 )
             ),
             LotteryTypeConfig.RuleVersion(
@@ -221,23 +221,23 @@ object LotteryType {
                 extraFieldCount = 2,
                 appendTierPairCount = 2,  // 2019起：追加仅参与一、二等奖（80%）
                 rules = listOf(
-                    LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(5, 0, "中5前区（后区未中）", "三等奖", 10000),
-                    LotteryTypeConfig.MatchRuleDef(4, 2, "中4前区+2后区", "四等奖", 3000),
-                    LotteryTypeConfig.MatchRuleDef(4, 1, "中4前区+1后区", "五等奖", 300),
-                    LotteryTypeConfig.MatchRuleDef(4, 0, "中4前区（后区未中）", "六等奖", 200),
-                    LotteryTypeConfig.MatchRuleDef(3, 2, "中3前区+2后区", "六等奖", 200),
-                    LotteryTypeConfig.MatchRuleDef(3, 1, "中3前区+1后区", "七等奖", 100),
-                    LotteryTypeConfig.MatchRuleDef(2, 2, "中2前区+2后区", "七等奖", 100),
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "中3前区（后区未中）", "八等奖", 15),
-                    LotteryTypeConfig.MatchRuleDef(2, 1, "中2前区+1后区", "八等奖", 15),
-                    LotteryTypeConfig.MatchRuleDef(1, 2, "中1前区+2后区", "八等奖", 15),
-                    LotteryTypeConfig.MatchRuleDef(0, 2, "仅中2后区", "八等奖", 15),
-                    LotteryTypeConfig.MatchRuleDef(2, 0, "中2前区（后区未中）", "九等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(1, 1, "中1前区+1后区", "九等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(1, 0, "仅中1前区", "九等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(0, 1, "仅中1后区", "九等奖", 5)
+                    LotteryTypeConfig.MatchRuleDef(5, 2, "5+2", "一等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 1, "5+1", "二等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 0, "5+0", "三等奖", 10000),
+                    LotteryTypeConfig.MatchRuleDef(4, 2, "4+2", "四等奖", 3000),
+                    LotteryTypeConfig.MatchRuleDef(4, 1, "4+1", "五等奖", 300),
+                    LotteryTypeConfig.MatchRuleDef(4, 0, "4+0", "六等奖", 200),
+                    LotteryTypeConfig.MatchRuleDef(3, 2, "3+2", "六等奖", 200),
+                    LotteryTypeConfig.MatchRuleDef(3, 1, "3+1", "七等奖", 100),
+                    LotteryTypeConfig.MatchRuleDef(2, 2, "2+2", "七等奖", 100),
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "3+0", "八等奖", 15),
+                    LotteryTypeConfig.MatchRuleDef(2, 1, "2+1", "八等奖", 15),
+                    LotteryTypeConfig.MatchRuleDef(1, 2, "1+2", "八等奖", 15),
+                    LotteryTypeConfig.MatchRuleDef(0, 2, "0+2", "八等奖", 15),
+                    LotteryTypeConfig.MatchRuleDef(2, 0, "2+0", "九等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(1, 1, "1+1", "九等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(1, 0, "1+0", "九等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(0, 1, "0+1", "九等奖", 5)
                 )
             ),
             LotteryTypeConfig.RuleVersion(
@@ -250,15 +250,15 @@ object LotteryType {
                 appendTierPairCount = 3,  // 2014起：追加参与一至三等奖
                 appendRatio = 0.6,  // 2007-2019年追加比例为60%
                 rules = listOf(
-                    LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(5, 0, "中5前区（后区未中）", "三等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(4, 2, "中4前区+2后区", "三等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(4, 1, "中4前区+1后区", "四等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(4, 0, "中4前区（后区未中）", "五等奖", 200),
-                    LotteryTypeConfig.MatchRuleDef(3, 2, "中3前区+2后区", "五等奖", 200),
-                    LotteryTypeConfig.MatchRuleDef(3, 1, "中3前区+1后区", "六等奖", 100),
-                    LotteryTypeConfig.MatchRuleDef(2, 2, "中2前区+2后区", "六等奖", 100)
+                    LotteryTypeConfig.MatchRuleDef(5, 2, "5+2", "一等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 1, "5+1", "二等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 0, "5+0", "三等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(4, 2, "4+2", "三等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(4, 1, "4+1", "四等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(4, 0, "4+0", "五等奖", 200),
+                    LotteryTypeConfig.MatchRuleDef(3, 2, "3+2", "五等奖", 200),
+                    LotteryTypeConfig.MatchRuleDef(3, 1, "3+1", "六等奖", 100),
+                    LotteryTypeConfig.MatchRuleDef(2, 2, "2+2", "六等奖", 100)
                 )
             ),
             LotteryTypeConfig.RuleVersion(
@@ -271,18 +271,18 @@ object LotteryType {
                 appendTierPairCount = 5,  // 2007-2014：追加参与一至五等奖（60%）
                 appendRatio = 0.6,  // 2007-2019年追加比例为60%
                 rules = listOf(
-                    LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(5, 0, "中5前区（后区未中）", "三等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(4, 2, "中4前区+2后区", "四等奖", 3000),
-                    LotteryTypeConfig.MatchRuleDef(4, 1, "中4前区+1后区", "五等奖", 500),
-                    LotteryTypeConfig.MatchRuleDef(4, 0, "中4前区（后区未中）", "六等奖", 200),
-                    LotteryTypeConfig.MatchRuleDef(3, 2, "中3前区+2后区", "六等奖", 200),
-                    LotteryTypeConfig.MatchRuleDef(3, 1, "中3前区+1后区", "七等奖", 10),
-                    LotteryTypeConfig.MatchRuleDef(2, 2, "中2前区+2后区", "七等奖", 10),
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "中3前区（后区未中）", "八等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(2, 1, "中2前区+1后区", "八等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(1, 2, "中1前区+2后区", "八等奖", 5)
+                    LotteryTypeConfig.MatchRuleDef(5, 2, "5+2", "一等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 1, "5+1", "二等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 0, "5+0", "三等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(4, 2, "4+2", "四等奖", 3000),
+                    LotteryTypeConfig.MatchRuleDef(4, 1, "4+1", "五等奖", 500),
+                    LotteryTypeConfig.MatchRuleDef(4, 0, "4+0", "六等奖", 200),
+                    LotteryTypeConfig.MatchRuleDef(3, 2, "3+2", "六等奖", 200),
+                    LotteryTypeConfig.MatchRuleDef(3, 1, "3+1", "七等奖", 10),
+                    LotteryTypeConfig.MatchRuleDef(2, 2, "2+2", "七等奖", 10),
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "3+0", "八等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(2, 1, "2+1", "八等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(1, 2, "1+2", "八等奖", 5)
                 )
             ),
             LotteryTypeConfig.RuleVersion(
@@ -295,18 +295,18 @@ object LotteryType {
                 appendTierPairCount = 5,  // 2007-2014：追加参与一至五等奖（60%）
                 appendRatio = 0.6,  // 2007-2019年追加比例为60%
                 rules = listOf(
-                    LotteryTypeConfig.MatchRuleDef(5, 2, "5前区+2后区全中", "一等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(5, 1, "中5前区+1后区", "二等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(5, 0, "中5前区（后区未中）", "三等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(4, 2, "中4前区+2后区", "四等奖", 3000),
-                    LotteryTypeConfig.MatchRuleDef(4, 1, "中4前区+1后区", "五等奖", 500),
-                    LotteryTypeConfig.MatchRuleDef(4, 0, "中4前区（后区未中）", "六等奖", 100),
-                    LotteryTypeConfig.MatchRuleDef(3, 2, "中3前区+2后区", "六等奖", 100),
-                    LotteryTypeConfig.MatchRuleDef(3, 1, "中3前区+1后区", "七等奖", 10),
-                    LotteryTypeConfig.MatchRuleDef(2, 2, "中2前区+2后区", "七等奖", 10),
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "中3前区（后区未中）", "八等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(2, 1, "中2前区+1后区", "八等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(1, 2, "中1前区+2后区", "八等奖", 5)
+                    LotteryTypeConfig.MatchRuleDef(5, 2, "5+2", "一等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 1, "5+1", "二等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 0, "5+0", "三等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(4, 2, "4+2", "四等奖", 3000),
+                    LotteryTypeConfig.MatchRuleDef(4, 1, "4+1", "五等奖", 500),
+                    LotteryTypeConfig.MatchRuleDef(4, 0, "4+0", "六等奖", 100),
+                    LotteryTypeConfig.MatchRuleDef(3, 2, "3+2", "六等奖", 100),
+                    LotteryTypeConfig.MatchRuleDef(3, 1, "3+1", "七等奖", 10),
+                    LotteryTypeConfig.MatchRuleDef(2, 2, "2+2", "七等奖", 10),
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "3+0", "八等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(2, 1, "2+1", "八等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(1, 2, "1+2", "八等奖", 5)
                 )
             )
         ),
@@ -451,17 +451,17 @@ object LotteryType {
                 realTiersToUse = 6, prizeTierPairCount = 6,
                 extraFieldCount = 2,  // 销售额 + 奖池
                 rules = listOf(
-                    LotteryTypeConfig.MatchRuleDef(6, 1, "前6位+后1位全中", "一等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(6, 0, "前6位全对（后1位未中）", "二等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(5, 1, "前6位中5位 + 后1位全对", "三等奖", 3000),
-                    LotteryTypeConfig.MatchRuleDef(5, 0, "前6位中5位（后1位未中）", "四等奖", 500),
-                    LotteryTypeConfig.MatchRuleDef(4, 1, "前6位中4位 + 后1位全对", "四等奖", 500),
-                    LotteryTypeConfig.MatchRuleDef(4, 0, "前6位中4位（后1位未中）", "五等奖", 30),
-                    LotteryTypeConfig.MatchRuleDef(3, 1, "前6位中3位 + 后1位全对", "五等奖", 30),
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "前6位中3位（后1位未中）", "六等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(2, 1, "前6位中2位 + 后1位全对", "六等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(1, 1, "前6位中1位 + 后1位全对", "六等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(0, 1, "仅后1位全对", "六等奖", 5)
+                    LotteryTypeConfig.MatchRuleDef(6, 1, "6+1", "一等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(6, 0, "6+0", "二等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 1, "5+1", "三等奖", 3000),
+                    LotteryTypeConfig.MatchRuleDef(5, 0, "5+0", "四等奖", 500),
+                    LotteryTypeConfig.MatchRuleDef(4, 1, "4+1", "四等奖", 500),
+                    LotteryTypeConfig.MatchRuleDef(4, 0, "4+0", "五等奖", 30),
+                    LotteryTypeConfig.MatchRuleDef(3, 1, "3+1", "五等奖", 30),
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "3+0", "六等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(2, 1, "2+1", "六等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(1, 1, "1+1", "六等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(0, 1, "0+1", "六等奖", 5)
                 )
             ),
             LotteryTypeConfig.RuleVersion(
@@ -472,17 +472,17 @@ object LotteryType {
                 realTiersToUse = 6, prizeTierPairCount = 6,
                 extraFieldCount = 2,
                 rules = listOf(
-                    LotteryTypeConfig.MatchRuleDef(6, 1, "前6位+后1位全中", "一等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(6, 0, "前6位全对（后1位未中）", "二等奖", null),
-                    LotteryTypeConfig.MatchRuleDef(5, 1, "前6位中5位 + 后1位全对", "三等奖", 1800),
-                    LotteryTypeConfig.MatchRuleDef(5, 0, "前6位中5位（后1位未中）", "四等奖", 300),
-                    LotteryTypeConfig.MatchRuleDef(4, 1, "前6位中4位 + 后1位全对", "四等奖", 300),
-                    LotteryTypeConfig.MatchRuleDef(4, 0, "前6位中4位（后1位未中）", "五等奖", 20),
-                    LotteryTypeConfig.MatchRuleDef(3, 1, "前6位中3位 + 后1位全对", "五等奖", 20),
-                    LotteryTypeConfig.MatchRuleDef(3, 0, "前6位中3位（后1位未中）", "六等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(2, 1, "前6位中2位 + 后1位全对", "六等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(1, 1, "前6位中1位 + 后1位全对", "六等奖", 5),
-                    LotteryTypeConfig.MatchRuleDef(0, 1, "仅后1位全对", "六等奖", 5)
+                    LotteryTypeConfig.MatchRuleDef(6, 1, "6+1", "一等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(6, 0, "6+0", "二等奖", null),
+                    LotteryTypeConfig.MatchRuleDef(5, 1, "5+1", "三等奖", 1800),
+                    LotteryTypeConfig.MatchRuleDef(5, 0, "5+0", "四等奖", 300),
+                    LotteryTypeConfig.MatchRuleDef(4, 1, "4+1", "四等奖", 300),
+                    LotteryTypeConfig.MatchRuleDef(4, 0, "4+0", "五等奖", 20),
+                    LotteryTypeConfig.MatchRuleDef(3, 1, "3+1", "五等奖", 20),
+                    LotteryTypeConfig.MatchRuleDef(3, 0, "3+0", "六等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(2, 1, "2+1", "六等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(1, 1, "1+1", "六等奖", 5),
+                    LotteryTypeConfig.MatchRuleDef(0, 1, "0+1", "六等奖", 5)
                 )
             )
         ),
