@@ -493,25 +493,29 @@ class DrawDetailDialog(
             if (!metadataMissing) {
                 if (config.code == "dlt" && ruleVersion.key.startsWith("dlt_2026")) {
                     val floatState = draw?.conditionalFlags?.get(ConditionalKey.DLT_2026_FLOAT)
-                    val jp = draw?.jackpotAmount
-                    append("\n★大乐透2026新规奖池联动：")
-                    if (jp != null) append("当前奖池${formatAmount(jp)}，")
-                    append(when (floatState) {
-                        ConditionalValue.UP -> "≥8亿已上浮（三6666/四380/五200/六18/七7）"
-                        ConditionalValue.NORMAL -> "<8亿未上浮（三5000/四300/五150/六15/七5）"
-                        else -> "上期奖池数据暂缺，本期暂按基础金额展示"
-                    })
+                    // 状态可判定才展示联动说明；HOLD(上期奖池缺失)不展示，避免出现"暂缺"类不确定表述
+                    if (floatState == ConditionalValue.UP || floatState == ConditionalValue.NORMAL) {
+                        val jp = draw?.jackpotAmount
+                        append("\n★大乐透2026新规奖池联动：")
+                        if (jp != null) append("当前奖池${formatAmount(jp)}，")
+                        append(if (floatState == ConditionalValue.UP)
+                            "≥8亿已上浮（三6666/四380/五200/六18/七7）"
+                        else
+                            "<8亿未上浮（三5000/四300/五150/六15/七5）")
+                    }
                 }
                 if (config.code == "ssq" && ruleVersion.key.startsWith("ssq_2026")) {
                     val fuyunState = draw?.conditionalFlags?.get(ConditionalKey.SSQ_FUYUN)
-                    val jp = draw?.jackpotAmount
-                    append("\n★双色球福运奖双门槛：")
-                    if (jp != null) append("奖池${formatAmount(jp)}，")
-                    append(when (fuyunState) {
-                        ConditionalValue.ON -> "≥15亿福运奖已开启（中3红=5元）"
-                        ConditionalValue.OFF -> "福运奖未开启（奖池<15亿或已停止，中3红不中奖）"
-                        else -> "3亿~15亿之间福运奖维持上期状态"
-                    })
+                    // 状态可判定才展示说明；HOLD(奖池无法判定)不展示，避免出现不确定表述
+                    if (fuyunState == ConditionalValue.ON || fuyunState == ConditionalValue.OFF) {
+                        val jp = draw?.jackpotAmount
+                        append("\n★双色球福运奖双门槛：")
+                        if (jp != null) append("奖池${formatAmount(jp)}，")
+                        append(if (fuyunState == ConditionalValue.ON)
+                            "≥15亿福运奖已开启（中3红=5元）"
+                        else
+                            "福运奖未开启（奖池<15亿或已停止，中3红不中奖）")
+                    }
                 }
             }
         }
@@ -709,8 +713,8 @@ class DrawDetailDialog(
 
         // ===== v11 条件性奖级动态判定 =====
         //  把 conditionalFlags 读出来，按 MatchRuleDef.conditionalKey 注入行为：
-        //    SSQ_FUYUN: ON(开启) / OFF(本期停发) / HOLD(奖池未知)
-        //    DLT_2026_FLOAT: UP(奖池≥8亿上浮) / NORMAL(未上浮) / HOLD(奖池未知)
+        //    SSQ_FUYUN: ON(开启) / OFF(本期停发) / HOLD(奖池缺失→不展示联动说明)
+        //    DLT_2026_FLOAT: UP(奖池≥8亿上浮) / NORMAL(未上浮) / HOLD(上期奖池缺失→按基础金额展示)
         //  这些判定和 XlsParser 中的 conditionalFlags 生成逻辑严格一一对应，保证展示与解析一致。
         val flags = draw?.conditionalFlags.orEmpty()
         val fuyunState = flags[ConditionalKey.SSQ_FUYUN]
@@ -757,9 +761,9 @@ class DrawDetailDialog(
                     val token = rule.fixedAmountYuan.toString()
                     val actual = dltFloatOverrideMap?.get(token) ?: rule.fixedAmountYuan
                     val prefix = when (dltFloat) {
+                        // 状态可判定才标"已上浮"；HOLD(上期奖池缺失)按基础规则金额展示，不出现"未知"字样
                         ConditionalValue.UP -> "本期奖池≥8亿已上浮"
-                        ConditionalValue.NORMAL -> "规则固定"
-                        else -> "奖池未知，暂按规则固定"
+                        else -> "规则固定"
                     }
                     "$baseMatch（$prefix¥$actual）"
                 }
