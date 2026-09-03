@@ -1056,10 +1056,12 @@ function renderResults(results,selPri){
   results.forEach(function(r,i){
     var row=document.createElement('div');row.className='row';
     var pc=prizeColor(r.name);
+    // P1 修复：数据行列序与表头对齐（红球在前、蓝球在后）。
+    //   之前 cPri(红球/mp) 在 cSec(蓝球/ms) 之后渲染，与表头 hPri→hSec 相反，导致"命中红球/命中蓝球"错位。
     row.innerHTML=
       '<div class="cPrize" style="color:'+pc+';">'+r.name+'</div>'
-      +(secShow?'<div class="cSec" style="color:'+(r.ms>0?'#1565C0':'#78909C')+';">'+(r.ms<0?'—':r.ms+'个')+'</div>':'')
       +'<div class="cPri" style="color:'+(r.mp>=3?'#C62828':'#546E7A')+';">'+(r.mp<0?'—':r.mp+'个')+'</div>'
+      +(secShow?'<div class="cSec" style="color:'+(r.ms>0?'#1565C0':'#78909C')+';">'+(r.ms<0?'—':r.ms+'个')+'</div>':'')
       +'<div class="cCnt" style="color:'+(r.count>0?'#C62828':'#9E9E9E')+';">'+(r.count>0?'中'+r.count+'次':'未中')+'</div>'
       +'<div class="cAct">'+(r.count>0?'<span class="actbtn yes" data-m="'+i+'">查看</span>':'<span class="actbtn no">—</span>')+'</div>';
     c.appendChild(row);
@@ -1092,8 +1094,8 @@ function showEmptyResult(){
   results.forEach(function(r){
     var row=document.createElement('div');row.className='row';
     row.innerHTML='<div class="cPrize" style="color:'+prizeColor(r.name)+';">'+r.name+'</div>'
-      +(secShow?'<div class="cSec" style="color:#78909C;">—</div>':'')
       +'<div class="cPri" style="color:#546E7A;">'+(r.mp<0?'—':r.mp+'个')+'</div>'
+      +(secShow?'<div class="cSec" style="color:#78909C;">—</div>':'')
       +'<div class="cCnt" style="color:#9E9E9E;">未中</div>'
       +'<div class="cAct"><span class="actbtn no">—</span></div>';
     c.appendChild(row);
