@@ -422,7 +422,7 @@ var TYPES=[
   vers:[{d:'2004-12-18',tc:1,r:[[5,0,'一等奖',100000]]}]},
  {code:'7xc',api:'7xc',name:'七星彩',mainN:6,mainMin:0,mainMax:9,mainLabel:'前6位',
   hasSec:true,secN:1,secMin:0,secMax:14,secLabel:'后1位',parseMain:6,parseSec:1,pos:false,
-  primaryUnit:'位前区',secondaryUnit:'位后区',extraCount:2, tierCount:6,
+  primaryUnit:'位（前区）',secondaryUnit:'位（后区）',extraCount:2, tierCount:6,
   vers:[
    {d:'2020-10-11',tc:6,r:[[6,1,'一等奖',null],[6,0,'二等奖',null],[5,1,'三等奖',3000],[5,0,'四等奖',500],[4,1,'四等奖',500],[4,0,'五等奖',30],[3,1,'五等奖',30],[3,0,'六等奖',5],[2,1,'六等奖',5],[1,1,'六等奖',5],[0,1,'六等奖',5]]},
    {d:'2004-05-18',tc:6,r:[[6,1,'一等奖',null],[6,0,'二等奖',null],[5,1,'三等奖',1800],[5,0,'四等奖',300],[4,1,'四等奖',300],[4,0,'五等奖',20],[3,1,'五等奖',20],[3,0,'六等奖',5],[2,1,'六等奖',5],[1,1,'六等奖',5],[0,1,'六等奖',5]]}
@@ -873,15 +873,16 @@ async function doQuery(){
 }
 /* 按期号查询：后缀模糊匹配单期，用当期规则版本判定是否命中 */
 async function doIssueQuery(){
-  if(!authState.token){openAuthDialog();return;}
   var inp=($('issueInput').value||'').trim();
   if(!inp){setIssueHint();$('issueInput').focus();toast('请输入期号');return;}
   if(draws.length===0){toast('请先刷新获取开奖数据');return;}
   var hit=null;
   for(var i=0;i<draws.length;i++){var is=draws[i].issue;if(is===inp||is.endsWith(inp)){hit=draws[i];break;}}
   if(!hit){toast('未找到期号 '+inp+'（支持后几位模糊匹配）');return;}
+  // 智能双模式：未选号 → 免费查看该期开奖详情（无需登录、不扣配额）；已选号 → 付费选号对比查询
   var hasSel=cur.pos?posVals.every(function(v){return v>=0;}):(selMain.size>0&&(!cur.hasSec||selSec.size>0));
-  if(!hasSel){toast(cur.pos?'请先选满百位+十位+个位（3个号码）':'请先选择号码再查该期');return;}
+  if(!hasSel){ openDrawDetail(hit); return; }
+  if(!authState.token){openAuthDialog();return;}
   var ccb=await consumeOneQuery();if(!ccb.ok){toast(ccb.msg, ccb.long ? 6000 : 2500);updateUserBar();return;}
   var selPri=cur.pos?posVals.slice():Array.from(selMain);
   var selPSet=new Set(selPri);
@@ -1221,12 +1222,12 @@ function buildKl8TierRows(draw,ver){
       var cs='—';
       if(cnt===null) cs='—';
       else if(cnt>0) cs=cnt.toLocaleString()+'注';
-      else cs='空开';
+      else cs='无人中奖';
       var as='—';
       if(cnt===null) as='—';
       else if(cnt>0 && amt!=null && amt>0) as=fmtAmt(amt);
       else if(cnt>0) as=(ruleAmt==null)?'浮动（官方当期实际）':'—';
-      else as='空开无奖金';
+      else as='无人中奖，无奖金';
       html+='<div class="tierRow"><div class="nm"><div class="pr">'+nm+'</div><div class="mc">'+mc
         +'</div></div><div class="cnt">'+cs+'</div><div class="amt">'+as+'</div></div>';
     }
@@ -1285,11 +1286,11 @@ function showTierRows(cfg,draw,ver,prevDraw){
       // DLT 浮动金额判定（对齐 APK: UP/NORMAL/HOLD 三种状态都有前缀）
       if(dltFloat!==null&&ruleAmt!==null&&DLT_FLOAT_MAP[ruleAmt]){
         var actual=dltFloat==='UP'?DLT_FLOAT_MAP[ruleAmt]:ruleAmt;
-        var prefix=dltFloat==='UP'?'本期奖池≥8亿已上浮':(dltFloat==='NORMAL'?'规则固定':'奖池未知，暂按规则固定');
+        var prefix=dltFloat==='UP'?'本期奖池≥8亿已上浮':(dltFloat==='NORMAL'?'规则固定':'上期奖池数据暂缺，本期暂按基础奖金');
         desc+='（'+prefix+'¥'+actual+'）';
       }else if(dltFloat===null&&ruleAmt!==null&&DLT_FLOAT_MAP[ruleAmt]){
-        // HOLD: 奖池未知，仍显示提示
-        desc+='（奖池未知，暂按规则固定¥'+ruleAmt+'）';
+        // HOLD: 上期奖池数据缺失，仍按基础奖金展示（不误报上浮）
+        desc+='（上期奖池数据暂缺，本期暂按基础奖金¥'+ruleAmt+'）';
       }
       matchLines.push(desc);
     });
@@ -1305,7 +1306,7 @@ function showTierRows(cfg,draw,ver,prevDraw){
     if(isFuyunOff){
       baseCntStr=(baseCnt!==null)?(baseCnt>0?baseCnt.toLocaleString()+'注':'0注'):'—';
     }else if(baseCnt!==null){
-      baseCntStr=baseCnt>0?baseCnt.toLocaleString()+'注':'空开';
+      baseCntStr=baseCnt>0?baseCnt.toLocaleString()+'注':'无人中奖';
     }
     // 基本投注金额
     var baseAmtStr='—';
@@ -1314,17 +1315,17 @@ function showTierRows(cfg,draw,ver,prevDraw){
     }else if(baseCnt!==null){
       if(baseAmt>0)baseAmtStr=fmtAmt(baseAmt);
       else if(baseCnt>0)baseAmtStr='—';
-      else baseAmtStr='空开无奖金';
+      else baseAmtStr='无人中奖，无奖金';
     }
     // 追加投注注数
     var appCntStr='';
     if(hasAppend&&atd){
-      appCntStr=appCnt>0?appCnt.toLocaleString()+'注':(appCnt===0?'空开':'—');
+      appCntStr=appCnt>0?appCnt.toLocaleString()+'注':(appCnt===0?'无人中奖':'—');
     }
     // 追加投注金额
     var appAmtStr='';
     if(hasAppend&&atd){
-      appAmtStr=appCnt>0&&appAmt>0?fmtAmt(appAmt):(appCnt>0?'—':'空开无奖金');
+      appAmtStr=appCnt>0&&appAmt>0?fmtAmt(appAmt):(appCnt>0?'—':'无人中奖，无奖金');
     }
     // 构建主行
     var rowClass='tierRow';
@@ -1370,7 +1371,7 @@ function openDrawDetail(d){
     +'<div class="hline"></div>'
     +showTierRows(cur,d,ver,prev)
     +'<div class="hline"></div>'
-    +'<div style="font-size:11px;color:var(--text_secondary);padding:8px 0 4px;">空开=本期无人中奖；奖金以上方标注为准，均为本期实际开奖数据。</div>';
+    +'<div style="font-size:11px;color:var(--text_secondary);padding:8px 0 4px;">无人中奖=本期该奖项无人命中；奖金以上方标注为准，均为本期实际开奖数据。</div>';
   showMask('maskDetail');
 }
 
