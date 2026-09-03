@@ -1288,18 +1288,14 @@ function showTierRows(cfg,draw,ver,prevDraw){
     conds.forEach(function(c){
       var desc=matchDesc(cfg,c[0],c[1]);
       if(!desc)return;
-      // DLT 浮动金额判定（对齐 APK：UP/NORMAL 标注状态；HOLD 仅展示基础奖金，不出现不确定字样）
+      // DLT 浮动金额判定（对齐 APK：UP 才标注上浮金额；NORMAL/HOLD 不附加括号说明）
       // P0 修复：必须 cfg.code==='dlt' 门控——非 DLT 彩种 dltFloat 恒为 null，
       //   若不加彩种判断，双色球六等奖/福运奖、7乐彩/七星彩六等奖等 5/15/150/300 元奖级
       //   会命中 DLT_FLOAT_MAP 的 key，错误显示"（追加¥X）"。
-      if(cfg.code==='dlt'&&dltFloat!==null&&ruleAmt!==null&&DLT_FLOAT_MAP[ruleAmt]){
-        var actual=dltFloat==='UP'?DLT_FLOAT_MAP[ruleAmt]:ruleAmt;
-        var prefix=dltFloat==='UP'?'本期奖池≥8亿已上浮':'规则固定';
-        desc+='（'+prefix+'¥'+actual+'）';
-      }else if(cfg.code==='dlt'&&dltFloat===null&&ruleAmt!==null&&DLT_FLOAT_MAP[ruleAmt]){
-        // HOLD: 上期奖池数据缺失 → 仅展示规则固定奖金金额，不出现"暂缺"类字样。
-        //   P0：三至七等是固定奖，追加投注不参与奖金分配，绝不能用"追加¥X"误导用户。
-        desc+='（规则固定¥'+ruleAmt+'）';
+      // 用户要求（2026-09）："（规则固定¥X）"类冗余提示不显示——固定奖单注奖金列已准确展示，
+      //   仅 UP（奖池≥8亿上浮、金额与规则不同）才说明上浮金额。
+      if(cfg.code==='dlt'&&dltFloat==='UP'&&ruleAmt!==null&&DLT_FLOAT_MAP[ruleAmt]){
+        desc+='（本期奖池≥8亿已上浮¥'+DLT_FLOAT_MAP[ruleAmt]+'）';
       }
       matchLines.push(desc);
     });
