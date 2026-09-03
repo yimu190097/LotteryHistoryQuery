@@ -834,13 +834,15 @@ class DrawDetailDialog(
     }
 
     private fun buildMatchText(rule: LotteryTypeConfig.MatchRuleDef): String = buildString {
-        append("中")
-        append(rule.matchPrimary)
-        append(config.primaryUnit)
+        // 双区彩种：简洁 X+Y 命中格式（不出现"前区/后区/红球/蓝球"文字）
         if (config.hasSecondary) {
-            append(" + ")
+            append(rule.matchPrimary)
+            append("+")
             append(rule.matchSecondary)
-            append(config.secondaryUnit)
+        } else {
+            append("中")
+            append(rule.matchPrimary)
+            append(config.primaryUnit)
         }
     }
 
