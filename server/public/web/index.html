@@ -304,7 +304,7 @@ body{
         <div class="t" id="issueCardTitle">正在查询双色球</div>
         <div id="issueHint"></div>
         <div id="issueRow">
-          <input id="issueInput" name="issue_no" inputmode="numeric" autocomplete="off" placeholder="">
+          <input id="issueInput" name="issue_no" inputmode="numeric" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly')" placeholder="">
           <div id="btnByIssue" onclick="doIssueQuery()">查该期</div>
         </div>
       </div>
@@ -1707,6 +1707,8 @@ checkAuthOnLoad();
 setInterval(function(){loadAllLatest();},120000);
 // 自动轮巡：每5分钟刷新当前彩种历史数据
 setInterval(function(){loadHistory();},300000);
+// 最新开奖卡片自动循环轮播（对齐 App MainActivity 自动轮播）
+startAutoScroll();
 </script>
 </body>
 </html>
