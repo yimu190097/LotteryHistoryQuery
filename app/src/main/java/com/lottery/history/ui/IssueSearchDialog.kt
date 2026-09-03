@@ -445,12 +445,12 @@ class IssueSearchDialog(context: Context) : Dialog(context) {
                 }
                 val color = tierColors.getOrElse(displayIdx) { 0xFF757575.toInt() }
                 container.addView(buildPrizeRow(name, baseCount, baseAmount, color))
-                // 追加投注：仅显示「追加参与当期奖金分配」的奖级（按政策版本 appendTierPairCount 限定）。
+                // 追加投注：仅显示「追加参与当期奖金分配 且 实际中奖（注数>0）」的奖级（按政策版本 appendTierPairCount 限定）。
                 // 追加不参与分配的奖级（如 2019/2026 版三等奖及以下、2014 版四等奖及以下、2007/2009 版六等奖及以下）
-                // 其 appendPrizeTiers 无对应条目（getOrNull 为 null），不显示追加行，避免把"追加不参与该奖级"
-                // 误展示成"追加本期空开"。参与追加的奖级即使 0 注也显示"本期空开"，保证用户能看到该玩法存在。
+                // 其 appendPrizeTiers 无对应条目（getOrNull 为 null），不显示追加行；
+                // 参与追加但 0 注（无人中奖，未产生实际奖金分配）同样不显示追加行，避免不专业提示。
                 val append = draw.appendPrizeTiers.getOrNull(i)
-                if (append != null) {
+                if (append != null && (append.count ?: 0L) > 0) {
                     val appCount = append.count ?: 0L
                     val appAmount = append.amount ?: 0L
                     container.addView(buildAppendRow("追加$name", appCount, appAmount))
