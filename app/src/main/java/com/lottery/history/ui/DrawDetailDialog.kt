@@ -233,6 +233,15 @@ class DrawDetailDialog(
 
         // ----- 按 ruleVersion 顺序逐行渲染所有奖级（按期自动适配政策版本）-----
         val merged = mergePrizeTiersWithRules(ruleVersion, draw?.allPrizeTiers.orEmpty())
+
+        // ===== 快乐8 专属：按 10 种玩法分组展示全部 39 对官方奖级（与网页版 buildKl8TierRows 一致）=====
+        //   快乐8 不走下方"扁平化合并"（那只展示选十 7 档），而是按玩法分组渲染官方 39 对奖级。
+        if (config.code == "kl8") {
+            renderKl8TierGroups(llRules, density)
+            addFooter(llRules, ruleVersion, density, metadataMissing)
+            return
+        }
+
         // 顶部提示：若当期真实 allPrizeTiers 少于规则去重后的奖级数，显式提示客户"部分未公布"
         val haveAnyRealTiers = merged.any { it.totalCount != null }
         // 停发行(conditionalOff)不算"未公布"，它们是有明确状态（停发）的
@@ -263,8 +272,8 @@ class DrawDetailDialog(
 
         merged.forEachIndexed { idx, row ->
             // ---- v11：条件奖级「停发」状态专属文案（福运奖 OFF 等）----
-            //    关键：绝不出现"空开"字样；OFF 语义是"本期规则不开放"≠"本期没人中（空开）"
-            //    P0 修复：追加投注 hasAppend=true 时，0注也要显式写「追加空开」，
+            //    关键：绝不出现"无人中奖"字样（此处指原"空开"概念）；OFF 语义是"本期规则不开放"≠"本期没人中"
+            //    P0 修复：追加投注 hasAppend=true 时，0注也要显式写「追加无人中奖」，
             //    绝不能把追加投注整行吞掉（用户以为 DLT 根本没有追加玩法）。
             val countText = when {
                 row.conditionalOff -> "—（奖池未达门槛，本奖项停发）"
@@ -276,15 +285,15 @@ class DrawDetailDialog(
                         row.totalCount > 0 && appCnt > 0 ->
                             "${row.totalCount}注\n（追加${appCnt}注）"
                         row.totalCount > 0 /* appCnt == 0 */ ->
-                            "${row.totalCount}注\n（追加空开）"
+                            "${row.totalCount}注\n（追加无人中奖）"
                         baseCnt == 0L && appCnt == 0L ->
-                            "空开\n（追加空开）"
+                            "无人中奖\n（追加无人中奖）"
                         else ->
-                            "${row.totalCount}注\n（追加空开）"
+                            "${row.totalCount}注\n（追加无人中奖）"
                     }
                 }
                 row.totalCount > 0 -> "${row.totalCount}注"
-                else -> "空开"   // totalCount == 0：真实空开
+                else -> "无人中奖"   // totalCount == 0：真实无人中奖
             }
 
             // ---- 单注奖金：金额不同分两行展示（绝不合并基本/追加金额） ----
@@ -299,15 +308,15 @@ class DrawDetailDialog(
                 when {
                     row.conditionalOff -> append("—（奖池未达门槛，本奖项停发）")
                     countEmpty -> append("—")
-                    isEmpty && !row.hasAppend -> append("空开无奖金")
+                    isEmpty && !row.hasAppend -> append("无人中奖，无奖金")
                     else -> {
                         var shown = false
-                        // 基本投注：有金额 >0 显示金额；空开但基本投注本身存在时
+                        // 基本投注：有金额 >0 显示金额；无人中奖但基本投注本身存在时
                         if (bAmt != null && bAmt > 0L) {
                             append("基本投注 ").append(formatAmount(bAmt))
                             shown = true
                         } else if (!row.hasAppend && isEmpty) {
-                            append("空开无奖金")
+                            append("无人中奖，无奖金")
                             shown = true
                         } else if (!row.hasAppend) {
                             append("基本投注 —")
@@ -349,13 +358,136 @@ class DrawDetailDialog(
         }
 
         // 末行：精炼说明（含奖池联动提示）— 使用解析时预计算的 conditionalFlags，不重算阈值
-        //   严格模式：metadataMissing 时，跳过 DLT/SSQ 联动说明（因为 ruleVersion 是最旧版骨架，
-        //   startsWith 判断必错），改追加【最高严重级别红色警告】。
+        addFooter(llRules, ruleVersion, density, metadataMissing)
+    }
+
+    // ================ 快乐8 专属：按 10 种玩法分组展示全部 39 对官方奖级 ================
+    //  与网页版 buildKl8TierRows() 完全一致：
+    //   选十7 + 选九7 + 选八6 + 选七5 + 选六4 + 选五3 + 选四3 + 选三2 + 选二1 + 选一1 = 39 对
+    //   官方每期 kl8_desc.txt 在 2 额外字段(销售额/奖池)后按此顺序输出 39 对（注数+金额）。
+    //   最低奖级按官方规则：选六中三、选五中三、选四中二、选三中二（非"全不中"）。
+    private fun renderKl8TierGroups(
+        llRules: LinearLayout,
+        density: Float
+    ) {
+        // 玩法分组结构（pickN=选几个号；pairs=该玩法奖级档数；offset=该玩法在官方39对中的起始下标）
+        data class Play(val pickN: Int, val name: String, val pairs: Int, val offset: Int, val note: String)
+        val plays = listOf(
+            Play(10, "选十玩法", 7, 0, "选10个号，中10/9/8/7/6/5/0个号"),
+            Play(9, "选九玩法", 7, 7, "选9个号，中9/8/7/6/5/4/0个号"),
+            Play(8, "选八玩法", 6, 14, "选8个号，中8/7/6/5/4/0个号"),
+            Play(7, "选七玩法", 5, 20, "选7个号，中7/6/5/4/0个号"),
+            Play(6, "选六玩法", 4, 25, "选6个号，中6/5/4/3个号"),
+            Play(5, "选五玩法", 3, 29, "选5个号，中5/4/3个号"),
+            Play(4, "选四玩法", 3, 32, "选4个号，中4/3/2个号"),
+            Play(3, "选三玩法", 2, 35, "选3个号，中3/2个号"),
+            Play(2, "选二玩法", 1, 37, "选2个号，中2个号"),
+            Play(1, "选一玩法", 1, 38, "选1个号，中1个号")
+        )
+        val allTiers = draw?.allPrizeTiers.orEmpty()
+        // 浮动奖级（官方规则不设固定金额，以当期实际为准）：选十中十、选九中九
+        val isFloatingPrize = { pickN: Int, p: Int -> (pickN == 10 || pickN == 9) && p == 0 }
+
+        plays.forEach { play ->
+            // 该玩法的命中档位序列：≥5档含"全不中(0)"末档，4档及以下不含
+            val matched: List<Int> = if (play.pairs >= 5) {
+                (play.pickN downTo (play.pickN - play.pairs + 2)).toList() + 0
+            } else {
+                (play.pickN downTo (play.pickN - play.pairs + 1)).toList()
+            }
+
+            // ---- 玩法分组头：玩法名 + 官方档数 + 命中说明 ----
+            val groupHeader = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = (6 * density).toInt() }
+                setBackgroundColor(0xFFFAFAFE.toInt())
+                val p = (6 * density).toInt()
+                setPadding(p, (4 * density).toInt(), p, (4 * density).toInt())
+            }
+            val tvPlayName = TextView(context).apply {
+                text = "${play.name} （官方${play.pairs}档）"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setTypeface(null, Typeface.BOLD)
+                setTextColor(0xFF37474F.toInt())
+            }
+            val tvPlayNote = TextView(context).apply {
+                text = play.note
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+                setTextColor(0xFF90A4AE.toInt())
+            }
+            groupHeader.addView(tvPlayName)
+            groupHeader.addView(tvPlayNote)
+            llRules.addView(groupHeader)
+
+            // ---- 逐档渲染奖级行（真实注数+金额）----
+            for (p in 0 until play.pairs) {
+                val idx = play.offset + p
+                val td = allTiers.getOrNull(idx)
+                val m = matched[p]
+                // 奖项名 + 命中规则
+                val prizeName = when {
+                    m == play.pickN -> "选${play.pickN}中${play.pickN}"
+                    m == 0 -> "选${play.pickN}全不中"
+                    else -> "选${play.pickN}中$m"
+                }
+                val matchText = when {
+                    m == play.pickN -> "选${play.pickN}中${play.pickN}（全中）"
+                    m == 0 -> "选${play.pickN}中0（全不中·幸运奖）"
+                    else -> "选${play.pickN}中$m"
+                }
+                // 注数（真实数据）
+                val countText = when {
+                    td == null -> "—"
+                    td.count > 0 -> "${td.count}注"
+                    else -> "无人中奖"
+                }
+                // 单注奖金（真实数据；浮动奖级无固定金额时按官方当期实际）
+                val amountText = when {
+                    td == null -> "—"
+                    td.count == 0L -> "无人中奖，无奖金"
+                    td.amount > 0L -> formatAmount(td.amount)
+                    isFloatingPrize(play.pickN, p) -> "浮动（官方当期实际）"
+                    else -> "—"
+                }
+
+                llRules.addView(
+                    buildPrizeRow(
+                        prizeName = prizeName,
+                        matchText = matchText,
+                        countText = countText,
+                        amountText = amountText,
+                        density = density,
+                        highlightTop = (idx == 0)
+                    )
+                )
+                if (p < play.pairs - 1) {
+                    llRules.addView(View(context).apply {
+                        layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            (0.5f * density).toInt()
+                        )
+                        setBackgroundColor(Color.parseColor("#EEEEEE"))
+                    })
+                }
+            }
+        }
+    }
+
+    // ================ 末行精炼说明（含奖池联动提示）— 快乐8 分组与通用扁平化共用 ================
+    private fun addFooter(
+        llRules: LinearLayout,
+        ruleVersion: LotteryTypeConfig.RuleVersion,
+        density: Float,
+        metadataMissing: Boolean
+    ) {
         val extraHint = buildString {
             if (metadataMissing) {
                 append("数据解析异常，请返回主界面下拉刷新。如问题持续，请联系客服。")
             } else {
-                append("空开=本期无人中奖；\"规则固定¥X\"为基础额度，每期实际金额以官方公布为准。")
+                append("无人中奖=本期该奖项无人命中；\"规则固定¥X\"为基础额度，每期实际金额以官方公布为准。")
             }
             // —— 奖池联动说明仅在规则版本明确时展示（缺失时 ruleVersion 是占位骨架，startsWith 必错）——
             if (!metadataMissing) {
@@ -367,7 +499,7 @@ class DrawDetailDialog(
                     append(when (floatState) {
                         ConditionalValue.UP -> "≥8亿已上浮（三6666/四380/五200/六18/七7）"
                         ConditionalValue.NORMAL -> "<8亿未上浮（三5000/四300/五150/六15/七5）"
-                        else -> "奖池未知，暂按基础金额展示"
+                        else -> "上期奖池数据暂缺，本期暂按基础金额展示"
                     })
                 }
                 if (config.code == "ssq" && ruleVersion.key.startsWith("ssq_2026")) {
@@ -651,7 +783,7 @@ class DrawDetailDialog(
 
             // —— v11：条件奖级停发状态注入 ——
             //    福运奖 OFF：整行变灰、奖名"(本期不开放)"、注数/金额显示说明文字，
-            //    **绝对不能出现"空开 无奖金"字样**（"空开"意味着规则在但没人中，
+            //    **绝对不能出现"无人中奖，无奖金"字样（原"空开 无奖金"）**（"无人中奖"意味着规则在但没人中，
             //    而 OFF 意味着该期此奖项根本不开放，语义完全不同，会误导）。
             val fuyunDisabled =
                 info.conditionalKey == ConditionalKey.SSQ_FUYUN && fuyunState == ConditionalValue.OFF
@@ -675,11 +807,11 @@ class DrawDetailDialog(
             val aAmount = appendEntry?.amount?.takeIf {
                 appendEntry.count?.let { c -> c > 0 || it == 0L } ?: true
             }
-            // 【用户要求：追加投注全奖级都显示，0注也要显示「追加空开」，0金额显示「追加投注 —」】
-            //  旧版 hasAppendData 必须 count>0 才为 true，导致整期空开的追加投注全部被过滤掉，
+            // 【用户要求：追加投注全奖级都显示，0注也要显示「追加无人中奖」，0金额显示「追加投注 —」】
+            //  旧版 hasAppendData 必须 count>0 才为 true，导致整期无人中奖的追加投注全部被过滤掉，
             //  用户打开详情以为 DLT 根本没有追加投注这个玩法，骂死。
             //  新版：只要规则版本含追加投注 (appendTierPairCount>0) 且 appendEntry 非 null
-            //  → hasAppend = true，哪怕 0注0金额，也在UI上显式告诉用户「追加空开」。
+            //  → hasAppend = true，哪怕 0注0金额，也在UI上显式告诉用户「追加无人中奖」。
             val hasAppendData = ruleVersion.appendTierPairCount > 0 && appendEntry != null && !fuyunDisabled
 
             result.add(
@@ -812,7 +944,7 @@ class DrawDetailDialog(
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             } else {
                 val isOffText = conditionalOff
-                val isEmpty = countText == "空开" || countText == "—"
+                val isEmpty = countText == "无人中奖" || countText == "—"
                 setTextColor(
                     when {
                         isOffText -> 0xFFBDBDBD.toInt()
