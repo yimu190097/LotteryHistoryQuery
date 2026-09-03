@@ -743,6 +743,7 @@ function buildPicker(){
     for(var s=cur.secMin;s<=cur.secMax;s++)$('scGrid').appendChild(makeBall(s,false));
     bindSecGrid();
   }
+  $('issueInput').value='';  // 切换彩种时清空期号输入框，避免残留手机号/旧期号
   setIssueHint();
   updateSelectedText();
   showEmptyResult();
@@ -875,6 +876,8 @@ async function doQuery(){
 async function doIssueQuery(){
   var inp=($('issueInput').value||'').trim();
   if(!inp){setIssueHint();$('issueInput').focus();toast('请输入期号');return;}
+  // 期号合法性校验：仅纯数字且长度 2~8（如 26088/2026101/2026268），防止手机号等长数字误入查询
+  if(!/^\d{2,8}$/.test(inp)){ $('issueInput').value=''; setIssueHint(); toast('期号格式不正确，请输入数字（如 '+issueExample(cur.code)+'）'); return; }
   if(draws.length===0){toast('请先刷新获取开奖数据');return;}
   var hit=null;
   for(var i=0;i<draws.length;i++){var is=draws[i].issue;if(is===inp||is.endsWith(inp)){hit=draws[i];break;}}
@@ -1560,6 +1563,37 @@ function refreshLatest(){
   $('latestScroller').innerHTML=TYPES.map(latestCards).join('');
 }
 function refreshData(){loadHistory();}
+
+/* ===== 最新开奖卡片自动循环轮播（对齐 App MainActivity：多彩种卡片循环展示）=====
+   在 latestScroller 上每 3s 平滑滚动一个卡片宽度，滚到底回到开头；
+   用户手动触摸/拖动时暂停，3s 无操作后恢复。wrap 布局（平板）下 maxScroll<=0 自动跳过。 */
+var autoScrollTimer=null, autoScrollPaused=false;
+function startAutoScroll(){
+  stopAutoScroll();
+  var sc=$('latestScroller');
+  if(!sc)return;
+  autoScrollTimer=setInterval(function(){
+    if(autoScrollPaused||!sc.children||sc.children.length<=1)return;
+    var cardW=sc.children[0].offsetWidth||180;
+    var maxScroll=sc.scrollWidth-sc.clientWidth;
+    if(maxScroll<=0)return;
+    if(sc.scrollLeft>=maxScroll-4){sc.scrollTo({left:0,behavior:'smooth'});}
+    else{sc.scrollBy({left:cardW,behavior:'smooth'});}
+  },3000);
+}
+function stopAutoScroll(){if(autoScrollTimer){clearInterval(autoScrollTimer);autoScrollTimer=null;}}
+function pauseAutoScroll(){autoScrollPaused=true;}
+function resumeAutoScroll(){autoScrollPaused=false;}
+(function(){
+  var sc=$('latestScroller');
+  if(!sc)return;
+  var rt=null;
+  sc.addEventListener('touchstart',pauseAutoScroll,{passive:true});
+  sc.addEventListener('touchend',function(){clearTimeout(rt);rt=setTimeout(resumeAutoScroll,3000);},{passive:true});
+  sc.addEventListener('mousedown',pauseAutoScroll);
+  sc.addEventListener('mouseup',function(){clearTimeout(rt);rt=setTimeout(resumeAutoScroll,3000);});
+  sc.addEventListener('mouseleave',resumeAutoScroll);
+})();
 
 /* ---------- UI 工具 ---------- */
 function showMask(id){$(id).classList.add('show');}
