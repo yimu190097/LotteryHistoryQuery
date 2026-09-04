@@ -1120,10 +1120,8 @@ function prizeColor(name){
   return '#212121';
 }
 function showEmptyResult(){
-  var results=latestPr(cur).map(function(p){
-    var one=p[1].length===1;
-    return {name:p[0],conds:p[1],amt:p[2],mp:one?p[1][0][0]:-1,ms:one?p[1][0][1]:-1,count:0,matches:[]};
-  });
+  // 未选号时仅展示奖级列表占位，不显示任何"命中个数/次数/未中"字样（用户反馈：未选号不应有命中个数）
+  var results=latestPr(cur);
   $('selText').textContent='请选择号码后点击查询'
     +(cur.vers.length>1?'\n本彩种有 '+cur.vers.length+' 个政策版本，查询结果按各期适用版本展示':'');
   $('selText').style.color='#616161';$('selText').style.fontWeight='normal';
@@ -1135,16 +1133,19 @@ function showEmptyResult(){
   var c=$('resultContainer');c.innerHTML='';
   results.forEach(function(r){
     var row=document.createElement('div');row.className='row';
-    row.innerHTML='<div class="cPrize" style="color:'+prizeColor(r.name)+';">'+r.name+'</div>'
-      +'<div class="cPri" style="color:#546E7A;">'+(r.mp<0?'—':r.mp+'个')+'</div>'
-      +(secShow?'<div class="cSec" style="color:#78909C;">—</div>':'')
-      +'<div class="cCnt" style="color:#9E9E9E;">未中</div>'
+    row.innerHTML='<div class="cPrize" style="color:'+prizeColor(r[0])+';">'+r[0]+'</div>'
+      +'<div class="cPri" style="color:#9E9E9E;">—</div>'
+      +(secShow?'<div class="cSec" style="color:#9E9E9E;">—</div>':'')
+      +'<div class="cCnt" style="color:#9E9E9E;">—</div>'
       +'<div class="cAct"><span class="actbtn no">—</span></div>';
     c.appendChild(row);
     var dv=document.createElement('div');dv.className='rdiv';c.appendChild(dv);
   });
 }
 function dedupNames(){return latestPr(cur).map(function(p){return p[0];});}
+/* 七星彩派奖期（21期：2021 21099-21107、2023 23092-23103）官方 prizeLevelList 映射：
+   b=基本奖级[注数,单注奖金]（覆盖源数据：2021派奖期源数据错位/缺额）；p=派奖奖级[名称,注数,单注奖金]。 */
+var QXC_PAI_MAP={"21099":{"b":[[0,null],[13,60259],[49,3000],[2469,500],[44418,30],[2095690,5]],"p":[["一等奖派奖",0,null],["二等奖派奖",11,60259],["三等奖派奖",43,1500],["四等奖派奖",2085,250],["五等奖派奖",37769,15],["六等奖派奖",1774024,2.5]]},"21100":{"b":[[0,null],[16,55799],[53,3000],[1572,500],[28433,30],[950656,5]],"p":[["一等奖派奖",0,null],["二等奖派奖",12,55799],["三等奖派奖",42,1500],["四等奖派奖",1356,250],["五等奖派奖",24315,15],["六等奖派奖",820537,2.5]]},"21101":{"b":[[0,null],[17,50107],[55,3000],[1788,500],[29216,30],[997772,5]],"p":[["一等奖派奖",0,null],["二等奖派奖",14,50107],["三等奖派奖",42,1500],["四等奖派奖",1500,250],["五等奖派奖",24906,15],["六等奖派奖",864376,2.5]]},"21102":{"b":[[0,null],[10,93550],[63,3000],[2751,500],[45474,30],[1728437,5]],"p":[["一等奖派奖",0,null],["二等奖派奖",9,93550],["三等奖派奖",49,1500],["四等奖派奖",2325,250],["五等奖派奖",38760,15],["六等奖派奖",1465500,2.5]]},"21103":{"b":[[3,5000000],[14,47545],[62,3000],[2062,500],[34838,30],[1381253,5]],"p":[["一等奖派奖",1,5000000],["二等奖派奖",12,47545],["三等奖派奖",56,1500],["四等奖派奖",1734,250],["五等奖派奖",29517,15],["六等奖派奖",1169660,2.5]]},"21104":{"b":[[0,null],[9,45688],[70,3000],[2499,500],[38924,30],[1921927,5]],"p":[["一等奖派奖",0,null],["二等奖派奖",8,45688],["三等奖派奖",50,1500],["四等奖派奖",2195,250],["五等奖派奖",33612,15],["六等奖派奖",1678598,2.5]]},"21105":{"b":[[2,5000000],[31,20785],[102,3000],[3959,500],[53238,30],[1860479,5]],"p":[["一等奖派奖",2,2500000],["二等奖派奖",26,20785],["三等奖派奖",88,1500],["四等奖派奖",3398,250],["五等奖派奖",45099,15],["六等奖派奖",1567094,2.5]]},"21106":{"b":[[2,5000000],[21,22811],[73,3000],[1985,500],[31410,30],[1235959,5]],"p":[["一等奖派奖",1,5000000],["二等奖派奖",18,22811]]},"21107":{"b":[[0,null],[4,150362],[28,3000],[1496,500],[26656,30],[917652,5]],"p":[["二等奖派奖",3,79021]]},"23092":{"b":[[1,5000000],[37,15558],[108,3000],[3400,500],[53029,30],[1611108,5]],"p":[["一等奖派奖",1,2500000],["二等奖派奖",35,7779],["三等奖派奖",89,1500],["四等奖派奖",2676,250],["五等奖派奖",43794,15],["六等奖派奖",1349230,2.5]]},"23093":{"b":[[1,5000000],[20,20581],[60,3000],[1822,500],[27166,30],[915163,5]],"p":[["一等奖派奖",1,2500000],["二等奖派奖",18,10290],["三等奖派奖",51,1500],["四等奖派奖",1501,250],["五等奖派奖",22466,15],["六等奖派奖",750445,2.5]]},"23094":{"b":[[1,5000000],[38,13769],[32,3000],[1456,500],[24198,30],[848106,5]],"p":[["一等奖派奖",1,2500000],["二等奖派奖",38,6884],["三等奖派奖",25,1500],["四等奖派奖",1219,250],["五等奖派奖",20097,15],["六等奖派奖",698798,2.5]]},"23095":{"b":[[1,5000000],[14,67833],[28,3000],[1815,500],[31025,30],[1132263,5]],"p":[["一等奖派奖",0,null],["二等奖派奖",11,33916],["三等奖派奖",23,1500],["四等奖派奖",1575,250],["五等奖派奖",26565,15],["六等奖派奖",980214,2.5]]},"23096":{"b":[[0,null],[9,75374],[39,3000],[1156,500],[19919,30],[609417,5]],"p":[["一等奖派奖",0,null],["二等奖派奖",6,37687],["三等奖派奖",35,1500],["四等奖派奖",1007,250],["五等奖派奖",16904,15],["六等奖派奖",522620,2.5]]},"23097":{"b":[[1,5000000],[14,66888],[34,3000],[1850,500],[29628,30],[1076035,5]],"p":[["一等奖派奖",1,5000000],["二等奖派奖",13,52440],["三等奖派奖",32,3000],["四等奖派奖",1661,500],["五等奖派奖",26638,30],["六等奖派奖",975903,5]]},"23098":{"b":[[2,5000000],[9,92562],[42,3000],[1933,500],[32215,30],[1285963,5]],"p":[["一等奖派奖",2,2500000],["三等奖派奖",29,1500],["四等奖派奖",1618,250],["五等奖派奖",27177,15],["六等奖派奖",1067366,2.5]]},"23099":{"b":[[0,null],[17,41137],[21,3000],[904,500],[16281,30],[511880,5]],"p":[["三等奖派奖",20,1500],["四等奖派奖",755,250],["五等奖派奖",13546,15],["六等奖派奖",432920,2.5]]},"23100":{"b":[[0,null],[4,103012],[25,3000],[1061,500],[17647,30],[913120,5]],"p":[["三等奖派奖",22,1500],["四等奖派奖",905,250],["五等奖派奖",14476,15],["六等奖派奖",739420,2.5]]},"23101":{"b":[[1,5000000],[12,54487],[65,3000],[2215,500],[36240,30],[1321395,5]],"p":[["三等奖派奖",55,1500],["四等奖派奖",1804,250],["五等奖派奖",29857,15],["六等奖派奖",1076208,2.5]]},"23102":{"b":[[1,5000000],[6,75958],[24,3000],[1126,500],[20644,30],[781756,5]],"p":[["三等奖派奖",15,1500],["四等奖派奖",920,250],["五等奖派奖",16348,15],["六等奖派奖",633770,2.5]]},"23103":{"b":[[0,null],[7,86505],[11,3000],[751,500],[14435,30],[522436,5]],"p":[["三等奖派奖",9,1500],["四等奖派奖",611,250],["五等奖派奖",11769,15],["六等奖派奖",432984,2.5]]}};
 
 /* ---------- 查询记录 & 历史弹窗 ---------- */
 function saveRecord(selPri,selSec){
@@ -1215,18 +1216,22 @@ function openDetailDraw(k){
 /* 金额格式化：对齐 APK formatAmount，>=1万 用"万元" */
 function fmtAmt(n){
   if(n===null||n===undefined)return '—';
-  if(n>=10000){
+  if(n>=1000000){
     var wan=n/10000;
     var s=wan.toFixed(1);
-    if(s.indexOf('.0')===s.length-2)return wan+'万元';
-    return s+'万元';
+    return (s.indexOf('.0')===s.length-2?wan:s)+'万元';
   }
-  return n+'元';
+  // 100万以下一律精确到"元"+千分位，避免"6.0259万元"这类不精确/不专业写法
+  return n.toLocaleString('en-US')+'元';
 }
-/* 命中规则描述：对齐 APK buildMatchText */
-function matchDesc(cfg,mp,ms){
+/* 命中规则描述：对齐 APK buildMatchText；组选奖级不要求顺序（3D/排列三） */
+function matchDesc(cfg,mp,ms,name){
   if(cfg.pos){
-    if(mp===3&&ms===0)return '顺序一致';
+    if(mp===3&&ms===0){
+      if(name==='组选3')return '号码相同·顺序不限（组三）';
+      if(name==='组选6')return '号码相同·顺序不限（组六）';
+      return '顺序一致';
+    }
     return '中'+mp+'位';
   }
   if(!cfg.hasSec){
@@ -1335,9 +1340,13 @@ function showTierRows(cfg,draw,ver,prevDraw){
   // DLT 追加数据
   var appendTiers=draw.appendTiers||[];
   var hasAppend=cfg.code==='dlt'&&appendTiers.length>0;
-  // 派奖期（141期）：官方 prizeLevelList 含「××派奖」奖级，基本/追加注数与金额以官方为准（源数据缺失派奖上浮值）
+  // 派奖期：大乐透141期、七星彩21期——官方 prizeLevelList 含「××派奖」奖级，
+  //   基本/追加注数与金额以官方为准（源数据缺失派奖上浮值或错位）
   var paiMap=null;
-  if(cfg.code==='dlt'&&draw&&draw.issue&&typeof DLT_PAI_MAP!=='undefined'&&DLT_PAI_MAP){paiMap=DLT_PAI_MAP[draw.issue]||null;}
+  if(draw&&draw.issue){
+    if(cfg.code==='dlt'&&typeof DLT_PAI_MAP!=='undefined'&&DLT_PAI_MAP){paiMap=DLT_PAI_MAP[draw.issue]||null;}
+    else if(cfg.code==='7xc'&&typeof QXC_PAI_MAP!=='undefined'&&QXC_PAI_MAP){paiMap=QXC_PAI_MAP[draw.issue]||null;}
+  }
   if(paiMap){
     // 派奖期金额上浮由派奖活动导致（下方逐条展示派奖奖级），不附加"奖池≥8亿上浮"说明
     dltFloat=null;
@@ -1351,7 +1360,7 @@ function showTierRows(cfg,draw,ver,prevDraw){
     // 命中规则文本（含 DLT 浮动信息，对齐 APK buildMatchText + 条件性奖级）
     var matchLines=[];
     conds.forEach(function(c){
-      var desc=matchDesc(cfg,c[0],c[1]);
+      var desc=matchDesc(cfg,c[0],c[1],name);
       if(!desc)return;
       // DLT 浮动金额判定（对齐 APK：UP 才标注上浮金额；NORMAL/HOLD 不附加括号说明）
       // P0 修复：必须 cfg.code==='dlt' 门控——非 DLT 彩种 dltFloat 恒为 null，
@@ -1392,6 +1401,9 @@ function showTierRows(cfg,draw,ver,prevDraw){
       if(baseAmt>0)baseAmtStr=fmtAmt(baseAmt);
       else if(baseCnt>0)baseAmtStr='—';
       else baseAmtStr='无人中奖，无奖金';
+    }else{
+      // 注数未公布（如福彩3D 2022年起官方开奖公告不公布注数）：注数"—"，单注奖金仍展示（规则固定值/当期实际值）
+      baseAmtStr=(baseAmt>0)?fmtAmt(baseAmt):'—';
     }
     // 构建主行
     var rowClass='tierRow';
@@ -1448,6 +1460,11 @@ function openDrawDetail(d){
   // T3: 找上一期（按日期更旧的那一期，draws 是倒序 = 新→旧，i+1 就是上期）
   var idx=draws.indexOf(d);
   var prev=(idx>=0&&idx+1<draws.length)?draws[idx+1]:null;
+  // 注数脚注：福彩3D 官方开奖公告不公布中奖注数（2004 前 / 2021-12-15 起），注数列以"—"表示
+  var footNote='无人中奖=本期该奖项无人命中；奖金以上方标注为准，均为本期实际开奖数据。';
+  if(cur.code==='3d'&&(d.date<'2004-01-01'||d.date>'2021-12-14')){
+    footNote='福彩3D官方开奖公告未公布各奖项中奖注数，注数列以"—"表示；单注奖金为规则固定值或当期实际值，以上方标注为准。';
+  }
   $('detailBody').innerHTML=
     '<div style="text-align:center;color:var(--text_secondary);font-size:13px;margin-bottom:4px;">开奖日期：'+d.date+' '+verLabel+'</div>'
     +infoBar
@@ -1458,7 +1475,7 @@ function openDrawDetail(d){
     +'<div class="hline"></div>'
     +showTierRows(cur,d,ver,prev)
     +'<div class="hline"></div>'
-    +'<div style="font-size:11px;color:var(--text_secondary);padding:8px 0 4px;">无人中奖=本期该奖项无人命中；奖金以上方标注为准，均为本期实际开奖数据。</div>';
+    +'<div style="font-size:11px;color:var(--text_secondary);padding:8px 0 4px;">'+footNote+'</div>';
   showMask('maskDetail');
 }
 
@@ -1553,6 +1570,9 @@ function parseDraws(text){
     // 奖级数据从 numEnd+extraCount 开始
     var tierStart=numEnd+extraCount;
     var tiers=[];
+    // 福彩3D 注数发布区间：2004-01-01~2021-12-14 数据源发布真实注数；
+    //   区间之外注数恒为0=未公布，须计为未知（"—"）而非"无人中奖"。
+    var cntUnpub=(cur.code==='3d')&&(t[1]<'2004-01-01'||t[1]>'2021-12-14');
     // T1-P2: 解析上限可配置——快乐8官方数据=39对(选十~选一)，其余彩种不超过15对
     var tierMax=(cur.code==='kl8')?39:15;
     for(var k=0;k<tierMax;k++){
@@ -1562,6 +1582,11 @@ function parseDraws(text){
       if(cRaw==='-'||aRaw==='-'||!cRaw||!aRaw){tiers.push(null);continue;}
       var cnt=parseNumberSafe(cRaw),amt=parseNumberSafe(aRaw);
       if(cnt===null||amt===null){tiers.push(null);continue;}
+      if(cntUnpub){
+        // 未公布注数：2004 之前金额同样缺失 → 整档未知；2022 起金额为规则固定值 → 仅注数未知
+        tiers.push(t[1]<'2004-01-01'?{count:null,amount:null}:{count:null,amount:amt});
+        continue;
+      }
       tiers.push({count:cnt,amount:amt});
     }
     var validTiers=tiers.filter(function(x){return x!==null;});
