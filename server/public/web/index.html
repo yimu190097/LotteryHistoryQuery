@@ -1417,7 +1417,10 @@ function openDrawDetail(d){
   $('detailBody').innerHTML=
     '<div style="text-align:center;color:var(--text_secondary);font-size:13px;margin-bottom:4px;">开奖日期：'+d.date+' '+verLabel+'</div>'
     +infoBar
-    +'<div class="balls" style="display:flex;flex-wrap:wrap;justify-content:center;margin-bottom:10px;">'+d.ballHtml+'</div>'
+    +'<div style="text-align:center;margin-bottom:10px;">'
+    +'<span style="color:var(--red_ball);font-size:18px;font-weight:bold;">'+d.dmain.join('、')+'</span>'
+    +(cur.hasSec&&d.dsec.length?('<span style="color:var(--text_secondary);font-size:18px;font-weight:bold;margin:0 4px;">+</span><span style="color:var(--blue_ball);font-size:18px;font-weight:bold;">'+d.dsec.join('、')+'</span>'):'')
+    +'</div>'
     +'<div class="hline"></div>'
     +showTierRows(cur,d,ver,prev)
     +'<div class="hline"></div>'
