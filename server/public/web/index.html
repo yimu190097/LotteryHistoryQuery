@@ -1392,6 +1392,11 @@ function showTierRows(cfg,draw,ver,prevDraw){
       baseCntStr=(baseCnt!==null)?(baseCnt>0?baseCnt.toLocaleString()+'注':'0注'):'—';
     }else if(baseCnt!==null){
       baseCntStr=baseCnt>0?baseCnt.toLocaleString()+'注':'无人中奖';
+    }else{
+      // 注数未公布（福彩3D：2004 前 / 2021-12-15 起官方全国开奖公告不公布注数）→ 明确标注而非"—"
+      if(cfg.code==='3d'&&draw&&draw.date&&(draw.date<'2004-01-01'||draw.date>'2021-12-14')){
+        baseCntStr='<span style="color:#9E9E9E;font-size:10px;">官方未公布</span>';
+      }
     }
     // 基本投注金额
     var baseAmtStr='—';
