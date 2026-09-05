@@ -467,6 +467,7 @@ var MODES = ['直选','组选3','组选6'];
 
 var cur = TYPES[0];
 var selMain = new Set(), selSec = new Set();
+var selTouched = false; // 本次是否主动选过号（用于区分残留选号，避免查该期被误判为选号对比）
 var posVals = [-1,-1,-1], modeIdx = 0;
 var draws = [], latestMap = {};
 var historyRecs = {}; // code -> [record]
@@ -708,7 +709,7 @@ function selectTab(i){
 /* ---------- 选号区 ---------- */
 function buildPicker(){
   var L=ballLayout();
-  selMain=new Set(); selSec=new Set(); posVals=[-1,-1,-1]; modeIdx=0;
+  selMain=new Set(); selSec=new Set(); posVals=[-1,-1,-1]; modeIdx=0; selTouched=false;
   $('pkLabel').textContent='选号对比';
   $('pkTitle').textContent=cur.mainLabel;
   // 结果表头 label（结果区用）
@@ -782,6 +783,7 @@ function bindSecGrid(){
   });
 }
 function onBall(num,isPri){
+  selTouched=true; // 用户主动点了号码
   if(isPri && cur.pos){
     // 位置式：填槽
     var idx=posVals.indexOf(num);
@@ -844,7 +846,7 @@ function updateSelectedText(){
   }
 }
 function resetSelection(){
-  selMain=new Set();selSec=new Set();posVals=[-1,-1,-1];
+  selMain=new Set();selSec=new Set();posVals=[-1,-1,-1];selTouched=false;
   refreshGridFromSet();refreshPositional();updateSelectedText();showEmptyResult();
 }
 function setIssueHint(){
@@ -888,7 +890,7 @@ async function doIssueQuery(){
   for(var i=0;i<draws.length;i++){var is=draws[i].issue;if(is===inp||is.endsWith(inp)){hit=draws[i];break;}}
   if(!hit){toast('未找到期号 '+inp+'（支持后几位模糊匹配）');return;}
   // 智能双模式：未选号 → 免费查看该期开奖详情（无需登录、不扣配额）；已选号 → 付费选号对比查询
-  var hasSel=cur.pos?posVals.every(function(v){return v>=0;}):(selMain.size>0&&(!cur.hasSec||selSec.size>0));
+  var hasSel=selTouched&&(cur.pos?posVals.every(function(v){return v>=0;}):(selMain.size>0&&(!cur.hasSec||selSec.size>0)));
   if(!hasSel){ openDrawDetail(hit); return; }
   if(!authState.token){openAuthDialog();return;}
   var ccb=await consumeOneQuery();if(!ccb.ok){toast(ccb.msg, ccb.long ? 6000 : 2500);updateUserBar();return;}
@@ -1187,6 +1189,7 @@ function openQueryRecord(){
 }
 function importRec(i){
   var r=(historyRecs[cur.code]||[])[i];if(!r)return;
+  selTouched=true; // 导入选号 = 主动选号
   selMain=new Set(r.pri.filter(function(v){return v>=0;}));
   if(cur.pos){posVals=[r.pri[0]!==undefined&&r.pri[0]>=0?r.pri[0]:-1,r.pri[1]!==undefined&&r.pri[1]>=0?r.pri[1]:-1,r.pri[2]!==undefined&&r.pri[2]>=0?r.pri[2]:-1];}
   selSec=new Set(r.sec);
