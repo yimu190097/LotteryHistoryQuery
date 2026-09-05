@@ -2,6 +2,7 @@ package com.lottery.history.ui
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -10,6 +11,7 @@ import android.os.Bundle
 import android.provider.MediaStore
 import android.view.MotionEvent
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -76,6 +78,7 @@ class CustomerServiceActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.tvVoiceCall).setOnClickListener {
             startActivity(Intent(this, VoiceCallActivity::class.java))
         }
+        findViewById<TextView>(R.id.tvWechat).setOnClickListener { showWechatDialog() }
 
         rvChat = findViewById(R.id.rvChat)
         rvChat.layoutManager = LinearLayoutManager(this).apply { stackFromEnd = true }
@@ -165,6 +168,52 @@ class CustomerServiceActivity : AppCompatActivity() {
         // 进入聊天页即标记已读
         ChatClient.connect()
         ChatClient.sendRead()
+    }
+
+    // ========== 微信客服二维码 ==========
+    private fun showWechatDialog() {
+        lifecycleScope.launch {
+            val config = try {
+                ApiClient.getClientConfig()
+            } catch (e: Exception) {
+                Toast.makeText(this@CustomerServiceActivity, "获取配置失败：${e.message}", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val qr = config.wechat_qr_url
+            if (qr.isNullOrBlank()) {
+                Toast.makeText(this@CustomerServiceActivity, "暂未配置微信客服二维码", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val acc = config.wechat_account
+            val dp = resources.displayMetrics.density
+
+            val img = ImageView(this@CustomerServiceActivity)
+            img.setImageURI(Uri.parse(ApiClient.fileUrl(qr)))
+            img.adjustViewBounds = true
+            img.layoutParams = LinearLayout.LayoutParams((200 * dp).toInt(), (200 * dp).toInt())
+
+            val body = LinearLayout(this@CustomerServiceActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = android.view.Gravity.CENTER_HORIZONTAL
+                setPadding((16 * dp).toInt(), (16 * dp).toInt(), (16 * dp).toInt(), (16 * dp).toInt())
+                addView(img)
+            }
+            if (!acc.isNullOrBlank()) {
+                val tv = TextView(this@CustomerServiceActivity).apply {
+                    text = "微信号：$acc"
+                    gravity = android.view.Gravity.CENTER_HORIZONTAL
+                    setTextColor(resources.getColor(android.R.color.darker_gray, null))
+                    textSize = 14f
+                    setPadding(0, (10 * dp).toInt(), 0, 0)
+                }
+                body.addView(tv)
+            }
+            AlertDialog.Builder(this@CustomerServiceActivity)
+                .setTitle("微信客服")
+                .setView(body)
+                .setPositiveButton("关闭", null)
+                .show()
+        }
     }
 
     // ========== 发送文本 ==========

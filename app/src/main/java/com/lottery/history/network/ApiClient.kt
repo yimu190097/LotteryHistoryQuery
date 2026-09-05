@@ -86,7 +86,11 @@ object ApiClient {
     )
     data class SessionsResponse(val sessions: List<SessionInfo>, val maxSessions: Int)
     data class UploadResponse(val url: String, val size: Long, val mimetype: String)
-    data class ClientConfig(val freeQueryLimit: Int)
+    data class ClientConfig(
+        val freeQueryLimit: Int,
+        val wechat_qr_url: String? = null,
+        val wechat_account: String? = null
+    )
 
     class ApiException(
         val code: Int,

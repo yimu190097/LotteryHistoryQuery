@@ -341,7 +341,28 @@ router.get('/client/config', (req, res) => {
   const freeLimit = getFreeQueryLimit();
   // 同时返回 VIP 套餐列表
   const plans = db.prepare('SELECT plan_type, name, price, duration_days FROM vip_plans ORDER BY price ASC').all();
-  res.json({ free_query_limit: freeLimit, vip_plans: plans });
+  // 微信客服配置（供 App/网页端显示二维码）
+  const qr = db.prepare("SELECT value FROM system_config WHERE key = 'wechat_qr_url'").get();
+  const acc = db.prepare("SELECT value FROM system_config WHERE key = 'wechat_account'").get();
+  res.json({
+    free_query_limit: freeLimit,
+    vip_plans: plans,
+    wechat_qr_url: qr?.value || '',
+    wechat_account: acc?.value || ''
+  });
+});
+
+/**
+ * GET /api/users/client/chat-history - 当前用户的聊天历史（需要用户 Token）
+ */
+router.get('/client/chat-history', userAuthMiddleware, (req, res) => {
+  const messages = db.prepare(`
+    SELECT id, role, type, text, media_path, duration, created_at
+    FROM chat_messages
+    WHERE session_user_phone = ?
+    ORDER BY created_at ASC
+  `).all(req.user.phone);
+  res.json({ messages });
 });
 
 /**

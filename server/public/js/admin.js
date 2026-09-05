@@ -718,6 +718,10 @@ async function renderSettings() {
       <div id="configForm"><div class="empty-state">加载中...</div></div>
     </div>
     <div class="card">
+      <div class="card-header"><h3>微信客服</h3></div>
+      <div id="wechatConfigForm"><div class="empty-state">加载中...</div></div>
+    </div>
+    <div class="card">
       <div class="card-header">
         <h3>管理员列表</h3>
         <button class="btn btn-primary btn-sm" onclick="showAddAdminModal()">添加管理员</button>
@@ -763,8 +767,32 @@ async function renderSettings() {
         `).join('')}
       </div>
     `;
+    $('#wechatConfigForm').innerHTML = `
+      <div style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;padding:8px;background:#F5F5F5;border-radius:4px">
+        上传微信客服二维码并填写微信号后，网页端和 App 端的「微信客服」入口将展示该二维码。留空则不显示。
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label style="font-weight:bold">微信客服二维码</label>
+        <div style="display:flex;align-items:flex-start;gap:12px;margin-top:6px">
+          <div style="flex:1">
+            <input type="file" id="wechatQrFile" accept="image/*" style="margin-bottom:6px">
+            <div style="font-size:11px;color:var(--text-secondary)">建议图片为正方形（如 300×300），保存后立即生效。</div>
+          </div>
+          <img id="wechatQrPreview" src="${configs.wechat_qr_url || ''}" alt="二维码预览"
+               style="width:100px;height:100px;object-fit:contain;border:1px solid var(--border);border-radius:4px;${configs.wechat_qr_url ? '' : 'display:none'}">
+        </div>
+      </div>
+      <div class="form-group" style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <div style="min-width:180px"><label style="margin:0;font-weight:bold">微信号</label><br><span style="font-size:11px;color:var(--text-secondary)">展示在二维码下方</span></div>
+        <input type="text" id="cfg_wechat_account" value="${configs.wechat_account || ''}" style="flex:1">
+      </div>
+      <button class="btn btn-primary" onclick="uploadWechatQr()">上传二维码</button>
+      <button class="btn btn-primary" style="margin-left:8px" onclick="saveConfig('wechat_account')">保存微信号</button>
+      <button class="btn btn-secondary" style="margin-left:8px" onclick="clearWechatQr()">清除二维码</button>
+    `;
   } catch (err) {
     $('#configForm').innerHTML = `<div class="empty-state">加载失败: ${err.message}</div>`;
+    $('#wechatConfigForm').innerHTML = `<div class="empty-state">加载失败: ${err.message}</div>`;
   }
 
   try {
@@ -801,6 +829,55 @@ async function saveVipPrice(planType) {
   try {
     await api(`/api/users/vip/plans/${planType}`, { method: 'PUT', body: JSON.stringify({ price }) });
     showToast('套餐价格已更新', 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+// ============ 微信客服二维码 ============
+async function uploadWechatQr() {
+  const input = $('#wechatQrFile');
+  const file = input.files && input.files[0];
+  if (!file) { showToast('请先选择图片文件', 'error'); return; }
+  if (!/^image\//.test(file.type)) { showToast('仅支持图片文件', 'error'); return; }
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    showToast('正在上传...', 'info');
+    const headers = {};
+    if (API.token) headers['Authorization'] = `Bearer ${API.token}`;
+    const res = await fetch(API.base + '/api/upload', {
+      method: 'POST',
+      headers,
+      body: formData
+    });
+    if (res.status === 401) {
+      localStorage.removeItem('admin_token');
+      showLogin();
+      throw new Error('登录已过期');
+    }
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '上传失败');
+
+    // 保存 URL 到配置
+    await api('/api/config/wechat_qr_url', { method: 'PUT', body: JSON.stringify({ value: data.url }) });
+    showToast('二维码上传并保存成功', 'success');
+    input.value = '';
+    renderSettings();
+  } catch (err) {
+    showToast(err.message, 'error');
+    input.value = '';
+  }
+}
+
+async function clearWechatQr() {
+  if (!confirm('确定清除微信客服二维码吗？')) return;
+  try {
+    await api('/api/config/wechat_qr_url', { method: 'PUT', body: JSON.stringify({ value: '' }) });
+    showToast('已清除二维码', 'success');
+    renderSettings();
   } catch (err) {
     showToast(err.message, 'error');
   }
