@@ -137,10 +137,11 @@ body{
   font-size:10px;font-weight:700;color:#BDBDBD;background:#fff;border:1px solid #BDBDBD;cursor:pointer;}
 .posCol .pball.on{background:var(--primary_red);color:#fff;border-color:var(--primary_red);}
 .posCol .ptip{color:#9E9E9E;font-size:9px;padding-top:1px;}
-/* 选号球 */
+/* 选号球：红色球红色圈、蓝色球蓝色圈；未选中浅色描边，选中实心高亮 */
 .ball{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;
-  font-family:monospace;font-weight:700;background:#fff;border:1px solid var(--ball_border);
-  color:var(--ball_text_normal);cursor:pointer;user-select:none;}
+  font-family:monospace;font-weight:700;background:#FDECEA;border:1px solid var(--red_ball);
+  color:var(--red_ball);cursor:pointer;user-select:none;}
+.ball.sec{background:#E8F1FC;border-color:var(--blue_ball);color:var(--blue_ball);}
 .ball.on{background:var(--primary_red);border-color:var(--primary_red);color:#fff;}
 .ball.sec.on{background:var(--primary_blue);border-color:var(--primary_blue);color:#fff;}
 
