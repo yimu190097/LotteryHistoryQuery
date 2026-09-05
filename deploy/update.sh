@@ -181,6 +181,7 @@ FILES=(
   server/public/css/admin.css
   server/public/js/admin.js
   server/public/web/index.html
+  server/public/img/wechat_qr_default.jpg
   server/public/js/chat.js
   server/public/js/call.js
 )

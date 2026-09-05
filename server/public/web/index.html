@@ -2068,7 +2068,7 @@ var chatWs = null, chatAuthed = false, chatData = [], chatRenderedIds = {};
 
 function initService() {
   fetch('/api/config').then(function(r){return r.json();}).then(function(cfg){
-    wechatCfg.wechat_qr_url = cfg.wechat_qr_url || '';
+    wechatCfg.wechat_qr_url = cfg.wechat_qr_url || '/img/wechat_qr_default.jpg';
     wechatCfg.wechat_account = cfg.wechat_account || '';
     if (wechatCfg.wechat_qr_url) $('srvMiWechat').style.display = '';
   }).catch(function(){});
