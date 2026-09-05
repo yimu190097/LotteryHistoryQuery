@@ -1299,6 +1299,36 @@ function buildKl8TierRows(draw,ver){
   });
   return html;
 }
+/* ---------- 福彩3D 省级注数补充（浙江主 + 福建/上海自动替补） ----------
+   17500 数据源自 2021-12-15 起不公布全国注数 → 网页端原显示"官方未公布"。
+   现调用 /api/lottery/3d/prizes 获取省级官方注数（浙江优先，失败自动切福建/上海），
+   成功则展示真实注数并标注来源；全部失败则如实显示"官方未公布"，绝不伪造。 */
+var prov3dMap = {}; // issue -> { sourceName, tiers:[{name,count,amount}...] }
+function provTierMatch(draw,name){
+  var pd=prov3dMap[draw.issue];
+  if(!pd||!pd.tiers||!pd.tiers.length)return null;
+  var alias={'直选奖':['单选','直选'],'组选3':['组选3','组选三'],'组选6':['组选6','组选六']};
+  var keys=alias[name]||[name];
+  for(var i=0;i<pd.tiers.length;i++){
+    var tn=pd.tiers[i].name||'';
+    for(var k=0;k<keys.length;k++){
+      if(tn.indexOf(keys[k])>=0&&(pd.tiers[i].count!=null))return pd.tiers[i];
+    }
+  }
+  return null;
+}
+function fetchProv3dPrizes(issue,done){
+  if(prov3dMap[issue]){ if(done)done(prov3dMap[issue]); return; }
+  fetch('/api/lottery/3d/prizes?term='+encodeURIComponent(issue))
+    .then(function(r){return r.json();})
+    .then(function(j){
+      if(j&&j.ok&&j.tiers&&j.tiers.length){
+        prov3dMap[issue]={sourceName:j.sourceName||'浙江',tiers:j.tiers};
+      }
+      if(done)done(j&&j.ok?(prov3dMap[issue]||null):null);
+    })
+    .catch(function(){ if(done)done(null); });
+}
 function showTierRows(cfg,draw,ver,prevDraw){
   var html='';
   // 快乐8 走专属分组展示逻辑（10玩法×39对官方原始数据）
@@ -1393,9 +1423,14 @@ function showTierRows(cfg,draw,ver,prevDraw){
     }else if(baseCnt!==null){
       baseCntStr=baseCnt>0?baseCnt.toLocaleString()+'注':'无人中奖';
     }else{
-      // 注数未公布（福彩3D：2004 前 / 2021-12-15 起官方全国开奖公告不公布注数）→ 明确标注而非"—"
+      // 注数未公布（福彩3D：2004 前 / 2021-12-15 起官方全国开奖公告不公布注数）→ 优先展示省级注数
       if(cfg.code==='3d'&&draw&&draw.date&&(draw.date<'2004-01-01'||draw.date>'2021-12-14')){
-        baseCntStr='<span style="color:#9E9E9E;font-size:10px;">官方未公布</span>';
+        var pt=provTierMatch(draw,name);
+        if(pt&&pt.count!=null){
+          baseCntStr=pt.count>0?(pt.count.toLocaleString()+'注'):'无人中奖';
+        }else{
+          baseCntStr='<span style="color:#9E9E9E;font-size:10px;">官方未公布</span>';
+        }
       }
     }
     // 基本投注金额
@@ -1468,7 +1503,12 @@ function openDrawDetail(d){
   // 注数脚注：福彩3D 官方开奖公告不公布中奖注数（2004 前 / 2021-12-15 起），注数列以"—"表示
   var footNote='无人中奖=本期该奖项无人命中；奖金以上方标注为准，均为本期实际开奖数据。';
   if(cur.code==='3d'&&(d.date<'2004-01-01'||d.date>'2021-12-14')){
-    footNote='福彩3D官方开奖公告未公布各奖项中奖注数，注数列以"—"表示；单注奖金为规则固定值或当期实际值，以上方标注为准。';
+    var pd0=prov3dMap[d.issue];
+    if(pd0&&pd0.sourceName){
+      footNote='注数来源：'+pd0.sourceName+'福彩官方开奖公告（17500 未公布全国注数）；单注奖金为规则固定值或当期实际值，以上方标注为准。';
+    }else{
+      footNote='福彩3D官方开奖公告未公布各奖项中奖注数，注数列以"—"表示；单注奖金为规则固定值或当期实际值，以上方标注为准。';
+    }
   }
   $('detailBody').innerHTML=
     '<div style="text-align:center;color:var(--text_secondary);font-size:13px;margin-bottom:4px;">开奖日期：'+d.date+' '+verLabel+'</div>'
@@ -1482,6 +1522,10 @@ function openDrawDetail(d){
     +'<div class="hline"></div>'
     +'<div style="font-size:11px;color:var(--text_secondary);padding:8px 0 4px;">'+footNote+'</div>';
   showMask('maskDetail');
+  // 福彩3D 未公布注数期：异步拉取省级注数（浙江主，福建/上海自动替补），成功则重绘展示真实注数
+  if(cur.code==='3d'&&d.date>'2021-12-14'&&!prov3dMap[d.issue]){
+    fetchProv3dPrizes(d.issue,function(pd){ if(pd)openDrawDetail(d); });
+  }
 }
 
 /* ---------- 最新开奖 ---------- */

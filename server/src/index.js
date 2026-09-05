@@ -281,6 +281,225 @@ app.get('/api/lottery/:code', async (req, res) => {
   }
 });
 
+// ============================================================================
+// 福彩3D 省级注数代理（浙江主 + 福建/上海备用 + 缓存）
+// 背景：17500.cn 数据源自 2021-12-15 起不公布全国注数 → 网页端显示"官方未公布"。
+// 方案：依次抓取 浙江 → 福建 → 上海 省级官方开奖公告，解析各奖级注数；
+//       全部失败则如实返回不可用（前端继续显示"官方未公布"），绝不伪造数据。
+// ============================================================================
+const PROV3D_CACHE_TTL = 5 * 60 * 1000; // 省级注数缓存 5min
+const PROV3D_TIMEOUT = 8000;
+const PROV3D_SOURCES = [
+  { key: 'zj', name: '浙江', url: (t) => `http://zjflcp.zjol.com.cn/fcweb/new_sd_d.html?qishu=${t}` },
+  { key: 'fj', name: '福建', url: (t) => `https://www.fjcp.cn/kjgg.php?type=fc3d&term=${t}` },
+  { key: 'sh', name: '上海', url: () => `http://www.swlc.sh.cn/shsflcpfxzx/lottery/3d.html` }, // 仅当前期
+];
+const prov3dCache = new Map(); // term -> { data, fetchedAt }
+
+function httpGetText(targetUrl) {
+  return new Promise((resolve, reject) => {
+    const proxyUrl = process.env.HTTP_PROXY || process.env.http_proxy || '';
+    const useProxy = !!proxyUrl;
+    const isHttps = targetUrl.startsWith('https');
+    const transport = isHttps ? https : http;
+    const options = {};
+    if (useProxy) {
+      const pu = new URL(proxyUrl);
+      options.host = pu.hostname;
+      options.port = pu.port || 80;
+      options.path = targetUrl;
+      options.headers = { Host: new URL(targetUrl).host };
+    }
+    let settled = false;
+    const req = transport.get(useProxy ? options : targetUrl, (r) => {
+      if (r.statusCode >= 300 && r.statusCode < 400 && r.headers.location) {
+        r.resume();
+        if (!settled) { settled = true; reject(new Error('redirect:' + r.headers.location)); }
+        return;
+      }
+      if (r.statusCode !== 200) {
+        r.resume();
+        if (!settled) { settled = true; reject(new Error('upstream status ' + r.statusCode)); }
+        return;
+      }
+      let buf = '';
+      r.setEncoding('utf8');
+      r.on('data', (c) => { buf += c; });
+      r.on('end', () => {
+        if (!settled) { settled = true; resolve(buf); }
+      });
+      r.on('error', (e) => { if (!settled) { settled = true; reject(e); } });
+    });
+    req.setTimeout(PROV3D_TIMEOUT, () => { req.destroy(new Error('数据源响应超时')); });
+    req.on('error', (e) => { if (!settled) { settled = true; reject(e); } });
+    req.on('timeout', () => { if (!settled) { settled = true; reject(new Error('数据源响应超时')); } });
+  });
+}
+
+function stripHtml(s) {
+  return s.replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&[a-z]+;/gi, ' ')
+    .replace(/[\u3000]/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s*\n+/g, '\n');
+}
+function pnum(s) {
+  if (s == null) return null;
+  const m = String(s).replace(/,/g, '').match(/(\d+(?:\.\d+)?)/);
+  return m ? Math.round(parseFloat(m[1])) : null;
+}
+
+// 浙江：中奖情况区 <ul class="rewardMid"><li>名称</li><li>注数</li><li>奖金</li>…</ul>
+// 期号不在"第X期"连续文本中，而在 <select defaultValue="2026237"> 下拉框当前选中值
+function parseZJ(html) {
+  const f = stripHtml(html);
+  const termM = f.match(/第\s*(\d{7})\s*期/)
+    || html.match(/defaultValue="(\d{7})"/)
+    || html.match(/name="qishuzy"[^>]*?value="(\d{7})"/);
+  const salesM = f.match(/本期销售额[:：]?\s*([\d,\.]+)/);
+  const totalM = f.match(/中奖总金额[:：]?\s*([\d,\.]+)/);
+  const ballM = f.match(/开奖号码\s*[:：]?\s*(\d)\s*(\d)\s*(\d)/);
+  const mid = html.match(/<ul class="rewardMid">([\s\S]*?)<\/ul>/);
+  const tiers = [];
+  if (mid) {
+    const items = mid[1].match(/<li>([^<]*)<\/li>/g) || [];
+    const vals = items.map((x) => x.replace(/<\/?li>/g, '').trim());
+    for (let i = 0; i + 2 < vals.length; i += 3) {
+      const name = vals[i], c = pnum(vals[i + 1]), a = pnum(vals[i + 2]);
+      if (!name || c == null || a == null) break;
+      tiers.push({ name, count: c, amount: a });
+    }
+  }
+  return {
+    term: termM ? termM[1] : null,
+    digits: ballM ? ballM[1] + ballM[2] + ballM[3] : null,
+    sales: salesM ? pnum(salesM[1]) : null,
+    total: totalM ? pnum(totalM[1]) : null,
+    tiers,
+  };
+}
+
+// 福建：中奖情况区三列表格 <tr><td>名称</td><td>注数</td><td>奖金</td></tr>
+// 号码前有"百位/十位/个位"标签，需跳过
+function parseFJ(html) {
+  const f = stripHtml(html);
+  const termM = f.match(/第\s*(\d{7})\s*期/);
+  const salesM = f.match(/本期销售额[:：]?\s*([\d,\.]+)/);
+  const totalM = f.match(/中奖总金额[:：]?\s*([\d,\.]+)/);
+  const ballM = f.match(/开奖号码[:：]?\s*(?:百位\s*十位\s*个位\s*)?(\d)\s*(\d)\s*(\d)/);
+  const i = html.indexOf('中奖情况');
+  const seg = i >= 0 ? html.slice(i) : html;
+  const tiers = [];
+  const rows = seg.match(/<tr>[\s\S]*?<td[^>]*>\s*(.*?)\s*<\/td>\s*<td[^>]*>\s*(.*?)\s*<\/td>\s*<td[^>]*>\s*(.*?)\s*<\/td>\s*<\/tr>/g) || [];
+  for (const r of rows) {
+    const cells = r.match(/<td[^>]*>\s*(.*?)\s*<\/td>/g) || [];
+    if (cells.length < 3) continue;
+    const name = cells[0].replace(/<[^>]+>/g, '').trim();
+    const c = pnum(cells[1].replace(/<[^>]+>/g, ''));
+    const a = pnum(cells[2].replace(/<[^>]+>/g, ''));
+    if (!name || c == null || a == null) continue;
+    tiers.push({ name, count: c, amount: a });
+  }
+  return {
+    term: termM ? termM[1] : null,
+    digits: ballM ? ballM[1] + ballM[2] + ballM[3] : null,
+    sales: salesM ? pnum(salesM[1]) : null,
+    total: totalM ? pnum(totalM[1]) : null,
+    tiers,
+  };
+}
+
+// 上海：中奖情况表格（注数带"注"后缀，如 "733注"）
+function parseSH(html) {
+  const f = stripHtml(html);
+  const termM = f.match(/第(\d{7})期/);
+  const salesM = f.match(/本期销售额[^<]*?(\d[\d,\.]*)元/);
+  const totalM = f.match(/中奖总金额[^<]*?(\d[\d,\.]*)元/);
+  const balls = html.match(/class="drawNotice_shuangse"[\s\S]*?<p class="">(\d)<\/p><p class="">(\d)<\/p><p class="">(\d)<\/p>/);
+  const i = html.indexOf('中奖情况');
+  const seg = i >= 0 ? html.slice(i) : html;
+  const tiers = [];
+  const rows = seg.match(/<tr><td>([^<]*)<\/td><td>([^<]*)注?<\/td><td>([^<]*)<\/td><\/tr>/g) || [];
+  for (const r of rows) {
+    const m = r.match(/<tr><td>([^<]*)<\/td><td>([^<]*)注?<\/td><td>([^<]*)<\/td><\/tr>/);
+    if (!m) continue;
+    const name = m[1].trim(), c = pnum(m[2]), a = pnum(m[3]);
+    if (!name || c == null || a == null) continue;
+    tiers.push({ name, count: c, amount: a });
+  }
+  return {
+    term: termM ? termM[1] : null,
+    digits: balls ? balls[1] + balls[2] + balls[3] : null,
+    sales: salesM ? pnum(salesM[1]) : null,
+    total: totalM ? pnum(totalM[1]) : null,
+    tiers,
+  };
+}
+
+const PROV3D_PARSERS = { zj: parseZJ, fj: parseFJ, sh: parseSH };
+
+// 从 17500 缓存/上游获取最新 3D 期号
+async function latest3dTerm() {
+  const cache = lotteryCache.get('3d');
+  let text = cache ? cache.data : null;
+  if (!text || (Date.now() - cache.fetchedAt) > 30 * 60 * 1000) {
+    try { text = await fetchLotteryWithRetry('3d'); } catch (e) { text = cache ? cache.data : null; }
+  }
+  if (!text) return null;
+  const first = text.split(/\r?\n/).find((l) => l.trim());
+  if (!first) return null;
+  const tok = first.trim().split(/\s+/)[0];
+  return /^\d{7}$/.test(tok) ? tok : null;
+}
+
+async function fetchProv3d(term) {
+  let lastErr = null;
+  for (const src of PROV3D_SOURCES) {
+    try {
+      const html = await httpGetText(src.url(term));
+      const d = PROV3D_PARSERS[src.key](html);
+      // 校验：解析结果必须与请求期号一致（上海仅当前期，期号不符则视为不可用）
+      if (!d.term || !/^\d{7}$/.test(d.term) || d.term !== term) {
+        lastErr = new Error(src.name + ' 期号不符(请求' + term + ',实得' + (d.term || '无') + ')');
+        continue;
+      }
+      if (!d.tiers || !d.tiers.length) {
+        lastErr = new Error(src.name + ' 未解析到奖级数据');
+        continue;
+      }
+      return { source: src.key, sourceName: src.name, ...d };
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('所有省级数据源均不可用');
+}
+
+app.get('/api/lottery/3d/prizes', async (req, res) => {
+  let term = String(req.query.term || '').trim();
+  if (!/^\d{7}$/.test(term)) {
+    try { term = await latest3dTerm(); } catch (e) { /* ignore */ }
+  }
+  if (!term || !/^\d{7}$/.test(term)) {
+    return res.status(400).json({ ok: false, error: '无法确定期号，请携带 term 参数（如 ?term=2026237）' });
+  }
+  const now = Date.now();
+  const cached = prov3dCache.get(term);
+  if (cached && now - cached.fetchedAt < PROV3D_CACHE_TTL) {
+    return res.json({ ok: true, term, cached: true, ...cached.data });
+  }
+  try {
+    const data = await fetchProv3d(term);
+    prov3dCache.set(term, { data, fetchedAt: now });
+    res.json({ ok: true, term, cached: false, ...data });
+  } catch (e) {
+    res.status(502).json({ ok: false, error: '省级注数暂不可用', detail: (e && e.message) || String(e) });
+  }
+});
+
 // 上传文件目录（图片/语音）
 const UPLOAD_DIR = path.join(__dirname, '..', 'public', 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
