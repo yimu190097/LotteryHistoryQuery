@@ -1096,7 +1096,13 @@ function renderResults(results,selPri){
     +'<span class="hCnt">次数</span><span class="hAct">操作</span>';
   // 行
   var c=$('resultContainer');c.innerHTML='';
-  results.forEach(function(r,i){
+  // 展示全部奖级（含未命中）：最新版规则下所有奖级名排前，未命中的构造空数据行显示「未中」，
+  // 使用户直观了解所选号码在历史上未命中哪些奖项作为参考；旧版独有且本次命中的奖级排在其后。
+  var allNames=latestPr(cur).map(function(p){return p[0];});
+  var shown={};
+  var riOf={};
+  results.forEach(function(r,ri){riOf[r.name]=ri;});
+  var renderRow=function(r,ri){
     var row=document.createElement('div');row.className='row';
     var pc=prizeColor(r.name);
     // P1 修复：数据行列序与表头对齐（红球在前、蓝球在后）。
@@ -1106,9 +1112,18 @@ function renderResults(results,selPri){
       +'<div class="cPri" style="color:'+(r.mp>=3?'#C62828':'#546E7A')+';">'+(r.mp<0?'—':r.mp+'个')+'</div>'
       +(secShow?'<div class="cSec" style="color:'+(r.ms>0?'#1565C0':'#78909C')+';">'+(r.ms<0?'—':r.ms+'个')+'</div>':'')
       +'<div class="cCnt" style="color:'+(r.count>0?'#C62828':'#9E9E9E')+';">'+(r.count>0?'中'+r.count+'次':'未中')+'</div>'
-      +'<div class="cAct">'+(r.count>0?'<span class="actbtn yes" data-m="'+i+'">查看</span>':'<span class="actbtn no">—</span>')+'</div>';
+      +'<div class="cAct">'+(r.count>0?'<span class="actbtn yes" data-m="'+ri+'">查看</span>':'<span class="actbtn no">—</span>')+'</div>';
     c.appendChild(row);
     var dv=document.createElement('div');dv.className='rdiv';c.appendChild(dv);
+  };
+  allNames.forEach(function(name){
+    shown[name]=true;
+    var ri=riOf[name];
+    renderRow((ri!==undefined?results[ri]:{name:name,mp:-1,ms:-1,count:0}),ri);
+  });
+  // 旧版本独有奖级名（最新版本不存在）且本次命中的，追加在全部奖级之后
+  results.forEach(function(r,ri){
+    if(!shown[r.name]){shown[r.name]=true;renderRow(r,ri);}
   });
   c.querySelectorAll('.actbtn.yes').forEach(function(a){
     a.onclick=function(){openHistory(+(a.getAttribute('data-m')),results);};
