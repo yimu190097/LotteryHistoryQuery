@@ -142,54 +142,24 @@ const lotteryCache = new Map();
 // code -> { failCount, openUntil }
 const lotteryCircuit = new Map();
 
-function fetchLotteryUpstream(code) {
+// 候选上游 URL：数据源 data.17500.cn 的 http/https 双协议 + 代理/直连自动回退。
+// 顺序：1) 配置出站代理时优先 http 经代理（代理隧道兼容性更好）；2) https 直连；3) http 直连。
+// 任一候选返回有效数据即成功，全部失败才抛出，避免单协议/单通道抖动导致整体不可用。
+function lotteryCandidateUrls(code) {
+  const proxyUrl = process.env.HTTP_PROXY || process.env.http_proxy || '';
+  const list = [];
+  if (proxyUrl) list.push({ url: `http://data.17500.cn/${code}_desc.txt`, proxyUrl });
+  list.push({ url: `https://data.17500.cn/${code}_desc.txt`, proxyUrl: '' });
+  list.push({ url: `http://data.17500.cn/${code}_desc.txt`, proxyUrl: '' });
+  return list;
+}
+
+// 单次请求单个候选 URL（支持重定向与整体超时），成功 resolve(buf)，失败 reject(err)。
+function fetchOneUpstream(code, targetUrl, proxyUrl) {
   return new Promise((resolve, reject) => {
-    const proxyUrl = process.env.HTTP_PROXY || process.env.http_proxy || '';
     const useProxy = !!proxyUrl;
-    // 沙箱内通过代理出站，优先 HTTP（代理隧道兼容性更好）
-    const url = useProxy
-      ? `http://data.17500.cn/${code}_desc.txt`
-      : `https://data.17500.cn/${code}_desc.txt`;
-    let settled = false;
-
-    const doRequest = (targetUrl, redirectDepth) => {
-      if (redirectDepth > 3) { reject(new Error('重定向次数过多')); return; }
-      const isHttps = targetUrl.startsWith('https');
-      const transport = isHttps ? https : http;
-
-      const options = {};
-      if (useProxy) {
-        const pu = new URL(proxyUrl);
-        options.host = pu.hostname;
-        options.port = pu.port || 80;
-        options.path = targetUrl;
-        options.headers = { Host: new URL(targetUrl).host };
-      }
-
-      const req = transport.get(useProxy ? options : targetUrl, (r) => {
-        if (r.statusCode >= 300 && r.statusCode < 400 && r.headers.location) {
-          r.resume();
-          const redirectUrl = r.headers.location;
-          doRequest(redirectUrl, redirectDepth + 1);
-          return;
-        }
-        if (r.statusCode !== 200) {
-          r.resume();
-          if (!settled) { settled = true; reject(new Error(`upstream status ${r.statusCode}`)); }
-          return;
-        }
-        readResponse(r);
-      });
-      req.setTimeout(LOTTERY_UPSTREAM_TIMEOUT, () => {
-        req.destroy(new Error('数据源响应超时'));
-      });
-      req.on('error', (e) => {
-        if (!settled) { settled = true; reject(e); }
-      });
-      req.on('timeout', () => {
-        if (!settled) { settled = true; reject(new Error('数据源响应超时')); }
-      });
-    };
+    let done = false;
+    const finish = (err) => { if (!done) { done = true; reject(err); } };
 
     function readResponse(r) {
       const expectedLen = parseInt(r.headers['content-length'], 10) || 0;
@@ -198,25 +168,70 @@ function fetchLotteryUpstream(code) {
       r.setEncoding('utf8');
       r.on('data', (chunk) => { buf += chunk; byteLen += Buffer.byteLength(chunk, 'utf8'); });
       r.on('end', () => {
-        if (!settled) {
-          settled = true;
-          if (byteLen < 200) {
-            reject(new Error('数据源返回数据异常（过短）：' + byteLen + ' bytes'));
-            return;
-          }
-          if (expectedLen > 0 && Math.abs(byteLen - expectedLen) > expectedLen * 0.1) {
-            console.warn(`[lottery] ${code}: Content-Length=${expectedLen} 实际=${byteLen}, 差异=${Math.abs(byteLen - expectedLen)}`);
-          }
-          resolve(buf);
+        if (done) return;
+        done = true;
+        if (byteLen < 200) {
+          reject(new Error('数据源返回数据异常（过短）：' + byteLen + ' bytes'));
+          return;
         }
+        if (expectedLen > 0 && Math.abs(byteLen - expectedLen) > expectedLen * 0.1) {
+          console.warn(`[lottery] ${code}: Content-Length=${expectedLen} 实际=${byteLen}, 差异=${Math.abs(byteLen - expectedLen)}`);
+        }
+        resolve(buf);
       });
-      r.on('error', (e) => {
-        if (!settled) { settled = true; reject(e); }
-      });
+      r.on('error', finish);
     }
 
-    doRequest(url, 0);
+    function doRequest(target, redirectDepth) {
+      if (redirectDepth > 3) { finish(new Error('重定向次数过多')); return; }
+      const isHttps = target.startsWith('https');
+      const transport = isHttps ? https : http;
+
+      const options = {};
+      if (useProxy) {
+        const pu = new URL(proxyUrl);
+        options.host = pu.hostname;
+        options.port = pu.port || 80;
+        options.path = target;
+        options.headers = { Host: new URL(target).host };
+      }
+
+      const req = transport.get(useProxy ? options : target, (r) => {
+        if (r.statusCode >= 300 && r.statusCode < 400 && r.headers.location) {
+          r.resume();
+          doRequest(r.headers.location, redirectDepth + 1);
+          return;
+        }
+        if (r.statusCode !== 200) {
+          r.resume();
+          finish(new Error(`upstream status ${r.statusCode}`));
+          return;
+        }
+        readResponse(r);
+      });
+      req.setTimeout(LOTTERY_UPSTREAM_TIMEOUT, () => {
+        req.destroy(new Error('数据源响应超时'));
+      });
+      req.on('error', finish);
+      req.on('timeout', () => finish(new Error('数据源响应超时')));
+    }
+
+    doRequest(targetUrl, 0);
   });
+}
+
+async function fetchLotteryUpstream(code) {
+  const candidates = lotteryCandidateUrls(code);
+  let lastErr;
+  for (const c of candidates) {
+    try {
+      return await fetchOneUpstream(code, c.url, c.proxyUrl);
+    } catch (e) {
+      lastErr = e;
+      console.warn(`[lottery] ${code}: 上游候选失败 (${c.url}): ${e.message || e}`);
+    }
+  }
+  throw lastErr || new Error('所有上游数据源均不可用');
 }
 
 async function fetchLotteryWithRetry(code) {
